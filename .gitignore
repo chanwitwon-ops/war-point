@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+# build output
+dist/
+build/
+# editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# local settings ของ Claude Code (เก็บ agent/skill ที่ commit ไว้ แต่ไม่เก็บ settings เครื่องใครเครื่องมัน)
+.claude/settings.local.json
