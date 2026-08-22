@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>War Point — ต้นแบบฝั่งนักเรียน (UJ-01)</title>
+<style>
+/* ==========================================================================
+   Design Tokens — คัดลอกมาจาก DESIGN.md ทุกตัว (2026-08-21) ห้ามแก้ค่า hex
+   ที่นี่โดยไม่แก้ DESIGN.md ก่อน — ทุก rule ของ component ด้านล่างอ้างผ่าน
+   var(--token) เท่านั้น
+   ========================================================================== */
+:root {
+  /* โซนเรียน (สว่าง) */
+  --bg-learn:          #FFFDF7;
+  --surface-learn:     #FFFFFF;
+  --surface-learn-alt: #FFF1DC;
+  --border-learn:      #E6DAC4;
+
+  /* โซนอารีน่า (เข้ม) */
+  --bg-arena:          #141733;
+  --surface-arena:     #1E2247;
+  --surface-arena-alt: #2B3163;
+  --border-arena:      #3C4480;
+
+  /* ink token */
+  --ink-learn:         #171B2A;
+  --ink-learn-muted:   #4B5568;
+  --ink-arena:         #F6F8FF;
+  --ink-arena-muted:   #AEB7DE;
+  --ink-on-bright:     #171B2A;
+
+  /* สีสด */
+  --bright-orange:    #FF6A13;
+  --bright-yellow:    #FFD21E;
+  --bright-teal:      #00B3C8;
+  --bright-green:     #21C46A;
+  --bright-lavender:  #C4A5FF;
+  --bright-pink:      #FF7BAC;
+
+  /* สีเข้ม */
+  --deep-orange:      #C43D00;
+  --deep-amber:       #8A6300;
+  --deep-teal:        #00707F;
+  --deep-green:       #0F7A3D;
+  --deep-violet:      #5B21B6;
+  --deep-red:         #B3231C;
+
+  /* สถานะ */
+  --state-success-on-learn: #0F7A3D;
+  --state-success-on-arena: #21C46A;
+  --state-warn-on-learn:    #8A6300;
+  --state-warn-on-arena:    #FFD21E;
+  --state-error-on-learn:   #B3231C;
+  --state-error-on-arena:   #FF8A84;
+  --state-info-on-learn:    #00707F;
+  --state-info-on-arena:    #3ED8EB;
+
+  /* สายพันธุ์ */
+  --species-1: #FF6A13;
+  --species-2: #00B3C8;
+  --species-3: #21C46A;
+  --species-4: #C4A5FF;
+  --species-5: #FF7BAC;
+
+  /* spacing / radius / text */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+  --radius-sm: 8px;   --radius-md: 14px;
+  --radius-lg: 22px;  --radius-pill: 999px;
+  --text-xs: 13px; --text-sm: 15px; --text-md: 17px;
+  --text-lg: 21px; --text-xl: 27px; --text-2xl: 34px; --text-3xl: 44px;
+  --tap-min: 48px;
+
+  /* เงา */
+  --shadow-learn: 0 2px 8px rgba(23, 27, 42, .10);
+  --shadow-lift:  0 6px 18px rgba(23, 27, 42, .16);
+  --glow-arena:   0 0 20px rgba(255, 210, 30, .45);
+
+  --font-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai",
+               "Leelawadee UI", Tahoma, "Helvetica Neue", sans-serif;
+}
+
+/* ========================= Reset / base ========================= */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-base);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  overflow-x: hidden; /* กฎ 4.6 ห้ามให้หน้าเลื่อนซ้าย-ขวา */
+  background: var(--bg-learn);
+  color: var(--ink-learn);
+}
+h1, h2, h3, p, ul, ol { margin: 0 0 var(--space-3) 0; }
+button { font-family: inherit; }
+img, svg { max-width: 100%; display: block; }
+
+:focus-visible {
+  outline: 3px solid var(--deep-teal);
+  outline-offset: 2px;
+}
+.zone-arena :focus-visible,
+.review-nav :focus-visible[data-arena-focus] {
+  outline-color: var(--bright-yellow);
+}
+
+/* ========================= Review nav (ไม่ใช่ UI จริง) ========================= */
+.review-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface-learn-alt);
+  border-bottom: 2px dashed var(--border-learn);
+  padding: var(--space-2) var(--space-3);
+}
+.review-nav__label {
+  font-size: var(--text-xs);
+  color: var(--ink-learn-muted);
+  margin-bottom: var(--space-1);
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.review-nav__list {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto; /* เลื่อนในกล่องของตัวเอง ไม่ใช่ทั้ง body */
+  padding-bottom: var(--space-1);
+  list-style: none;
+  margin: 0;
+}
+.review-nav__list li { flex: 0 0 auto; }
+.review-nav__btn {
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-learn);
+  background: var(--surface-learn);
+  color: var(--ink-learn);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.review-nav__btn[aria-current="true"] {
+  background: var(--deep-teal);
+  color: var(--surface-learn);
+  border-color: var(--deep-teal);
+}
+
+/* ========================= Zones ========================= */
+.screen { width: 100%; min-height: 100vh; }
+.screen[hidden] { display: none; }
+.zone-learn { background: var(--bg-learn); color: var(--ink-learn); }
+.zone-arena { background: var(--bg-arena); color: var(--ink-arena); }
+.shell {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+  font-size: var(--text-sm);
+}
+.zone-learn .topbar { background: var(--surface-learn-alt); color: var(--ink-learn); }
+.zone-arena .topbar { background: var(--surface-arena-alt); color: var(--ink-arena); }
+.topbar__stat { text-align: right; }
+.topbar__stat b { display: block; font-size: var(--text-md); }
+
+h1 { font-size: var(--text-xl); }
+h2 { font-size: var(--text-lg); }
+.muted-learn { color: var(--ink-learn-muted); }
+.muted-arena { color: var(--ink-arena-muted); }
+
+/* ========================= Buttons ========================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-pill);
+  border: none;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+.btn:disabled { cursor: not-allowed; opacity: .55; }
+.btn-block { display: flex; width: 100%; }
+
+.btn-primary { background: var(--bright-orange); color: var(--ink-on-bright); }
+.btn-secondary {
+  background: transparent;
+  border: 2px solid var(--deep-teal);
+  color: var(--deep-teal);
+}
+.btn-ghost-learn { background: transparent; color: var(--ink-learn-muted); border: none; }
+.btn-ghost-arena { background: transparent; color: var(--ink-arena-muted); border: none; }
+.btn-arena { background: var(--bright-yellow); color: var(--ink-on-bright); box-shadow: var(--glow-arena); }
+.btn-arena-secondary {
+  background: var(--surface-arena-alt);
+  color: var(--ink-arena);
+  border: 1px solid var(--border-arena);
+}
+.btn-arena-secondary[aria-pressed="true"] {
+  border-color: var(--bright-yellow);
+  box-shadow: 0 0 0 2px var(--bright-yellow) inset;
+}
+
+/* ========================= Cards / forms ========================= */
+.card-learn {
+  background: var(--surface-learn);
+  border: 1px solid var(--border-learn);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-learn);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.card-arena {
+  background: var(--surface-arena);
+  border: 1px solid var(--border-arena);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.field { margin-bottom: var(--space-4); }
+.field label { display: block; font-size: var(--text-sm); margin-bottom: var(--space-2); font-weight: 600; }
+.field input {
+  width: 100%;
+  min-height: var(--tap-min);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-learn);
+  padding: 0 var(--space-4);
+  font-size: var(--text-md);
+  background: var(--surface-learn);
+  color: var(--ink-learn);
+}
+.hint { font-size: var(--text-xs); color: var(--ink-learn-muted); margin-top: var(--space-1); }
+
+.lesson-card {
+  display: flex;
+  gap: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface-learn);
+  box-shadow: var(--shadow-learn);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+  border: 1px solid var(--border-learn);
+}
+.lesson-card__stripe { width: 6px; flex: 0 0 6px; }
+.lesson-card__stripe--unread { background: var(--deep-orange); }
+.lesson-card__stripe--read { background: var(--deep-teal); }
+.lesson-card__body { padding: var(--space-4); flex: 1; }
+.lesson-card__tag {
+  display: inline-block;
+  font-size: var(--text-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-learn-alt);
+  color: var(--ink-learn-muted);
+  margin-bottom: var(--space-2);
+}
+.lesson-card__status {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+.lesson-card__status--unread { color: var(--deep-orange); }
+.lesson-card__status--read { color: var(--deep-teal); }
+.lesson-card__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+
+.qbox { background: var(--surface-learn); border: 1px solid var(--border-learn); border-radius: var(--radius-lg); box-shadow: var(--shadow-learn); padding: var(--space-4); margin-bottom: var(--space-4); }
+.qbox legend { font-weight: 700; padding: 0; margin-bottom: var(--space-3); font-size: var(--text-md); }
+.qopt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-learn);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+}
+.qopt input { width: 22px; height: 22px; flex: 0 0 22px; }
+.qopt:hover { background: var(--surface-learn-alt); }
+
+.progress-track { border-radius: var(--radius-pill); height: 18px; overflow: hidden; position: relative; }
+.zone-learn .progress-track { background: var(--surface-learn-alt); }
+.zone-arena .progress-track { background: var(--surface-arena-alt); }
+.progress-fill { height: 100%; background: var(--bright-green); }
+.progress-caption { font-size: var(--text-sm); margin-top: var(--space-2); font-weight: 600; }
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-arena-alt);
+  color: var(--ink-arena);
+  margin: 0 var(--space-1) var(--space-1) 0;
+}
+.badge-pill--learn { background: var(--surface-learn-alt); color: var(--ink-learn); }
+.mock-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px dashed currentColor;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
+.result-panel { border-radius: var(--radius-lg); padding: var(--space-4); margin-bottom: var(--space-4); }
+.result-panel--win { background: var(--surface-arena-alt); border: 2px solid var(--state-success-on-arena); }
+.result-panel--neutral { background: var(--surface-arena-alt); border: 2px solid var(--state-info-on-arena); }
+.result-panel__title { font-size: var(--text-lg); font-weight: 700; margin-bottom: var(--space-2); }
+
+/* ========================= Pet / species / arena visuals ========================= */
+.pet-stage { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4); }
+.pet-figure-caption { font-size: var(--text-xs); color: var(--ink-arena-muted); margin-top: var(--space-2); }
+
+.species-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-3); }
+.species-tile {
+  min-height: var(--tap-min);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border-arena);
+  background: var(--surface-arena-alt);
+  color: var(--ink-arena);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  text-align: center;
+}
+.species-tile[disabled] { opacity: .6; cursor: not-allowed; }
+.species-swatch { width: 32px; height: 32px; border-radius: 50%; }
+
+.opponent-tile {
+  width: 100%;
+  min-height: var(--tap-min);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border-arena);
+  background: var(--surface-arena-alt);
+  color: var(--ink-arena);
+  padding: var(--space-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  cursor: pointer;
+  text-align: left;
+}
+
+.growth-log-item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-arena-alt);
+  margin-bottom: var(--space-2);
+}
+
+.shop-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-arena-alt);
+  margin-bottom: var(--space-3);
+}
+
+/* ========================= Modal ========================= */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(20, 23, 51, .72);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 200;
+  padding: var(--space-4);
+}
+.modal-backdrop[hidden] { display: none; }
+.modal-box {
+  background: var(--surface-arena);
+  color: var(--ink-arena);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  max-width: 480px;
+  width: 100%;
+  box-shadow: var(--shadow-lift);
+}
+.modal-actions { display: flex; gap: var(--space-3); margin-top: var(--space-4); flex-wrap: wrap; }
+
+/* ========================= Toast ========================= */
+#toast-region {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  z-index: 300;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-lift);
+  font-size: var(--text-sm);
+}
+.toast-learn { background: var(--ink-learn); color: var(--bg-learn); }
+.toast-arena { background: var(--surface-arena-alt); color: var(--ink-arena); border: 1px solid var(--border-arena); }
+.toast-close {
+  min-height: var(--tap-min); min-width: var(--tap-min);
+  background: transparent; border: none; color: inherit; font-size: var(--text-lg); cursor: pointer;
+  line-height: 1;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0);
+}
+</style>
+</head>
+<body>
+
+<nav class="review-nav" aria-label="แถบนำทางสำหรับผู้รีวิว ไม่ใช่ส่วนของ UI จริง">
+  <div class="review-nav__label">แถบสำหรับรีวิว (ไม่ใช่ส่วนของ UI จริง) — กดเพื่อข้ามไปดูหน้าจอต่างๆ</div>
+  <ul class="review-nav__list" id="review-nav-list">
+    <li><button class="review-nav__btn" data-target="screen-login">1. ล็อกอิน</button></li>
+    <li><button class="review-nav__btn" data-target="screen-lessons">2. บทเรียนของฉัน</button></li>
+    <li><button class="review-nav__btn" data-target="screen-quiz">3. ทำแบบทดสอบ</button></li>
+    <li><button class="review-nav__btn" data-target="screen-results">4. ผลคะแนน</button></li>
+    <li><button class="review-nav__btn" data-target="screen-pet">5. สัตว์เลี้ยงของฉัน</button></li>
+    <li><button class="review-nav__btn" data-target="screen-shop">6. ร้านของแต่งตัว</button></li>
+    <li><button class="review-nav__btn" data-target="screen-species">7. เปลี่ยนสาย/อัลบั้ม</button></li>
+    <li><button class="review-nav__btn" data-target="screen-arena">8. อารีน่า</button></li>
+  </ul>
+</nav>
+
+<div id="toast-region" aria-live="polite"></div>
+
+<main>
+
+  <!-- ========================= 1. ล็อกอินนักเรียน (FE-01) ========================= -->
+  <section id="screen-login" class="screen zone-learn">
+    <div class="shell">
+      <h1>เข้าสู่ระบบ War Point</h1>
+      <p class="muted-learn">กรอกรหัสประจำตัวและ PIN ตัวเลขของเธอ</p>
+
+      <form id="login-form" class="card-learn" novalidate>
+        <div class="field">
+          <label for="login-id">รหัสประจำตัว</label>
+          <input id="login-id" name="id" type="text" inputmode="numeric" autocomplete="off" placeholder="เช่น 3001">
+        </div>
+        <div class="field">
+          <label for="login-pin">PIN (ตัวเลข)</label>
+          <input id="login-pin" name="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="เช่น 1234">
+        </div>
+        <p id="login-feedback" class="hint" role="status"></p>
+        <button type="submit" class="btn btn-primary btn-block">เข้าสู่ระบบ</button>
+      </form>
+
+      <p class="hint">ตัวอย่างข้อมูลสำหรับทดสอบ (ค่าสมมติของ prototype นี้เท่านั้น): รหัสประจำตัว <strong>3001</strong> / PIN <strong>1234</strong></p>
+    </div>
+  </section>
+
+  <!-- ========================= 2. บทเรียนของฉัน (FE-08/09/10) ========================= -->
+  <section id="screen-lessons" class="screen zone-learn" hidden>
+    <div class="shell">
+      <div class="topbar" id="topbar-lessons"></div>
+      <h1>บทเรียนของฉัน</h1>
+      <p class="muted-learn">เลือกดูคลิป/สื่อ หรือเอกสารที่ครูเตรียมไว้ให้ ก่อนไปทำแบบทดสอบ</p>
+      <div id="lesson-list"></div>
+      <button id="btn-go-quiz" class="btn btn-primary btn-block">ไปทำแบบทดสอบ</button>
+    </div>
+  </section>
+
+  <!-- ========================= 3. ทำแบบทดสอบปรนัย (FE-20) ========================= -->
+  <section id="screen-quiz" class="screen zone-learn" hidden>
+    <div class="shell">
+      <div class="topbar" id="topbar-quiz"></div>
+      <h1 id="quiz-title"></h1>
+      <p class="muted-learn">เลือกคำตอบที่ถูกที่สุดในแต่ละข้อ แล้วกดส่งคำตอบ</p>
+
+      <form id="quiz-form"></form>
+
+      <div id="quiz-submit-row">
+        <button id="btn-submit-quiz" type="button" class="btn btn-primary btn-block">ส่งคำตอบ</button>
+      </div>
+
+      <div id="quiz-result-inline" hidden class="card-learn" role="status">
+        <p id="quiz-result-text"></p>
+        <button id="btn-view-results" class="btn btn-primary btn-block">ดูผลคะแนน</button>
+        <button id="btn-retake-quiz" class="btn btn-ghost-learn btn-block">ทำแบบทดสอบใหม่อีกครั้ง (จำลองชุดถัดไป)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= 4. ผลคะแนน (FE-16/21/22/23) ========================= -->
+  <section id="screen-results" class="screen zone-learn" hidden>
+    <div class="shell">
+      <div class="topbar" id="topbar-results"></div>
+      <h1>ผลคะแนนของฉัน</h1>
+      <div id="results-body"></div>
+    </div>
+  </section>
+
+  <!-- ========================= 5. สัตว์เลี้ยงของฉัน (FE-24/74) ========================= -->
+  <section id="screen-pet" class="screen zone-arena" hidden>
+    <div class="shell">
+      <div class="topbar" id="topbar-pet"></div>
+      <h1>สัตว์เลี้ยงของฉัน</h1>
+      <div id="pet-body"></div>
+      <div style="display:flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-4);">
+        <button class="btn btn-ghost-arena" data-target="screen-shop">ไปร้านของแต่งตัว</button>
+        <button class="btn btn-ghost-arena" data-target="screen-species">เปลี่ยนชนิด / ดูอัลบั้ม</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= 6. ร้านของแต่งตัว (FE-25) ========================= -->
+  <section id="screen-shop" class="screen zone-arena" hidden>
+    <div class="shell">
+      <div class="topbar" id="topbar-shop"></div>
+      <h1>ร้านของแต่งตัว</h1>
+      <p class="muted-arena">ของแต่งตัวมีไว้เพื่อความสวยงามเท่านั้น <strong>ไม่มีผลต่อค่าพลัง</strong></p>
+      <div id="shop-list"></div>
+    </div>
+  </section>
+
+  <!-- ========================= 7. เปลี่ยนชนิดสัตว์เลี้ยง + อัลบั้ม (FE-26/72/73/74) ========================= -->
+  <section id="screen-species" class="screen zone-arena" hidden>
+    <div class="shell">
+      <div class="topbar" id="topbar-species"></div>
+      <h1>เปลี่ยนชนิดสัตว์เลี้ยง</h1>
+      <p class="muted-arena">เปลี่ยนได้ตลอด แต่ตัวใหม่จะเริ่มจาก <strong>ขั้น 1</strong> เสมอ — ยอดแต้มที่ใช้ได้จะคืนมาเท่ากับยอดสะสมรวมทั้งหมด</p>
+      <div id="species-grid" class="species-grid"></div>
+
+      <h2 style="margin-top: var(--space-6);">อัลบั้มบันทึกเส้นทางการเติบโต</h2>
+      <p class="muted-arena">ประวัติของสัตว์เลี้ยงตัวก่อนๆ ที่เคยเลี้ยงมา — <strong>เป็นบันทึกอ่านอย่างเดียว ไม่สามารถกดเพื่อสลับกลับไปใช้ตัวเก่าที่โตแล้วได้</strong></p>
+      <div id="growth-log-list"></div>
+    </div>
+  </section>
+
+  <!-- ========================= 8. อารีน่า (FE-42/31/32) ========================= -->
+  <section id="screen-arena" class="screen zone-arena" hidden>
+    <div class="shell">
+      <div class="topbar" id="topbar-arena"></div>
+      <h1>อารีน่ารายสัปดาห์</h1>
+      <div id="arena-body"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Modal: ยืนยันเปลี่ยนชนิดสัตว์เลี้ยง -->
+<div class="modal-backdrop" id="species-modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="species-modal-title">
+    <h2 id="species-modal-title">ยืนยันเปลี่ยนชนิดสัตว์เลี้ยง?</h2>
+    <p id="species-modal-body"></p>
+    <ul>
+      <li>สัตว์เลี้ยงตัวใหม่เริ่มจาก <strong>ขั้น 1</strong> เสมอ ไม่มีข้อยกเว้น</li>
+      <li>ยอดแต้มที่ใช้ได้จะกลับมาเท่ากับยอดสะสมรวมทั้งหมด (คืนเต็ม)</li>
+      <li>ของแต่งตัวที่ใส่อยู่จะถูกถอดทั้งหมด</li>
+      <li>ตัวเก่าจะถูกบันทึกไว้ในอัลบั้มเส้นทางการเติบโต แต่ไม่สามารถสลับกลับมาใช้ได้อีก</li>
+    </ul>
+    <div class="modal-actions">
+      <button id="btn-confirm-species" class="btn btn-arena">ยืนยันเปลี่ยนชนิดสัตว์เลี้ยง</button>
+      <button id="btn-cancel-species" class="btn btn-ghost-arena">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ======================================================================
+     ค่า mock ทั้งหมดของ prototype นี้ — ประกาศเป็น object เดียวที่ต้นสคริปต์
+     (กฎ DESIGN.md 4.8) ทุกที่ที่ต้องใช้ค่าเหล่านี้ให้อ้างจากที่นี่เท่านั้น
+     ค่าที่ spec ยังไม่ล็อก ถูกจดไว้ในคอมเมนต์ "ค่าสมมติ" ทุกจุด
+     ====================================================================== */
+  var MOCK = {
+    student: { id: "3001", pin: "1234", nickname: "น้องมิว" }, // ข้อมูลสมมติ ไม่ใช่ชื่อจริง (กฎ 4.5)
+
+    lessons: [
+      { id: "l1", type: "clip", title: "คลิปสอนสูตรคูณแม่ 6-9", note: "ลิงก์คลิปที่ครูแปะไว้ (FE-08)" },
+      { id: "l2", type: "document", title: "เอกสารสูตรคูณ (ครูอัปโหลด)", note: "เอกสารที่ครูอัปโหลด (FE-09)" },
+      { id: "l3", type: "clip", title: "คลิปทบทวนการคูณเลข 2 หลัก", note: "ลิงก์คลิปที่ครูแปะไว้ (FE-08)" }
+    ],
+
+    quiz: {
+      title: "แบบทดสอบปรนัย: การคูณเลข",
+      fullScoreMock: 20, // ค่าสมมติ: คะแนนเต็มของชุดนี้ที่ "ครู" ตั้งไว้ (FE-21)
+      questions: [
+        { text: "6 × 7 = ?", options: ["40", "42", "48", "36"], correct: 1 },
+        { text: "9 × 8 = ?", options: ["72", "81", "64", "90"], correct: 0 },
+        { text: "12 × 3 = ?", options: ["30", "36", "32", "40"], correct: 1 },
+        { text: "7 × 7 = ?", options: ["42", "45", "49", "56"], correct: 2 },
+        { text: "8 × 6 = ?", options: ["46", "48", "54", "64"], correct: 1 }
+      ]
+    },
+    pointConversionRatioMock: 1, // ค่าสมมติ: อัตราแปลง 1 คะแนน : 1 แต้ม (spec ยังไม่ล็อกอัตรานี้)
+
+    stageUnlockCostMock: 30,   // ค่าสมมติ: แต้มที่ใช้ได้ต่อการปลดล็อก 1 ขั้น (spec ยังไม่ล็อกเกณฑ์แต้มต่อขั้น)
+    powerPerStageMock: 10,     // ค่าสมมติ: ค่าพลังต่อขั้น (spec ยังไม่ล็อกตัวเลขค่าพลัง)
+    maxStage: 4,               // ค่าที่ล็อกแล้วจาก spec 02
+
+    species: [
+      { id: 1, label: "สายที่ 1", token: "--species-1" },
+      { id: 2, label: "สายที่ 2", token: "--species-2" },
+      { id: 3, label: "สายที่ 3", token: "--species-3" },
+      { id: 4, label: "สายที่ 4", token: "--species-4" },
+      { id: 5, label: "สายที่ 5", token: "--species-5" }
+    ], // ชื่อสายพันธุ์จริงยังไม่กำหนด ใช้ป้ายกลางๆ ตามข้อกำหนด
+
+    statusEffectsMock: [
+      { id: "fire", label: "ไฟไหม้" },
+      { id: "poison", label: "ติดพิษ" },
+      { id: "confuse", label: "มึนงง" }
+    ], // สถานะพิเศษ 3 อย่างตาม spec 02 — ตัวเลขผลของสถานะยังไม่ล็อก แสดงเป็นตัวอย่างเฉยๆ
+
+    shopItems: [
+      { id: "hat", name: "หมวกผ้า", priceMock: 15 },
+      { id: "scarf", name: "ผ้าพันคอ", priceMock: 20 },
+      { id: "glasses", name: "แว่นกลม", priceMock: 25 }
+    ], // รายการและราคาของแต่งตัวยังไม่ล็อกใน spec — เป็นค่าสมมติทั้งหมด
+
+    opponents: [
+      { code: "2214", nickname: "จิ๋ว", stageMock: 3 },
+      { code: "2219", nickname: "บอส", stageMock: 2 },
+      { code: "2231", nickname: "ฟ้า", stageMock: 4 },
+      { code: "2245", nickname: "ต้นกล้า", stageMock: 1 }
+    ] // เพื่อนร่วมห้องสมมติ ใช้รหัส+ชื่อเล่นเท่านั้น ไม่มีชื่อจริง (กฎ 4.5) · ขั้นเป็นค่าสมมติสำหรับสาธิตกลไกตัดสินผล
+  };
+
+  /* ======================================================================
+     State ของ prototype (mutable) — ทุกกลไกด้านล่างต้องเปลี่ยน state จริง
+     ====================================================================== */
+  var state = {
+    loggedIn: false,
+    lessonStatus: {},      // lessonId -> 'unread' | 'read'
+    audioPlayingId: null,  // lessonId ที่กำลังจำลองอ่านออกเสียงอยู่
+
+    quizAnswers: {},       // questionIndex -> optionIndex
+    quizSubmitted: false,
+    lastResult: null,      // { correctCount, total, scoreEarned, pointsEarned }
+
+    points: { total: 0, available: 0 }, // ยอดสะสมรวม (ห้ามลด) / ยอดที่ใช้ได้ (หักได้)
+
+    pet: { speciesId: 1, stage: 1, outfits: [] },
+    growthLog: [],          // { speciesId, reachedStage, roundLabel }
+    growthLogCounter: 0,
+
+    arena: { selectedCode: null, phase: "idle", stars: 0 } // phase: idle -> pending -> announced
+  };
+
+  MOCK.lessons.forEach(function (l) { state.lessonStatus[l.id] = "unread"; });
+
+  /* ======================================================================
+     Helper: toast (feedback inline แทน alert)
+     ====================================================================== */
+  function toast(message, zone) {
+    var region = document.getElementById("toast-region");
+    var el = document.createElement("div");
+    el.className = "toast toast-" + (zone === "arena" ? "arena" : "learn");
+    el.setAttribute("role", "status");
+    var span = document.createElement("span");
+    span.textContent = message;
+    var closeBtn = document.createElement("button");
+    closeBtn.className = "toast-close";
+    closeBtn.setAttribute("aria-label", "ปิดข้อความ");
+    closeBtn.textContent = "×";
+    el.appendChild(span);
+    el.appendChild(closeBtn);
+    region.appendChild(el);
+    function remove() { if (el.parentNode) el.parentNode.removeChild(el); }
+    closeBtn.addEventListener("click", remove);
+    setTimeout(remove, 4500);
+  }
+
+  function showScreen(id) {
+    document.querySelectorAll(".screen").forEach(function (s) {
+      s.hidden = s.id !== id;
+    });
+    document.querySelectorAll(".review-nav__btn").forEach(function (b) {
+      b.setAttribute("aria-current", b.dataset.target === id ? "true" : "false");
+    });
+    window.scrollTo(0, 0);
+    if (id === "screen-lessons") renderLessons();
+    if (id === "screen-quiz") renderQuiz();
+    if (id === "screen-results") renderResults();
+    if (id === "screen-pet") renderPet();
+    if (id === "screen-shop") renderShop();
+    if (id === "screen-species") renderSpecies();
+    if (id === "screen-arena") renderArena();
+  }
+
+  function speciesById(id) {
+    for (var i = 0; i < MOCK.species.length; i++) if (MOCK.species[i].id === id) return MOCK.species[i];
+    return MOCK.species[0];
+  }
+
+  /* บั๊ก 1: ตัวนับแต้มต้องมีเจ้าของเดียว (DESIGN.md 4.8) — แต่ละหน้าจอมี div
+     .topbar ของตัวเอง แต่ห้ามให้แต่ละหน้าจอ render ค่าตัวเองแยกกัน ฟังก์ชันนี้
+     จึงวน "เขียนซ้ำ" ค่าเดียวกันลงทุกจุดที่แสดงแต้มทุกครั้งที่ถูกเรียก (ไม่ใช่
+     เขียนเฉพาะ elId ที่รับมา) เพื่อไม่ให้ DOM มีค่าต่างกันพร้อมกันได้เลย
+     บั๊ก 3: ไม่ใช้ข้อความ "ยังไม่ได้เข้าสู่ระบบ" ในหน้าที่มีตัวนับแต้ม เพราะ
+     แถบนำทางสำหรับรีวิวข้ามหน้าล็อกอินได้ ทำให้ข้อความนั้นขัดกับแต้มที่โชว์อยู่
+     — ใช้ชื่อเล่นของนักเรียนตัวอย่างจาก MOCK เป็นค่าเริ่มต้นเสมอแทน */
+  var TOPBAR_IDS = [
+    "topbar-lessons", "topbar-quiz", "topbar-results",
+    "topbar-pet", "topbar-shop", "topbar-species", "topbar-arena"
+  ];
+
+  function renderTopbar() {
+    var name = MOCK.student.nickname + " (รหัส " + MOCK.student.id + ")";
+    var html =
+      "<div><strong>" + name + "</strong></div>" +
+      "<div class=\"topbar__stat\">" +
+        "<span>สะสมรวม <b>" + state.points.total + "</b></span> &nbsp; " +
+        "<span>ใช้ได้ <b>" + state.points.available + "</b></span>" +
+      "</div>";
+    TOPBAR_IDS.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    });
+  }
+
+  /* ======================================================================
+     1. Login
+     ====================================================================== */
+  document.getElementById("login-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var id = document.getElementById("login-id").value.trim();
+    var pin = document.getElementById("login-pin").value.trim();
+    var feedback = document.getElementById("login-feedback");
+    if (id === MOCK.student.id && pin === MOCK.student.pin) {
+      state.loggedIn = true;
+      feedback.textContent = "";
+      toast("เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ " + MOCK.student.nickname, "learn");
+      showScreen("screen-lessons");
+    } else {
+      feedback.textContent = "รหัสประจำตัวหรือ PIN ยังไม่ตรงกับข้อมูลตัวอย่าง ลองใหม่อีกครั้ง (ดูคำแนะนำด้านล่างฟอร์ม)";
+    }
+  });
+
+  /* ======================================================================
+     2. บทเรียนของฉัน (FE-08 / FE-09 / FE-10)
+     ====================================================================== */
+  function renderLessons() {
+    renderTopbar("topbar-lessons");
+    var list = document.getElementById("lesson-list");
+    list.innerHTML = "";
+    MOCK.lessons.forEach(function (lesson) {
+      var status = state.lessonStatus[lesson.id];
+      var isPlaying = state.audioPlayingId === lesson.id;
+      var wrap = document.createElement("div");
+      wrap.className = "lesson-card";
+      wrap.innerHTML =
+        "<div class=\"lesson-card__stripe " + (status === "read" ? "lesson-card__stripe--read" : "lesson-card__stripe--unread") + "\"></div>" +
+        "<div class=\"lesson-card__body\">" +
+          "<span class=\"lesson-card__tag\">" + (lesson.type === "clip" ? "คลิป / สื่อภายนอก" : "เอกสาร") + "</span>" +
+          "<h2 style=\"margin:0 0 4px;\">" + lesson.title + "</h2>" +
+          "<p class=\"muted-learn\" style=\"margin:0 0 8px; font-size: var(--text-sm);\">" + lesson.note + "</p>" +
+          "<div class=\"lesson-card__status " + (status === "read" ? "lesson-card__status--read" : "lesson-card__status--unread") + "\">" +
+            (status === "read" ? "ทบทวนแล้ว" : "ยังไม่ได้ทบทวน") +
+          "</div>" +
+          "<div class=\"lesson-card__actions\">" +
+            "<button class=\"btn btn-secondary\" data-open=\"" + lesson.id + "\">" + (lesson.type === "clip" ? "เปิดคลิป" : "เปิดเอกสาร") + "</button>" +
+            "<button class=\"btn btn-ghost-learn\" data-tts=\"" + lesson.id + "\">" + (isPlaying ? "หยุดอ่านออกเสียง" : "ให้ AI อ่านออกเสียง") + "</button>" +
+          "</div>" +
+        "</div>";
+      list.appendChild(wrap);
+    });
+
+    list.querySelectorAll("[data-open]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.dataset.open;
+        state.lessonStatus[id] = "read";
+        toast("จำลองการเปิดสื่อ — ในระบบจริงจะเปิดลิงก์/ไฟล์ที่ครูเตรียมไว้", "learn");
+        renderLessons();
+      });
+    });
+    list.querySelectorAll("[data-tts]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.dataset.tts;
+        if (state.audioPlayingId === id) {
+          state.audioPlayingId = null;
+          toast("หยุดอ่านออกเสียงแล้ว", "learn");
+        } else {
+          state.audioPlayingId = id;
+          state.lessonStatus[id] = "read";
+          toast("AI กำลังอ่านเนื้อหาบทเรียนออกเสียงให้ฟัง (จำลอง)", "learn");
+        }
+        renderLessons();
+      });
+    });
+  }
+
+  document.getElementById("btn-go-quiz").addEventListener("click", function () {
+    showScreen("screen-quiz");
+  });
+
+  /* ======================================================================
+     3. ทำแบบทดสอบปรนัย (FE-20)
+     ====================================================================== */
+  function renderQuiz() {
+    renderTopbar("topbar-quiz");
+    document.getElementById("quiz-title").textContent = MOCK.quiz.title;
+    var form = document.getElementById("quiz-form");
+    var submitRow = document.getElementById("quiz-submit-row");
+    var resultInline = document.getElementById("quiz-result-inline");
+
+    form.innerHTML = "";
+    MOCK.quiz.questions.forEach(function (q, qi) {
+      var fs = document.createElement("fieldset");
+      fs.className = "qbox";
+      var legend = document.createElement("legend");
+      legend.textContent = (qi + 1) + ". " + q.text;
+      fs.appendChild(legend);
+      q.options.forEach(function (opt, oi) {
+        var label = document.createElement("label");
+        label.className = "qopt";
+        var input = document.createElement("input");
+        input.type = "radio";
+        input.name = "q" + qi;
+        input.value = String(oi);
+        input.checked = state.quizAnswers[qi] === oi;
+        input.disabled = state.quizSubmitted;
+        input.addEventListener("change", function () {
+          state.quizAnswers[qi] = oi;
+        });
+        var span = document.createElement("span");
+        span.textContent = opt;
+        label.appendChild(input);
+        label.appendChild(span);
+        fs.appendChild(label);
+      });
+      form.appendChild(fs);
+    });
+
+    submitRow.hidden = state.quizSubmitted;
+    resultInline.hidden = !state.quizSubmitted;
+    if (state.quizSubmitted && state.lastResult) {
+      var r = state.lastResult;
+      document.getElementById("quiz-result-text").textContent =
+        "ตอบถูก " + r.correctCount + " / " + r.total + " ข้อ · ได้คะแนน " + r.scoreEarned + " / " + MOCK.quiz.fullScoreMock + " (คะแนนเต็มค่าสมมติ)";
+    }
+  }
+
+  document.getElementById("btn-submit-quiz").addEventListener("click", function () {
+    var total = MOCK.quiz.questions.length;
+    var answeredCount = Object.keys(state.quizAnswers).length;
+    if (answeredCount < total) {
+      toast("กรุณาเลือกคำตอบให้ครบทุกข้อก่อนส่ง", "learn");
+      return;
+    }
+    var correctCount = 0;
+    MOCK.quiz.questions.forEach(function (q, qi) {
+      if (state.quizAnswers[qi] === q.correct) correctCount++;
+    });
+    var scoreEarned = Math.round((correctCount / total) * MOCK.quiz.fullScoreMock);
+    var pointsEarned = scoreEarned * MOCK.pointConversionRatioMock;
+
+    state.lastResult = { correctCount: correctCount, total: total, scoreEarned: scoreEarned, pointsEarned: pointsEarned };
+    state.points.total += pointsEarned;       // ยอดสะสมรวม: เพิ่มได้เท่านั้น
+    state.points.available += pointsEarned;   // ยอดที่ใช้ได้: เพิ่มตามคะแนนที่ได้
+    state.quizSubmitted = true;
+
+    toast("ส่งคำตอบแล้ว ระบบตรวจให้คะแนนอัตโนมัติ", "learn");
+    renderQuiz();
+  });
+
+  document.getElementById("btn-view-results").addEventListener("click", function () {
+    showScreen("screen-results");
+  });
+
+  document.getElementById("btn-retake-quiz").addEventListener("click", function () {
+    state.quizAnswers = {};
+    state.quizSubmitted = false;
+    toast("จำลองแบบทดสอบชุดใหม่ — ในระบบจริงคือชุดข้อสอบที่ครูเผยแพร่ต่อไป", "learn");
+    renderQuiz();
+  });
+
+  /* ======================================================================
+     4. ผลคะแนน (FE-16 / FE-21 / FE-22 / FE-23)
+     ====================================================================== */
+  function renderResults() {
+    renderTopbar("topbar-results");
+    var body = document.getElementById("results-body");
+    if (!state.lastResult) {
+      body.innerHTML =
+        "<div class=\"card-learn\"><p>ยังไม่มีผลคะแนน กรุณาไปทำแบบทดสอบก่อน</p>" +
+        "<button class=\"btn btn-primary btn-block\" data-target=\"screen-quiz\">ไปทำแบบทดสอบ</button></div>";
+      body.querySelector("[data-target]").addEventListener("click", function () { showScreen("screen-quiz"); });
+      return;
+    }
+    var r = state.lastResult;
+    body.innerHTML =
+      "<div class=\"card-learn\">" +
+        "<h2>คะแนนแบบทดสอบล่าสุด</h2>" +
+        "<p>ตอบถูก <strong>" + r.correctCount + " / " + r.total + "</strong> ข้อ</p>" +
+        "<p>คะแนนที่ได้ <strong>" + r.scoreEarned + " / " + MOCK.quiz.fullScoreMock + "</strong> " +
+          "<span class=\"mock-tag\" style=\"color:var(--ink-learn-muted);\">คะแนนเต็มค่าสมมติที่ครูตั้งไว้</span></p>" +
+        "<p>แปลงเป็นแต้ม <strong>" + r.pointsEarned + " แต้ม</strong> " +
+          "<span class=\"mock-tag\" style=\"color:var(--ink-learn-muted);\">อัตราแปลง 1 คะแนน : 1 แต้ม (ค่าสมมติ)</span></p>" +
+      "</div>" +
+      "<div class=\"card-learn\">" +
+        "<h2>ยอดแต้มของฉัน</h2>" +
+        "<p><strong>ยอดสะสมรวมทั้งหมด: " + state.points.total + " แต้ม</strong><br>" +
+          "<span class=\"muted-learn\" style=\"font-size:var(--text-sm);\">ยอดนี้ไม่มีวันลดลงไม่ว่ากรณีใด</span></p>" +
+        "<p><strong>ยอดที่ใช้ได้ตอนนี้: " + state.points.available + " แต้ม</strong><br>" +
+          "<span class=\"muted-learn\" style=\"font-size:var(--text-sm);\">ใช้ปลดล็อกขั้นเติบโตหรือซื้อของแต่งตัวได้</span></p>" +
+      "</div>" +
+      "<button class=\"btn btn-primary btn-block\" data-target=\"screen-pet\">ไปดูสัตว์เลี้ยงของฉัน</button>";
+    body.querySelector("[data-target]").addEventListener("click", function () { showScreen("screen-pet"); });
+  }
+
+  /* ======================================================================
+     SVG สัตว์เลี้ยง (ค่าสมมติ ยังไม่มีอาร์ตเวิร์กจริง — รูปทรงเรขาคณิตแทน)
+     ====================================================================== */
+  function petSvg(speciesToken, stage) {
+    var size = 70 + stage * 18;
+    var half = size / 2;
+    var extra = "";
+    if (stage >= 2) {
+      extra += "<polygon points=\"" + (half - 14) + ",8 " + (half - 2) + ",8 " + (half - 8) + ",26\" fill=\"var(" + speciesToken + ")\" />";
+      extra += "<polygon points=\"" + (half + 2) + ",8 " + (half + 14) + ",8 " + (half + 8) + ",26\" fill=\"var(" + speciesToken + ")\" />";
+    }
+    if (stage >= 3) {
+      extra += "<circle cx=\"" + (half - half * 0.55) + "\" cy=\"" + half + "\" r=\"7\" fill=\"var(--ink-on-bright)\" />";
+      extra += "<circle cx=\"" + (half + half * 0.55) + "\" cy=\"" + half + "\" r=\"7\" fill=\"var(--ink-on-bright)\" />";
+    }
+    if (stage >= 4) {
+      extra += "<rect x=\"" + (half - 3) + "\" y=\"2\" width=\"6\" height=\"14\" fill=\"var(--bright-yellow)\" />";
+    }
+    return (
+      "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\" role=\"img\" aria-label=\"ภาพประกอบสัตว์เลี้ยง (ยังไม่มีอาร์ตเวิร์กจริง)\">" +
+        extra +
+        "<circle cx=\"" + half + "\" cy=\"" + half + "\" r=\"" + (half - 6) + "\" fill=\"var(" + speciesToken + ")\" stroke=\"var(--ink-arena)\" stroke-width=\"2\" />" +
+      "</svg>"
+    );
+  }
+
+  /* ======================================================================
+     5. สัตว์เลี้ยงของฉัน (FE-24 / FE-74)
+     ====================================================================== */
+  function renderPet() {
+    renderTopbar("topbar-pet", "arena");
+    var body = document.getElementById("pet-body");
+    var sp = speciesById(state.pet.speciesId);
+    var stage = state.pet.stage;
+    var cost = MOCK.stageUnlockCostMock;
+    var power = stage * MOCK.powerPerStageMock;
+    // บั๊ก 2: ยอดที่ใช้ได้อาจมากกว่าเกณฑ์ปลดล็อก (เช่นสะสมข้ามหลายขั้น) — ห้าม
+    // แสดงตัวเศษเกินตัวหาร (เช่น "65 / 30") ให้ครอบ (cap) ตัวเลขที่แสดงไว้ที่
+    // cost เป็นอย่างมาก ส่วนเงื่อนไขปลดล็อกจริงยังใช้ state.points.available เดิม
+    var pointsForStageDisplay = Math.min(state.points.available, cost);
+    var pct = Math.round((pointsForStageDisplay / cost) * 100);
+    var canUnlock = stage < MOCK.maxStage && state.points.available >= cost;
+    var atMax = stage >= MOCK.maxStage;
+    var stageCaptionText = (pointsForStageDisplay >= cost && !atMax)
+      ? (cost + " / " + cost + " แต้มที่ใช้ได้ — พร้อมปลดล็อกแล้ว")
+      : (pointsForStageDisplay + " / " + cost + " แต้มที่ใช้ได้");
+
+    var outfitsLabel = state.pet.outfits.length
+      ? state.pet.outfits.map(function (id) {
+          var item = MOCK.shopItems.filter(function (it) { return it.id === id; })[0];
+          return item ? item.name : id;
+        }).join(", ")
+      : "ยังไม่มีของแต่งตัว";
+
+    var statusHtml = MOCK.statusEffectsMock.map(function (s) {
+      return "<span class=\"badge-pill\">" + s.label + " <span class=\"mock-tag\">ตัวอย่างสถานะพิเศษ</span></span>";
+    }).join("");
+
+    var actionHtml;
+    if (atMax) {
+      actionHtml = "<p class=\"muted-arena\">สัตว์เลี้ยงถึงขั้นสูงสุดของรอบทดลองนี้แล้ว (ขั้น " + MOCK.maxStage + " / " + MOCK.maxStage + ")</p>";
+    } else if (canUnlock) {
+      actionHtml = "<button id=\"btn-unlock-stage\" class=\"btn btn-arena btn-block\">ปลดล็อกขั้นถัดไป (ใช้ " + cost + " แต้ม)</button>";
+    } else {
+      actionHtml =
+        "<button class=\"btn btn-arena-secondary btn-block\" disabled>ปลดล็อกขั้นถัดไป (ใช้ " + cost + " แต้ม)</button>" +
+        "<p class=\"muted-arena\" style=\"margin-top:var(--space-2);\">ยังสะสมแต้มที่ใช้ได้ไม่พอ ต้องมีอย่างน้อย " + cost + " แต้ม (ตอนนี้มี " + state.points.available + " แต้ม)</p>";
+    }
+
+    body.innerHTML =
+      "<div class=\"card-arena\">" +
+        "<div class=\"pet-stage\">" +
+          petSvg(sp.token, stage) +
+          "<div>" +
+            "<h2 style=\"margin:0;\">ขั้น " + stage + " / " + MOCK.maxStage + " <span class=\"mock-tag\">ชื่อขั้นค่าสมมติ</span></h2>" +
+            "<p class=\"muted-arena\" style=\"margin:4px 0 0;\">" + sp.label + " <span style=\"display:inline-block;width:12px;height:12px;border-radius:50%;background:var(" + sp.token + ");vertical-align:middle;margin-left:4px;\"></span></p>" +
+          "</div>" +
+        "</div>" +
+        "<p class=\"pet-figure-caption\">ภาพประกอบสัตว์เลี้ยงเป็นรูปทรงจำลอง ยังไม่มีอาร์ตเวิร์กจริง</p>" +
+        "<div class=\"progress-track\"><div class=\"progress-fill\" style=\"width:" + pct + "%;\"></div></div>" +
+        "<p class=\"progress-caption\">" + stageCaptionText + " <span class=\"mock-tag\">เกณฑ์แต้มต่อขั้นค่าสมมติ</span></p>" +
+        actionHtml +
+      "</div>" +
+      "<div class=\"card-arena\">" +
+        "<h2>ค่าพลังและสถานะพิเศษ</h2>" +
+        "<p><span class=\"badge-pill\">ค่าพลัง " + power + " <span class=\"mock-tag\">ค่าสมมติ</span></span></p>" +
+        "<p class=\"muted-arena\" style=\"font-size:var(--text-sm);\">ค่าพลังมาจากขั้นการเติบโตเท่านั้น ไม่ถูกกระทบโดยของแต่งตัว</p>" +
+        "<div>" + statusHtml + "</div>" +
+        "<p class=\"muted-arena\" style=\"font-size:var(--text-sm); margin-top:var(--space-2);\">ของแต่งตัวที่ใส่อยู่: " + outfitsLabel + "</p>" +
+      "</div>";
+
+    var unlockBtn = document.getElementById("btn-unlock-stage");
+    if (unlockBtn) {
+      unlockBtn.addEventListener("click", function () {
+        state.points.available -= cost;
+        state.pet.stage += 1;
+        toast("ปลดล็อกขั้น " + state.pet.stage + " สำเร็จ!", "arena");
+        renderPet();
+      });
+    }
+
+    document.querySelectorAll("#screen-pet [data-target]").forEach(function (btn) {
+      btn.addEventListener("click", function () { showScreen(btn.dataset.target); });
+    });
+  }
+
+  /* ======================================================================
+     6. ร้านของแต่งตัว (FE-25)
+     ====================================================================== */
+  function renderShop() {
+    renderTopbar("topbar-shop", "arena");
+    var list = document.getElementById("shop-list");
+    list.innerHTML = "";
+    MOCK.shopItems.forEach(function (item) {
+      var owned = state.pet.outfits.indexOf(item.id) !== -1;
+      var canBuy = !owned && state.points.available >= item.priceMock;
+      var row = document.createElement("div");
+      row.className = "shop-item";
+      row.innerHTML =
+        "<div>" +
+          "<strong>" + item.name + "</strong><br>" +
+          "<span class=\"muted-arena\" style=\"font-size:var(--text-sm);\">ราคา " + item.priceMock + " แต้ม <span class=\"mock-tag\">ราคาค่าสมมติ</span></span>" +
+        "</div>" +
+        (owned
+          ? "<span class=\"badge-pill\">ซื้อแล้ว ✓</span>"
+          : "<button class=\"btn btn-arena-secondary\" data-buy=\"" + item.id + "\" " + (canBuy ? "" : "disabled") + ">ซื้อ</button>");
+      list.appendChild(row);
+      if (!owned && !canBuy) {
+        var note = document.createElement("p");
+        note.className = "muted-arena";
+        note.style.fontSize = "var(--text-xs)";
+        note.textContent = "ยังสะสมแต้มที่ใช้ได้ไม่พอสำหรับของชิ้นนี้";
+      }
+    });
+    list.querySelectorAll("[data-buy]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.dataset.buy;
+        var item = MOCK.shopItems.filter(function (it) { return it.id === id; })[0];
+        if (!item || state.points.available < item.priceMock) return;
+        state.points.available -= item.priceMock;
+        state.pet.outfits.push(id);
+        toast("ซื้อ " + item.name + " สำเร็จ (ไม่มีผลต่อค่าพลัง)", "arena");
+        renderShop();
+      });
+    });
+  }
+
+  /* ======================================================================
+     7. เปลี่ยนชนิดสัตว์เลี้ยง + อัลบั้ม (FE-26 / FE-72 / FE-73 / FE-74)
+     ====================================================================== */
+  var pendingSpeciesId = null;
+
+  function renderSpecies() {
+    renderTopbar("topbar-species", "arena");
+    var grid = document.getElementById("species-grid");
+    grid.innerHTML = "";
+    MOCK.species.forEach(function (sp) {
+      var isCurrent = sp.id === state.pet.speciesId;
+      var tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "species-tile";
+      tile.disabled = isCurrent;
+      tile.innerHTML =
+        "<span class=\"species-swatch\" style=\"background:var(" + sp.token + ");\"></span>" +
+        "<span>" + sp.label + "</span>" +
+        (isCurrent ? "<span class=\"muted-arena\" style=\"font-size:var(--text-xs);\">กำลังใช้อยู่</span>" : "");
+      if (!isCurrent) {
+        tile.addEventListener("click", function () {
+          openSpeciesModal(sp.id);
+        });
+      }
+      grid.appendChild(tile);
+    });
+
+    var logList = document.getElementById("growth-log-list");
+    logList.innerHTML = "";
+    if (state.growthLog.length === 0) {
+      logList.innerHTML = "<p class=\"muted-arena\">ยังไม่มีประวัติ — นี่คือสัตว์เลี้ยงตัวแรกของเธอ</p>";
+    } else {
+      state.growthLog.forEach(function (entry) {
+        var sp = speciesById(entry.speciesId);
+        var row = document.createElement("div");
+        row.className = "growth-log-item";
+        row.innerHTML =
+          "<span class=\"species-swatch\" style=\"background:var(" + sp.token + "); width:24px; height:24px;\"></span>" +
+          "<div><strong>" + sp.label + "</strong><br>" +
+          "<span class=\"muted-arena\" style=\"font-size:var(--text-sm);\">เคยไปถึงขั้น " + entry.reachedStage + " / " + MOCK.maxStage + " · " + entry.roundLabel + "</span></div>";
+        logList.appendChild(row);
+      });
+    }
+  }
+
+  function openSpeciesModal(newSpeciesId) {
+    pendingSpeciesId = newSpeciesId;
+    var sp = speciesById(newSpeciesId);
+    document.getElementById("species-modal-body").textContent =
+      "เธอกำลังจะเปลี่ยนจาก " + speciesById(state.pet.speciesId).label + " ไปเป็น " + sp.label + " สิ่งที่จะเกิดขึ้นทันที:";
+    document.getElementById("species-modal").hidden = false;
+  }
+
+  document.getElementById("btn-cancel-species").addEventListener("click", function () {
+    pendingSpeciesId = null;
+    document.getElementById("species-modal").hidden = true;
+  });
+
+  document.getElementById("btn-confirm-species").addEventListener("click", function () {
+    if (pendingSpeciesId === null) return;
+    state.growthLogCounter += 1;
+    state.growthLog.unshift({
+      speciesId: state.pet.speciesId,
+      reachedStage: state.pet.stage,
+      roundLabel: "บันทึกครั้งที่ " + state.growthLogCounter
+    });
+    state.pet.speciesId = pendingSpeciesId;
+    state.pet.stage = 1;
+    state.pet.outfits = [];
+    state.points.available = state.points.total; // คืนแต้มที่ใช้ได้เต็ม
+
+    document.getElementById("species-modal").hidden = true;
+    toast("เปลี่ยนชนิดสัตว์เลี้ยงสำเร็จ แต้มที่ใช้ได้คืนมาเต็มจำนวน", "arena");
+    pendingSpeciesId = null;
+    renderSpecies();
+  });
+
+  /* ======================================================================
+     8. อารีน่า (FE-42 / FE-31 / FE-32)
+     ====================================================================== */
+  function renderArena() {
+    renderTopbar("topbar-arena", "arena");
+    var body = document.getElementById("arena-body");
+    var myPower = state.pet.stage * MOCK.powerPerStageMock;
+
+    var header =
+      "<div class=\"card-arena\">" +
+        "<p>ค่าพลังของสัตว์เลี้ยงฉัน: <strong>" + myPower + "</strong> <span class=\"mock-tag\">ค่าสมมติ</span></p>" +
+        "<p>ดาวที่สะสมไว้: <strong>" + state.arena.stars + " ⭐</strong> <span class=\"mock-tag\">สัญลักษณ์ตัวอย่างบนโปรไฟล์</span></p>" +
+      "</div>";
+
+    if (state.arena.phase === "idle") {
+      var opponentsHtml = MOCK.opponents.map(function (op) {
+        var selected = state.arena.selectedCode === op.code;
+        return (
+          "<button type=\"button\" class=\"opponent-tile\" data-code=\"" + op.code + "\" aria-pressed=\"" + selected + "\">" +
+            "<span>" + op.nickname + " (รหัส " + op.code + ")</span>" +
+            "<span class=\"badge-pill\">ระดับคู่แข่ง: ขั้น " + op.stageMock + " <span class=\"mock-tag\">ค่าสมมติ</span></span>" +
+          "</button>"
+        );
+      }).join("");
+      body.innerHTML =
+        header +
+        "<div class=\"card-arena\">" +
+          "<h2>เลือกคู่แข่งของสัปดาห์นี้ด้วยตัวเอง</h2>" +
+          opponentsHtml +
+          "<button id=\"btn-confirm-opponent\" class=\"btn btn-arena btn-block\" " + (state.arena.selectedCode ? "" : "disabled") + ">ยืนยันคู่แข่ง</button>" +
+        "</div>";
+
+      body.querySelectorAll(".opponent-tile").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          state.arena.selectedCode = btn.dataset.code;
+          renderArena();
+        });
+      });
+      var confirmBtn = document.getElementById("btn-confirm-opponent");
+      if (confirmBtn) {
+        confirmBtn.addEventListener("click", function () {
+          if (!state.arena.selectedCode) return;
+          state.arena.phase = "pending";
+          toast("เลือกคู่แข่งแล้ว รอครูกดประกาศผลการแข่งขัน", "arena");
+          renderArena();
+        });
+      }
+    } else if (state.arena.phase === "pending") {
+      var opponent = MOCK.opponents.filter(function (o) { return o.code === state.arena.selectedCode; })[0];
+      body.innerHTML =
+        header +
+        "<div class=\"card-arena\">" +
+          "<h2>รอครูประกาศผลการแข่งขัน</h2>" +
+          "<p class=\"muted-arena\">คู่แข่งของสัปดาห์นี้: " + (opponent ? opponent.nickname + " (รหัส " + opponent.code + ")" : "-") + "</p>" +
+          "<button id=\"btn-see-result\" class=\"btn btn-arena btn-block\">ดูผลการแข่งขัน</button>" +
+        "</div>";
+      document.getElementById("btn-see-result").addEventListener("click", function () {
+        state.arena.phase = "announced";
+        renderArena();
+      });
+    } else {
+      var op2 = MOCK.opponents.filter(function (o) { return o.code === state.arena.selectedCode; })[0];
+      var oppPower = op2 ? op2.stageMock * MOCK.powerPerStageMock : 0;
+      var win = myPower > oppPower;
+      if (win) state.arena.stars += (state.arena._counted ? 0 : 1);
+      state.arena._counted = true;
+
+      var resultHtml;
+      if (win) {
+        resultHtml =
+          "<div class=\"result-panel result-panel--win\">" +
+            "<p class=\"result-panel__title\">⭐ ชนะ!</p>" +
+            "<p>ได้รับดาวแสดงบนโปรไฟล์ 1 ดวง</p>" +
+          "</div>";
+      } else {
+        resultHtml =
+          "<div class=\"result-panel result-panel--neutral\">" +
+            "<p class=\"result-panel__title\">ยังไม่ชนะในสัปดาห์นี้</p>" +
+            "<p>ไม่มีผลเสียใดๆ ต่อแต้ม ขั้นการเติบโต หรือสัตว์เลี้ยง — ลองใหม่ได้สัปดาห์หน้า</p>" +
+          "</div>";
+      }
+      body.innerHTML =
+        header +
+        "<div class=\"card-arena\">" +
+          "<h2>ผลการแข่งขัน</h2>" +
+          "<p>ค่าพลังของฉัน " + myPower + " เทียบกับ " + (op2 ? op2.nickname : "-") + " ค่าพลัง " + oppPower + "</p>" +
+          resultHtml +
+          "<button id=\"btn-new-round\" class=\"btn btn-ghost-arena btn-block\">เลือกคู่แข่งใหม่ (จำลองสัปดาห์ถัดไป)</button>" +
+        "</div>";
+      document.getElementById("btn-new-round").addEventListener("click", function () {
+        state.arena.phase = "idle";
+        state.arena.selectedCode = null;
+        state.arena._counted = false;
+        renderArena();
+      });
+    }
+  }
+
+  /* ======================================================================
+     Review nav bindings + init
+     ====================================================================== */
+  document.querySelectorAll(".review-nav__btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { showScreen(btn.dataset.target); });
+  });
+
+  showScreen("screen-login");
+})();
+</script>
+</body>
+</html>
