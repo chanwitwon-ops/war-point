@@ -1,0 +1,2193 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>War Point — ต้นแบบฝั่งครู (UJ-02 / UJ-03 / UJ-04)</title>
+<style>
+/* ==========================================================================
+   Design Tokens — คัดลอกมาจาก DESIGN.md ทุกตัว (2026-08-21) ห้ามแก้ค่า hex
+   ที่นี่โดยไม่แก้ DESIGN.md ก่อน — ทุก rule ของ component ด้านล่างอ้างผ่าน
+   var(--token) เท่านั้น หน้าครูทุกหน้าอยู่ในโซนเรียน (zone-learn) ตาม
+   DESIGN.md ข้อ 1.3 จึงไม่มีการใช้ --bg-arena / --glow-arena ในหน้าใดเลย
+   แต่ยังคงประกาศ token ทั้งหมดไว้ครบตามที่ DESIGN.md กำหนด
+   ========================================================================== */
+:root {
+  /* โซนเรียน (สว่าง) */
+  --bg-learn:          #FFFDF7;
+  --surface-learn:     #FFFFFF;
+  --surface-learn-alt: #FFF1DC;
+  --border-learn:      #E6DAC4;
+
+  /* โซนอารีน่า (เข้ม) — ไม่ใช้ในไฟล์นี้ (หน้าครูอยู่โซนเรียนเท่านั้น) */
+  --bg-arena:          #141733;
+  --surface-arena:     #1E2247;
+  --surface-arena-alt: #2B3163;
+  --border-arena:      #3C4480;
+
+  /* ink token */
+  --ink-learn:         #171B2A;
+  --ink-learn-muted:   #4B5568;
+  --ink-arena:         #F6F8FF;
+  --ink-arena-muted:   #AEB7DE;
+  --ink-on-bright:     #171B2A;
+
+  /* สีสด */
+  --bright-orange:    #FF6A13;
+  --bright-yellow:    #FFD21E;
+  --bright-teal:      #00B3C8;
+  --bright-green:     #21C46A;
+  --bright-lavender:  #C4A5FF;
+  --bright-pink:      #FF7BAC;
+
+  /* สีเข้ม */
+  --deep-orange:      #C43D00;
+  --deep-amber:       #8A6300;
+  --deep-teal:        #00707F;
+  --deep-green:       #0F7A3D;
+  --deep-violet:      #5B21B6;
+  --deep-red:         #B3231C;
+
+  /* สถานะ */
+  --state-success-on-learn: #0F7A3D;
+  --state-success-on-arena: #21C46A;
+  --state-warn-on-learn:    #8A6300;
+  --state-warn-on-arena:    #FFD21E;
+  --state-error-on-learn:   #B3231C;
+  --state-error-on-arena:   #FF8A84;
+  --state-info-on-learn:    #00707F;
+  --state-info-on-arena:    #3ED8EB;
+
+  /* สายพันธุ์ — ไม่ใช้ในไฟล์นี้ (หน้าครูไม่แสดงข้อมูลสัตว์เลี้ยง) */
+  --species-1: #FF6A13;
+  --species-2: #00B3C8;
+  --species-3: #21C46A;
+  --species-4: #C4A5FF;
+  --species-5: #FF7BAC;
+
+  /* spacing / radius / text */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
+  --radius-sm: 8px;   --radius-md: 14px;
+  --radius-lg: 22px;  --radius-pill: 999px;
+  --text-xs: 13px; --text-sm: 15px; --text-md: 17px;
+  --text-lg: 21px; --text-xl: 27px; --text-2xl: 34px; --text-3xl: 44px;
+  --tap-min: 48px;
+
+  /* เงา */
+  --shadow-learn: 0 2px 8px rgba(23, 27, 42, .10);
+  --shadow-lift:  0 6px 18px rgba(23, 27, 42, .16);
+  --glow-arena:   0 0 20px rgba(255, 210, 30, .45);
+
+  --font-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai",
+               "Leelawadee UI", Tahoma, "Helvetica Neue", sans-serif;
+}
+
+/* ========================= Reset / base ========================= */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-base);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  overflow-x: hidden; /* กฎ 4.6 ห้ามให้หน้าเลื่อนซ้าย-ขวา */
+  background: var(--bg-learn);
+  color: var(--ink-learn);
+}
+h1, h2, h3, p, ul, ol { margin: 0 0 var(--space-3) 0; }
+button { font-family: inherit; }
+img, svg { max-width: 100%; display: block; }
+
+:focus-visible {
+  outline: 3px solid var(--deep-teal);
+  outline-offset: 2px;
+}
+
+/* ========================= Review nav (ไม่ใช่ UI จริง) ========================= */
+.review-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface-learn-alt);
+  border-bottom: 2px dashed var(--border-learn);
+  padding: var(--space-2) var(--space-3);
+}
+.review-nav__label {
+  font-size: var(--text-xs);
+  color: var(--ink-learn-muted);
+  margin-bottom: var(--space-1);
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.review-nav__list {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+  list-style: none;
+  margin: 0;
+}
+.review-nav__list li { flex: 0 0 auto; }
+.review-nav__btn {
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-learn);
+  background: var(--surface-learn);
+  color: var(--ink-learn);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.review-nav__btn[aria-current="true"] {
+  background: var(--deep-teal);
+  color: var(--surface-learn);
+  border-color: var(--deep-teal);
+}
+
+/* ========================= App nav (ของจริงในผลิตภัณฑ์ ใช้หลังล็อกอิน) ===== */
+.app-nav {
+  position: static;
+  z-index: 90;
+  background: var(--surface-learn);
+  border-bottom: 1px solid var(--border-learn);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: var(--shadow-learn);
+}
+.app-nav[hidden] { display: none; }
+.app-nav__inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow-x: auto;
+}
+.app-nav__brand {
+  font-weight: 700;
+  padding: 0 var(--space-3);
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--ink-learn-muted);
+}
+.app-nav__list { display: flex; gap: var(--space-1); list-style: none; margin: 0; padding: 0; }
+.app-nav__list li { flex: 0 0 auto; }
+.app-nav__btn {
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--ink-learn-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.app-nav__btn[aria-current="true"] {
+  background: var(--surface-learn-alt);
+  color: var(--deep-orange);
+}
+.app-nav__logout {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* ========================= Zones / layout ========================= */
+.screen { width: 100%; min-height: 100vh; }
+.screen[hidden] { display: none; }
+.zone-learn { background: var(--bg-learn); color: var(--ink-learn); }
+.shell {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+}
+.shell-wide {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+}
+h1 { font-size: var(--text-xl); }
+h2 { font-size: var(--text-lg); }
+h3 { font-size: var(--text-md); }
+.muted-learn { color: var(--ink-learn-muted); }
+
+/* ========================= Buttons ========================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-pill);
+  border: none;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+.btn:disabled { cursor: not-allowed; opacity: .55; }
+.btn-block { display: flex; width: 100%; }
+.btn-compact { padding: var(--space-2) var(--space-3); font-size: var(--text-sm); }
+
+.btn-primary { background: var(--bright-orange); color: var(--ink-on-bright); }
+.btn-secondary {
+  background: transparent;
+  border: 2px solid var(--deep-teal);
+  color: var(--deep-teal);
+}
+.btn-ghost-learn { background: transparent; color: var(--ink-learn-muted); border: none; }
+.btn-danger-outline {
+  background: transparent;
+  border: 2px solid var(--deep-red);
+  color: var(--deep-red);
+}
+
+/* ========================= Cards / forms ========================= */
+.card-learn {
+  background: var(--surface-learn);
+  border: 1px solid var(--border-learn);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-learn);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.card-learn h2:first-child, .card-learn h3:first-child { margin-top: 0; }
+.field { margin-bottom: var(--space-4); }
+.field label { display: block; font-size: var(--text-sm); margin-bottom: var(--space-2); font-weight: 600; }
+.field input[type="text"],
+.field input[type="url"],
+.field input[type="number"],
+.field input[type="date"],
+.field input[type="file"],
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: var(--tap-min);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-learn);
+  padding: 0 var(--space-4);
+  font-size: var(--text-md);
+  background: var(--surface-learn);
+  color: var(--ink-learn);
+  font-family: inherit;
+}
+.field textarea { padding: var(--space-3) var(--space-4); min-height: 96px; resize: vertical; }
+.hint { font-size: var(--text-xs); color: var(--ink-learn-muted); margin-top: var(--space-1); }
+
+.qopt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-learn);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+}
+.qopt input { width: 22px; height: 22px; flex: 0 0 22px; }
+.qopt:hover { background: var(--surface-learn-alt); }
+.qopt__body { display: flex; flex-direction: column; gap: 2px; }
+.qopt__desc { font-size: var(--text-xs); color: var(--ink-learn-muted); }
+
+.form-row { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
+@media (min-width: 640px) {
+  .form-row--2 { grid-template-columns: 1fr 1fr; }
+}
+
+/* ========================= Table ========================= */
+.table-wrap {
+  overflow-x: auto; /* กฎ 4.6 — ตารางเลื่อนในกล่องตัวเอง ไม่ใช่ทั้ง body */
+  border: 1px solid var(--border-learn);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+.data-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.data-table th, .data-table td {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--border-learn);
+  vertical-align: middle;
+}
+.data-table thead th {
+  background: var(--surface-learn-alt);
+  color: var(--ink-learn);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.data-table tbody tr:hover { background: var(--surface-learn-alt); }
+.data-table tbody tr.row-highlighted { outline: 3px solid var(--deep-teal); outline-offset: -1px; }
+.data-table td.actions-cell { white-space: nowrap; }
+.row-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* ========================= Chips / badges ========================= */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.status-chip--done { background: var(--surface-learn-alt); color: var(--state-success-on-learn); }
+.status-chip--pending { background: var(--surface-learn-alt); color: var(--state-warn-on-learn); }
+.status-chip--not { background: var(--surface-learn-alt); color: var(--ink-learn-muted); }
+.status-chip--off { background: var(--surface-learn-alt); color: var(--ink-learn-muted); }
+
+.warn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bright-yellow);
+  color: var(--ink-on-bright);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.mock-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px dashed currentColor;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+  color: var(--ink-learn-muted);
+}
+
+/* ========================= Toggle switch ========================= */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+}
+.toggle-switch {
+  position: relative;
+  width: 52px;
+  height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.toggle-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.toggle-switch__track {
+  width: 52px; height: 28px; border-radius: var(--radius-pill);
+  background: var(--border-learn);
+  position: relative;
+  transition: background .15s;
+}
+.toggle-switch__thumb {
+  position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--surface-learn); box-shadow: var(--shadow-learn);
+  transition: left .15s;
+}
+.toggle-switch input:checked + .toggle-switch__track { background: var(--bright-green); }
+.toggle-switch input:checked + .toggle-switch__track .toggle-switch__thumb { left: 27px; }
+.toggle-switch input:focus-visible + .toggle-switch__track { outline: 3px solid var(--deep-teal); outline-offset: 2px; }
+.toggle-label-text { font-weight: 600; font-size: var(--text-sm); }
+
+/* ========================= Pair / arena ========================= */
+.pair-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-learn);
+  background: var(--surface-learn);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+.pair-row__names { font-weight: 600; }
+.pair-row__vs { color: var(--ink-learn-muted); font-weight: 400; margin: 0 var(--space-2); }
+.stat-list { list-style: none; margin: 0; padding: 0; }
+.stat-list li {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-learn);
+}
+.stat-list li:last-child { border-bottom: none; }
+
+/* ========================= Modal / overlay ========================= */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(23, 27, 42, .55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  padding: var(--space-4);
+}
+.modal-backdrop[hidden] { display: none; }
+.modal-box {
+  background: var(--surface-learn);
+  color: var(--ink-learn);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  max-width: 560px;
+  width: 100%;
+  box-shadow: var(--shadow-lift);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.modal-actions { display: flex; gap: var(--space-3); margin-top: var(--space-4); flex-wrap: wrap; }
+.modal-close-x {
+  min-height: var(--tap-min); min-width: var(--tap-min);
+  background: transparent; border: none; color: var(--ink-learn-muted);
+  font-size: var(--text-lg); cursor: pointer; float: right; line-height: 1;
+}
+
+/* ========================= Presentation panel (โหมดฉาย) ========================= */
+.present-panel {
+  background: var(--surface-learn-alt);
+  border: 2px solid var(--border-learn);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+}
+.present-panel__vs { font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-4); }
+.present-panel__winner { font-size: var(--text-lg); color: var(--state-success-on-learn); font-weight: 700; }
+.present-panel__nav { display: flex; justify-content: center; gap: var(--space-3); margin-top: var(--space-5); flex-wrap: wrap; }
+
+/* ========================= Toast ========================= */
+#toast-region {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  z-index: 300;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  max-width: 560px;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-lift);
+  font-size: var(--text-sm);
+  background: var(--ink-learn);
+  color: var(--bg-learn);
+}
+.toast-close {
+  min-height: var(--tap-min); min-width: var(--tap-min);
+  background: transparent; border: none; color: inherit; font-size: var(--text-lg); cursor: pointer;
+  line-height: 1;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0);
+}
+.section-divider { border: none; border-top: 1px solid var(--border-learn); margin: var(--space-5) 0; }
+.filter-bar { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-end; margin-bottom: var(--space-4); }
+.filter-bar .field { margin-bottom: 0; min-width: 220px; flex: 1 1 220px; }
+.legend-row { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); font-size: var(--text-xs); color: var(--ink-learn-muted); align-items: center; }
+</style>
+</head>
+<body>
+
+<nav class="review-nav" aria-label="แถบนำทางสำหรับผู้รีวิว ไม่ใช่ส่วนของ UI จริง">
+  <div class="review-nav__label">แถบสำหรับรีวิว (ไม่ใช่ส่วนของ UI จริง) — กดเพื่อข้ามไปดูหน้าจอต่างๆ ได้ทันทีโดยไม่ต้องล็อกอิน</div>
+  <ul class="review-nav__list" id="review-nav-list">
+    <li><button class="review-nav__btn" data-target="screen-login">1. ล็อกอินครู</button></li>
+    <li><button class="review-nav__btn" data-target="screen-overview">2. ภาพรวมชั้นเรียน</button></li>
+    <li><button class="review-nav__btn" data-target="screen-roster">3. จัดการรายชื่อ</button></li>
+    <li><button class="review-nav__btn" data-target="screen-lessons">4. ลงบทเรียน</button></li>
+    <li><button class="review-nav__btn" data-target="screen-quizbuilder">5. สร้างแบบทดสอบ</button></li>
+    <li><button class="review-nav__btn" data-target="screen-grading">6. ตรวจงาน/บันทึกคะแนน</button></li>
+    <li><button class="review-nav__btn" data-target="screen-arena">7. จัดการแข่งขันรายสัปดาห์</button></li>
+    <li><button class="review-nav__btn" data-target="screen-export">8. ส่งออกคะแนน</button></li>
+  </ul>
+</nav>
+
+<nav class="app-nav" id="app-nav" hidden aria-label="เมนูหลักของครู">
+  <div class="app-nav__inner">
+    <span class="app-nav__brand">War Point · ครู</span>
+    <ul class="app-nav__list">
+      <li><button class="app-nav__btn" data-target="screen-overview">ภาพรวมชั้นเรียน</button></li>
+      <li><button class="app-nav__btn" data-target="screen-roster">รายชื่อนักเรียน</button></li>
+      <li><button class="app-nav__btn" data-target="screen-lessons">บทเรียน</button></li>
+      <li><button class="app-nav__btn" data-target="screen-quizbuilder">แบบทดสอบ</button></li>
+      <li><button class="app-nav__btn" data-target="screen-grading">ตรวจงาน/คะแนน</button></li>
+      <li><button class="app-nav__btn" data-target="screen-arena">แข่งขันรายสัปดาห์</button></li>
+      <li><button class="app-nav__btn" data-target="screen-export">ส่งออกคะแนน</button></li>
+    </ul>
+    <button class="btn btn-ghost-learn btn-compact app-nav__logout" id="btn-logout">ออกจากระบบ</button>
+  </div>
+</nav>
+
+<div id="toast-region" aria-live="polite"></div>
+
+<main>
+
+  <!-- ========================= 1. ล็อกอินครู (FE-03) ========================= -->
+  <section id="screen-login" class="screen zone-learn">
+    <div class="shell">
+      <h1>War Point — เข้าสู่ระบบสำหรับครู</h1>
+      <p class="muted-learn">ครูเข้าใช้งานด้วยบัญชี Google ระบบไม่เก็บรหัสผ่านของครูเอง (FE-03)</p>
+      <div class="card-learn">
+        <button id="btn-google-login" class="btn btn-primary btn-block">เข้าสู่ระบบด้วยบัญชี Google</button>
+        <p class="hint" style="margin-top: var(--space-3);">
+          จำลองปุ่มเท่านั้น — prototype นี้ไม่เชื่อมต่อ Google จริง กดแล้วจะเข้าสู่หน้าภาพรวมชั้นเรียนทันที
+        </p>
+        <p class="hint">
+          ถ้าโรงเรียนไม่ได้ออกบัญชี Google ให้ ครูใช้บัญชี Google ส่วนตัวล็อกอินแทนได้เช่นกัน (FE-49)
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= 2. ภาพรวมชั้นเรียน (FE-57..62) ========================= -->
+  <section id="screen-overview" class="screen zone-learn" hidden>
+    <div class="shell-wide">
+      <h1>ภาพรวมชั้นเรียน</h1>
+      <p class="muted-learn">ดูสถานะทำ/ไม่ทำแบบทดสอบรายชุด คะแนนรายคน และใครไม่เข้าใช้งานนาน ในหน้าเดียว — หน้านี้ไม่แสดงแต้มหรือขั้นการเติบโตของสัตว์เลี้ยงของนักเรียน (จงใจตาม spec 04)</p>
+
+      <div class="legend-row" id="overview-summary"></div>
+
+      <div class="filter-bar">
+        <div class="field">
+          <label for="overview-sort">เรียงลำดับตาม <span class="mock-tag">ตัวเลือกค่าสมมติ</span></label>
+          <select id="overview-sort">
+            <option value="id">รหัสประจำตัว (น้อย→มาก)</option>
+            <option value="score-desc">คะแนนรวม (มาก→น้อย)</option>
+            <option value="score-asc">คะแนนรวม (น้อย→มาก)</option>
+            <option value="inactive">เข้าใช้งานล่าสุด (นานสุดก่อน)</option>
+            <option value="warn-first">คนที่ต้องดูแลไว้บนสุด</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="overview-filter">กรองข้อมูล <span class="mock-tag">ตัวเลือกค่าสมมติ</span></label>
+          <select id="overview-filter">
+            <option value="all">แสดงทั้งหมด (ที่ใช้งานอยู่)</option>
+            <option value="warn">เฉพาะที่ต้องดูแล (มีสัญลักษณ์เตือน)</option>
+            <option value="inactive">เฉพาะที่ไม่เข้าใช้งานนาน</option>
+            <option value="pending-grade">เฉพาะที่มีงานค้างตรวจ (ใบงาน/ชิ้นงาน)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="overview-table">
+          <thead><tr id="overview-thead-row"></tr></thead>
+          <tbody id="overview-tbody"></tbody>
+        </table>
+      </div>
+      <p class="hint">สัญลักษณ์เตือน <span class="warn-badge">▲ ควรดูแล</span> ปรากฏเมื่อนักเรียนไม่เข้าใช้งานเกิน <strong id="overview-threshold-text"></strong> วัน หรือยังไม่มีชุดใดที่ทำ/ตรวจเสร็จเลย — เกณฑ์และรูปแบบสัญลักษณ์เป็น<strong>ค่าสมมติ</strong> (spec 04 ยังไม่ล็อก) ไม่ใช่การไฮไลต์สีทั้งแถว (ตาม DESIGN.md ข้อ 3.6)</p>
+    </div>
+  </section>
+
+  <!-- ========================= 3. จัดการรายชื่อนักเรียน (FE-02/04..07/50/51/55/56) ===== -->
+  <section id="screen-roster" class="screen zone-learn" hidden>
+    <div class="shell-wide">
+      <h1>จัดการรายชื่อนักเรียน</h1>
+      <p class="muted-learn">ระบบเก็บเฉพาะรหัสประจำตัวและชื่อเล่นเท่านั้น ไม่เก็บชื่อ-นามสกุลจริงแม้ไฟล์ต้นทางจะมีอยู่ก็ตาม (FE-07)</p>
+
+      <div class="form-row form-row--2">
+        <div class="card-learn">
+          <h2>นำเข้าจากไฟล์ (Excel/CSV) <span class="mock-tag">FE-04</span></h2>
+          <div class="field">
+            <label for="import-file-input">เลือกไฟล์รายชื่อ</label>
+            <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls">
+          </div>
+          <button id="btn-preview-file" class="btn btn-secondary btn-block">อ่านไฟล์ (จำลอง)</button>
+          <div id="file-import-preview" hidden style="margin-top: var(--space-4);">
+            <p class="hint">ตัวอย่างคอลัมน์ที่พบในไฟล์ (จำลอง):</p>
+            <div class="table-wrap">
+              <table class="data-table" style="min-width: 0;">
+                <thead><tr><th>รหัสนักเรียน</th><th>ชื่อ-นามสกุล</th><th>ห้อง</th></tr></thead>
+                <tbody>
+                  <tr><td>4114</td><td>(จะไม่นำเข้าชื่อจริง)</td><td>ป.4/1</td></tr>
+                  <tr><td>4115</td><td>(จะไม่นำเข้าชื่อจริง)</td><td>ป.4/1</td></tr>
+                  <tr><td>4116</td><td>(จะไม่นำเข้าชื่อจริง)</td><td>ป.4/1</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="field" style="margin-top: var(--space-3);">
+              <label for="file-id-column">เลือกคอลัมน์ที่เป็นรหัสประจำตัว (FE-51)</label>
+              <select id="file-id-column">
+                <option value="">— เลือกคอลัมน์ —</option>
+                <option value="col-a">คอลัมน์ที่ 1: รหัสนักเรียน</option>
+                <option value="col-b">คอลัมน์ที่ 2: ชื่อ-นามสกุล</option>
+                <option value="col-c">คอลัมน์ที่ 3: ห้อง</option>
+              </select>
+            </div>
+            <button id="btn-confirm-import-file" class="btn btn-secondary btn-block">นำเข้ารายชื่อจากไฟล์</button>
+          </div>
+        </div>
+
+        <div class="card-learn">
+          <h2>นำเข้าจากลิงก์ Google Sheets <span class="mock-tag">FE-50</span></h2>
+          <div class="field">
+            <label for="import-sheet-link">ลิงก์ Google Sheets</label>
+            <input type="url" id="import-sheet-link" placeholder="https://docs.google.com/spreadsheets/...">
+          </div>
+          <button id="btn-preview-sheet" class="btn btn-secondary btn-block">ดึงข้อมูลจากลิงก์ (จำลอง)</button>
+          <div id="sheet-import-preview" hidden style="margin-top: var(--space-4);">
+            <p class="hint">ตัวอย่างคอลัมน์ที่พบในชีท (จำลอง):</p>
+            <div class="table-wrap">
+              <table class="data-table" style="min-width: 0;">
+                <thead><tr><th>student_id</th><th>full_name</th><th>note</th></tr></thead>
+                <tbody>
+                  <tr><td>4119</td><td>(จะไม่นำเข้าชื่อจริง)</td><td>-</td></tr>
+                  <tr><td>4120</td><td>(จะไม่นำเข้าชื่อจริง)</td><td>-</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="field" style="margin-top: var(--space-3);">
+              <label for="sheet-id-column">เลือกคอลัมน์ที่เป็นรหัสประจำตัว (FE-51)</label>
+              <select id="sheet-id-column">
+                <option value="">— เลือกคอลัมน์ —</option>
+                <option value="col-a">คอลัมน์ที่ 1: student_id</option>
+                <option value="col-b">คอลัมน์ที่ 2: full_name</option>
+                <option value="col-c">คอลัมน์ที่ 3: note</option>
+              </select>
+            </div>
+            <button id="btn-confirm-import-sheet" class="btn btn-secondary btn-block">นำเข้ารายชื่อจากลิงก์</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-learn">
+        <h2>เพิ่มนักเรียนทีละคน <span class="mock-tag">FE-05</span></h2>
+        <p class="hint" style="margin-top:0;">ใช้กรณีนักเรียนย้ายเข้ากลางเทอม — ครูกรอกรหัสประจำตัวของโรงเรียนเอง ระบบสร้างเฉพาะ PIN เริ่มต้นให้ (FE-06)</p>
+        <div class="form-row form-row--2">
+          <div class="field">
+            <label for="manual-add-id">รหัสประจำตัว (รหัสของโรงเรียน)</label>
+            <input type="text" id="manual-add-id" inputmode="numeric" placeholder="เช่น 4121">
+          </div>
+          <div style="align-self:flex-end;">
+            <button id="btn-manual-add" class="btn btn-primary btn-block">เพิ่มนักเรียน</button>
+          </div>
+        </div>
+        <p id="manual-add-feedback" class="hint" role="status"></p>
+      </div>
+
+      <hr class="section-divider">
+
+      <h2>รายชื่อนักเรียนทั้งหมด</h2>
+      <p class="hint">PIN เริ่มต้นมี <strong id="roster-pin-digits-text"></strong> หลัก <span class="mock-tag">ค่าสมมติ — spec 03 ยังไม่ล็อกจำนวนหลัก</span> · บัญชีที่ปิดใช้งานแล้วจะไม่ปรากฏในหน้าภาพรวมชั้นเรียนหรือการจัดการแข่งขัน</p>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>รหัสประจำตัว</th>
+              <th>ชื่อเล่น</th>
+              <th>PIN ปัจจุบัน</th>
+              <th>สถานะ</th>
+              <th>การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="roster-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= 4. ลงบทเรียน (FE-08/09/11/37/39) ========================= -->
+  <section id="screen-lessons" class="screen zone-learn" hidden>
+    <div class="shell-wide">
+      <h1>ลงบทเรียน</h1>
+      <p class="muted-learn">แปะลิงก์คลิป อัปโหลดเอกสาร หรือพิมพ์เนื้อหาเอง — คลิปที่ AI ค้นหาให้ต้องได้รับการอนุมัติจากครูก่อนถึงนักเรียนเสมอ</p>
+
+      <div class="form-row form-row--2">
+        <div class="card-learn">
+          <h3>แปะลิงก์คลิป/สื่อภายนอก <span class="mock-tag">FE-08</span></h3>
+          <div class="field">
+            <label for="lesson-link-title">ชื่อบทเรียน</label>
+            <input type="text" id="lesson-link-title" placeholder="เช่น คลิปสอนเศษส่วน">
+          </div>
+          <div class="field">
+            <label for="lesson-link-url">ลิงก์คลิป/สื่อ</label>
+            <input type="url" id="lesson-link-url" placeholder="https://...">
+          </div>
+          <button id="btn-add-lesson-link" class="btn btn-secondary btn-block">เพิ่มบทเรียนจากลิงก์</button>
+        </div>
+
+        <div class="card-learn">
+          <h3>อัปโหลดเอกสาร <span class="mock-tag">FE-09</span></h3>
+          <div class="field">
+            <label for="lesson-doc-title">ชื่อบทเรียน</label>
+            <input type="text" id="lesson-doc-title" placeholder="เช่น ใบความรู้เรื่องเศษส่วน">
+          </div>
+          <div class="field">
+            <label for="lesson-doc-file">เลือกไฟล์เอกสาร</label>
+            <input type="file" id="lesson-doc-file">
+          </div>
+          <button id="btn-add-lesson-doc" class="btn btn-secondary btn-block">เพิ่มบทเรียนจากไฟล์</button>
+          <p class="hint">ระบบจะแจ้งว่าไฟล์นี้ให้ AI อ่านออกเสียงได้หรือไม่ (FE-40) — เอกสารภาพสแกนที่ดึงข้อความไม่ได้จะอ่านออกเสียงไม่ได้</p>
+        </div>
+      </div>
+
+      <div class="card-learn">
+        <h3>พิมพ์เนื้อหาบทเรียนตรงในระบบ <span class="mock-tag">FE-37</span></h3>
+        <div class="field">
+          <label for="lesson-typed-title">ชื่อบทเรียน</label>
+          <input type="text" id="lesson-typed-title" placeholder="เช่น สรุปสูตรคูณแม่ 6">
+        </div>
+        <div class="field">
+          <label for="lesson-typed-body">เนื้อหา</label>
+          <textarea id="lesson-typed-body" placeholder="พิมพ์เนื้อหาสั้นๆ ที่ต้องการให้นักเรียนทบทวน AI จะอ่านออกเสียงจากข้อความนี้ได้ง่าย"></textarea>
+        </div>
+        <button id="btn-add-lesson-typed" class="btn btn-secondary btn-block">บันทึกเนื้อหาที่พิมพ์</button>
+      </div>
+
+      <div class="card-learn">
+        <h3>ให้ AI ช่วยค้นหาคลิปตามหัวข้อ <span class="mock-tag">FE-11</span></h3>
+        <div class="form-row form-row--2">
+          <div class="field" style="margin-bottom:0;">
+            <label for="ai-topic-input">หัวข้อที่ต้องการ</label>
+            <input type="text" id="ai-topic-input" placeholder="เช่น การบวกเลขสองหลัก">
+          </div>
+          <div style="align-self:flex-end;">
+            <button id="btn-ai-search" class="btn btn-secondary btn-block">ค้นหาด้วย AI</button>
+          </div>
+        </div>
+        <p class="hint">คลิปที่ AI เสนอจะไม่ปรากฏต่อนักเรียนเลยจนกว่าครูจะกดอนุมัติ (FE-39)</p>
+      </div>
+
+      <div id="ai-pending-section" hidden>
+        <h2>คลิปที่ AI เสนอ — รอครูอนุมัติ</h2>
+        <div id="ai-pending-list"></div>
+      </div>
+
+      <hr class="section-divider">
+      <h2>บทเรียนที่เผยแพร่แล้ว</h2>
+      <div id="published-lesson-list"></div>
+    </div>
+  </section>
+
+  <!-- ========================= 5. สร้างแบบทดสอบ (FE-12..15/18/19/21) ========================= -->
+  <section id="screen-quizbuilder" class="screen zone-learn" hidden>
+    <div class="shell-wide">
+      <h1>สร้างแบบทดสอบ</h1>
+      <p class="muted-learn">เลือกรูปแบบ ตั้งคะแนนเต็ม จำนวนรอบทำซ้ำ และวันเปิด-ปิด — ชุดใหม่จะปรากฏเป็นคอลัมน์ใหม่ในหน้าภาพรวมชั้นเรียนทันที</p>
+
+      <form id="quiz-builder-form" class="card-learn" novalidate>
+        <div class="field">
+          <label for="qb-title">ชื่อชุดแบบทดสอบ</label>
+          <input type="text" id="qb-title" placeholder="เช่น แบบทดสอบปรนัย: การหารเลข">
+        </div>
+
+        <fieldset style="border:none; padding:0; margin:0 0 var(--space-4) 0;">
+          <legend style="font-weight:700; margin-bottom: var(--space-2);">รูปแบบแบบทดสอบ</legend>
+          <label class="qopt">
+            <input type="radio" name="qb-type" value="mcq-teacher" checked>
+            <span class="qopt__body"><strong>ปรนัย — ครูสร้างเอง</strong><span class="qopt__desc">ระบบตรวจและให้คะแนนอัตโนมัติ (FE-12/FE-16)</span></span>
+          </label>
+          <label class="qopt">
+            <input type="radio" name="qb-type" value="worksheet">
+            <span class="qopt__body"><strong>ใบงาน</strong><span class="qopt__desc">เหมาะกับเด็กเล็ก ครูตรวจและบันทึกคะแนนเอง (FE-13/FE-17)</span></span>
+          </label>
+          <label class="qopt">
+            <input type="radio" name="qb-type" value="attachment">
+            <span class="qopt__body"><strong>แนบชิ้นงาน</strong><span class="qopt__desc">นักเรียนแนบไฟล์การบ้าน ครูตรวจและบันทึกคะแนนเอง (FE-14/FE-17)</span></span>
+          </label>
+          <label class="qopt">
+            <input type="radio" name="qb-type" value="ai-mcq">
+            <span class="qopt__body"><strong>AI ช่วยออกข้อสอบปรนัย</strong><span class="qopt__desc">เป็นปรนัยล้วน ระบบตรวจและให้คะแนนอัตโนมัติ (FE-15/FE-16)</span></span>
+          </label>
+        </fieldset>
+
+        <div class="form-row form-row--2">
+          <div class="field">
+            <label for="qb-fullscore">คะแนนเต็มของชุดนี้ (FE-21)</label>
+            <input type="number" id="qb-fullscore" min="1" value="20">
+          </div>
+          <div class="field">
+            <label for="qb-attempts">จำนวนรอบที่ทำซ้ำได้ (FE-18)</label>
+            <input type="number" id="qb-attempts" min="1" value="1">
+          </div>
+        </div>
+        <div class="form-row form-row--2">
+          <div class="field">
+            <label for="qb-open">วันเปิด (FE-19)</label>
+            <input type="date" id="qb-open" value="2026-08-24">
+          </div>
+          <div class="field">
+            <label for="qb-close">วันปิด (FE-19)</label>
+            <input type="date" id="qb-close" value="2026-08-31">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">สร้างแบบทดสอบ</button>
+        <p id="qb-feedback" class="hint" role="status"></p>
+      </form>
+
+      <h2>ชุดแบบทดสอบที่มีอยู่แล้ว</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>ชื่อชุด</th><th>รูปแบบ</th><th>คะแนนเต็ม</th><th>จำนวนรอบ</th><th>เปิด-ปิด</th><th>วิธีตรวจ</th></tr>
+          </thead>
+          <tbody id="quizlist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= 6. ตรวจงานและบันทึกคะแนน (FE-16/17) ========================= -->
+  <section id="screen-grading" class="screen zone-learn" hidden>
+    <div class="shell-wide">
+      <h1>ตรวจงานและบันทึกคะแนน</h1>
+      <div id="grading-focus-bar" hidden class="card-learn"></div>
+
+      <h2>ก. ชุดที่ระบบตรวจให้อัตโนมัติ <span class="mock-tag">FE-16</span></h2>
+      <p class="hint">ครูไม่ต้องกรอกคะแนนของชุดกลุ่มนี้ ระบบคำนวณให้ทันทีที่นักเรียนส่งคำตอบ</p>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr id="auto-grade-thead"></tr></thead>
+          <tbody id="auto-grade-tbody"></tbody>
+        </table>
+      </div>
+
+      <hr class="section-divider">
+
+      <h2>ข. ชุดที่ครูตรวจและบันทึกคะแนนเอง <span class="mock-tag">FE-17</span></h2>
+      <p class="hint">กรอกคะแนนให้นักเรียนที่ส่งงานแล้ว ค่านี้จะไปแสดงในหน้าภาพรวมชั้นเรียนทันทีหลังกดบันทึก</p>
+      <div id="manual-grade-groups"></div>
+    </div>
+  </section>
+
+  <!-- ========================= 7. จัดการแข่งขันรายสัปดาห์ (FE-27..32/42/43/46) ===== -->
+  <section id="screen-arena" class="screen zone-learn" hidden>
+    <div class="shell-wide">
+      <h1>จัดการแข่งขันรายสัปดาห์</h1>
+      <p class="muted-learn">หน้านี้แสดงได้เพียง <strong>รายชื่อคู่แข่งและผลแพ้-ชนะ</strong> เท่านั้น — ระบบคำนวณค่าพลังจากขั้นการเติบโตโดยไม่แสดงให้ครูเห็น (ตาม spec 04)</p>
+
+      <div class="card-learn">
+        <h2>วิธีจับคู่สัปดาห์นี้</h2>
+        <label class="qopt">
+          <input type="radio" name="arena-mode" value="student-choice" checked>
+          <span class="qopt__body"><strong>นักเรียนเลือกคู่แข่งเอง</strong><span class="qopt__desc">วิธีหลัก — ครูไม่ต้องจับคู่ (FE-42)</span></span>
+        </label>
+        <label class="qopt">
+          <input type="radio" name="arena-mode" value="random">
+          <span class="qopt__body"><strong>ครูกดสุ่มจับคู่</strong><span class="qopt__desc">สำหรับครูที่มีเวลาและอยากคุมสถานการณ์ (FE-28)</span></span>
+        </label>
+        <label class="qopt">
+          <input type="radio" name="arena-mode" value="teacher-choice">
+          <span class="qopt__body"><strong>ครูเลือกคู่เอง</strong><span class="qopt__desc">ครูเลือกคู่แข่งของสัปดาห์นั้นด้วยตนเอง (FE-29)</span></span>
+        </label>
+        <label class="qopt">
+          <input type="radio" name="arena-mode" value="auto-weekly">
+          <span class="qopt__body"><strong>ตั้งให้ระบบจับคู่เองทุกสัปดาห์</strong><span class="qopt__desc">เหมาะกับครูที่ไม่มีเวลาจัดการ (FE-30)</span></span>
+        </label>
+      </div>
+
+      <div id="arena-mode-panel" class="card-learn"></div>
+
+      <div class="card-learn">
+        <h2>คู่แข่งของสัปดาห์นี้</h2>
+        <div id="arena-pairs-list"></div>
+        <div style="display:flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3);">
+          <button id="btn-announce-results" class="btn btn-primary" disabled>ประกาศผลการแข่งขัน (FE-31)</button>
+          <button id="btn-open-present" class="btn btn-secondary" disabled>ฉายผลในคาบโฮมรูม (FE-43)</button>
+        </div>
+      </div>
+
+      <div class="card-learn">
+        <h2>สถิติผู้ชนะสะสม <span class="mock-tag">FE-46</span></h2>
+        <p class="hint" style="margin-top:0;">ครูตัดสินใจเรื่องรางวัลจริงเอง ระบบให้ข้อมูลสถิติเป็นตัวช่วยเท่านั้น</p>
+        <ul class="stat-list" id="winner-stats-list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= 8. ส่งออกคะแนน (FE-34/63..71) ========================= -->
+  <section id="screen-export" class="screen zone-learn" hidden>
+    <div class="shell-wide">
+      <h1>ส่งออกคะแนน</h1>
+      <p class="muted-learn">เลือกข้อมูล เลือกช่องทาง เลือกคอลัมน์ปลายทาง ตรวจรายงานแถวที่ถูกข้าม แล้วครูกดส่งเอง — ระบบไม่เขียนอะไรลงสมุดคะแนนของครูจนกว่าครูจะกดยืนยัน</p>
+
+      <div class="card-learn">
+        <h2>1. เลือกข้อมูลที่จะส่งออก <span class="mock-tag">FE-63</span></h2>
+        <label class="qopt">
+          <input type="radio" name="export-scope" value="per-quiz" checked>
+          <span class="qopt__body"><strong>คะแนนแยกรายชุด</strong><span class="qopt__desc">ส่งออกทีละชุด (FE-64)</span></span>
+        </label>
+        <label class="qopt">
+          <input type="radio" name="export-scope" value="total">
+          <span class="qopt__body"><strong>คะแนนรวม</strong><span class="qopt__desc">รวมทุกชุดเป็นยอดเดียวต่อคน (FE-65)</span></span>
+        </label>
+        <div id="export-quiz-checkboxes"></div>
+      </div>
+
+      <div class="card-learn">
+        <h2>2. เลือกช่องทางส่งออก</h2>
+        <label class="qopt">
+          <input type="radio" name="export-channel" value="sheets" checked>
+          <span class="qopt__body"><strong>เขียนกลับเข้า Google Sheets ผ่านลิงก์</strong><span class="qopt__desc">ไม่ต้องดาวน์โหลดไฟล์ก่อน (FE-66)</span></span>
+        </label>
+        <label class="qopt">
+          <input type="radio" name="export-channel" value="file">
+          <span class="qopt__body"><strong>ดาวน์โหลดเป็นไฟล์</strong><span class="qopt__desc">สำหรับครูที่ใช้ Excel หรือไม่ต้องการให้สิทธิ์เขียนไฟล์ (FE-67)</span></span>
+        </label>
+        <div id="export-channel-detail"></div>
+      </div>
+
+      <div class="card-learn">
+        <h2>3. เลือกคอลัมน์ปลายทาง <span class="mock-tag">FE-68</span></h2>
+        <p class="hint" style="margin-top:0;">ครูเลือกเองว่าข้อมูลแต่ละอย่างลงคอลัมน์ไหน ระบบไม่บังคับจัดสมุดคะแนนใหม่</p>
+        <div id="export-column-map"></div>
+      </div>
+
+      <div class="card-learn">
+        <h2>4. ตรวจสอบข้อมูลก่อนส่ง <span class="mock-tag">FE-69/FE-70</span></h2>
+        <button id="btn-preview-export" class="btn btn-secondary btn-block">ตรวจสอบข้อมูลก่อนส่ง</button>
+        <div id="export-preview-result" hidden style="margin-top: var(--space-4);"></div>
+      </div>
+
+      <div class="card-learn">
+        <h2>5. ยืนยันส่ง <span class="mock-tag">FE-71</span></h2>
+        <p class="hint" style="margin-top:0;">ระบบจะไม่เขียน/ส่งข้อมูลใดจนกว่าครูจะกดยืนยันในขั้นนี้</p>
+        <button id="btn-confirm-export" class="btn btn-primary btn-block" disabled>ยืนยันส่งคะแนน</button>
+        <div id="export-sent-result" hidden style="margin-top: var(--space-4);"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Modal: ยืนยันรีเซ็ต PIN -->
+<div class="modal-backdrop" id="pin-modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="pin-modal-title">
+    <button class="modal-close-x" id="btn-close-pin-modal" aria-label="ปิดหน้าต่างนี้">×</button>
+    <h2 id="pin-modal-title">รีเซ็ต PIN สำเร็จ</h2>
+    <p id="pin-modal-body"></p>
+    <div class="modal-actions">
+      <button id="btn-ack-pin-modal" class="btn btn-secondary">รับทราบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: โหมดฉายผลในคาบโฮมรูม -->
+<div class="modal-backdrop" id="present-modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="present-modal-title" style="max-width:720px;">
+    <button class="modal-close-x" id="btn-close-present" aria-label="ปิดโหมดฉายผล">×</button>
+    <h2 id="present-modal-title">ฉายผลการต่อสู้ในคาบโฮมรูม</h2>
+    <div class="present-panel" id="present-panel-body"></div>
+    <div class="present-panel__nav">
+      <button id="btn-present-prev" class="btn btn-secondary">◀ ก่อนหน้า</button>
+      <button id="btn-present-next" class="btn btn-secondary">ต่อไป ▶</button>
+      <button id="btn-present-close" class="btn btn-ghost-learn">ปิดโหมดฉาย</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ======================================================================
+     ค่า mock ทั้งหมดของ prototype นี้ — ประกาศเป็น object เดียวที่ต้นสคริปต์
+     (กฎ DESIGN.md 4.8) ทุกที่ที่ต้องใช้ค่าเหล่านี้ให้อ้างจากที่นี่เท่านั้น
+     ค่าที่ spec ยังไม่ล็อกถูกจดไว้เป็น "...Mock" ทุกจุด และมีป้ายกำกับในหน้าจอ
+     ห้ามมีชื่อ-นามสกุลจริงของนักเรียนที่ใดเลย — ใช้รหัสประจำตัว + ชื่อเล่นเท่านั้น
+     ====================================================================== */
+  var MOCK = {
+    inactiveDaysThresholdMock: 7, // ค่าสมมติ: เกณฑ์ "ไม่เข้าใช้งานนาน" (spec 04 ยังไม่ล็อก)
+    pinDigitsMock: 4,             // ค่าสมมติ: จำนวนหลักของ PIN (spec 03 ยังไม่ล็อก)
+
+    students: [
+      { id: "4101", nickname: "มะปราง", pin: "1832", active: true, lastActiveDaysAgoMock: 0 },
+      { id: "4102", nickname: "บอส",    pin: "2941", active: true, lastActiveDaysAgoMock: 1 },
+      { id: "4103", nickname: "จิ๋ว",    pin: "3092", active: true, lastActiveDaysAgoMock: 9 },
+      { id: "4104", nickname: "ฟ้า",     pin: "5510", active: true, lastActiveDaysAgoMock: 2 },
+      { id: "4105", nickname: "ต้นกล้า", pin: "6673", active: true, lastActiveDaysAgoMock: 0 },
+      { id: "4106", nickname: "เต่า",    pin: "7284", active: true, lastActiveDaysAgoMock: 15 },
+      { id: "4107", nickname: "กล้า",    pin: "8195", active: true, lastActiveDaysAgoMock: 3 },
+      { id: "4108", nickname: "พลอย",   pin: "9026", active: true, lastActiveDaysAgoMock: 1 },
+      { id: "4109", nickname: "นุ่น",    pin: "1147", active: true, lastActiveDaysAgoMock: 4 },
+      { id: "4110", nickname: "ดิว",     pin: "2258", active: false, lastActiveDaysAgoMock: 21 },
+      { id: "4111", nickname: "เมย์",    pin: "3369", active: true, lastActiveDaysAgoMock: 6 },
+      { id: "4112", nickname: "ไอซ์",    pin: "4470", active: true, lastActiveDaysAgoMock: 2 },
+      { id: "4113", nickname: null,      pin: "5581", active: true, lastActiveDaysAgoMock: 0 }
+    ],
+
+    quizSets: [
+      { id: "q1", title: "แบบทดสอบปรนัย: การคูณเลข", type: "mcq-teacher", autograded: true, fullScore: 20, maxAttempts: 3, openDate: "2026-08-10", closeDate: "2026-08-24" },
+      { id: "q2", title: "ใบงานคัดลายมือ ก-ฮ", type: "worksheet", autograded: false, fullScore: 10, maxAttempts: 1, openDate: "2026-08-12", closeDate: "2026-08-19" },
+      { id: "q3", title: "แบบทดสอบปรนัย AI: คำศัพท์ภาษาอังกฤษพื้นฐาน", type: "ai-mcq", autograded: true, fullScore: 15, maxAttempts: 2, openDate: "2026-08-15", closeDate: "2026-08-29" }
+    ],
+
+    // scores[studentId][quizId] = { status, score }
+    // สถานะชุดตรวจอัตโนมัติ: 'done' | 'not-done'
+    // สถานะชุดครูตรวจเอง: 'graded' | 'pending-grading' | 'not-submitted'
+    scores: {
+      "4101": { q1: { status: "done", score: 18 }, q2: { status: "graded", score: 9 },  q3: { status: "done", score: 14 } },
+      "4102": { q1: { status: "done", score: 15 }, q2: { status: "not-submitted", score: null }, q3: { status: "done", score: 10 } },
+      "4103": { q1: { status: "not-done", score: null }, q2: { status: "not-submitted", score: null }, q3: { status: "not-done", score: null } },
+      "4104": { q1: { status: "done", score: 20 }, q2: { status: "graded", score: 10 }, q3: { status: "not-done", score: null } },
+      "4105": { q1: { status: "done", score: 12 }, q2: { status: "graded", score: 7 },  q3: { status: "done", score: 13 } },
+      "4106": { q1: { status: "not-done", score: null }, q2: { status: "pending-grading", score: null }, q3: { status: "not-done", score: null } },
+      "4107": { q1: { status: "done", score: 16 }, q2: { status: "not-submitted", score: null }, q3: { status: "done", score: 9 } },
+      "4108": { q1: { status: "done", score: 19 }, q2: { status: "graded", score: 10 }, q3: { status: "done", score: 15 } },
+      "4109": { q1: { status: "done", score: 10 }, q2: { status: "pending-grading", score: null }, q3: { status: "not-done", score: null } },
+      "4110": { q1: { status: "done", score: 14 }, q2: { status: "graded", score: 6 },  q3: { status: "done", score: 8 } },
+      "4111": { q1: { status: "done", score: 8 },  q2: { status: "not-submitted", score: null }, q3: { status: "done", score: 7 } },
+      "4112": { q1: { status: "done", score: 17 }, q2: { status: "graded", score: 9 },  q3: { status: "done", score: 12 } },
+      "4113": { q1: { status: "not-done", score: null }, q2: { status: "not-submitted", score: null }, q3: { status: "done", score: 11 } }
+    },
+
+    lessonSeed: [
+      { id: "l1", kind: "link", title: "คลิปสอนสูตรคูณแม่ 6-9", sourceLabel: "ลิงก์คลิปภายนอกที่ครูแปะไว้ (FE-08)" },
+      { id: "l2", kind: "document", title: "เอกสารสรุปสูตรคูณ (ไฟล์อัปโหลด)", sourceLabel: "เอกสารที่ครูอัปโหลด (FE-09)" }
+    ],
+
+    aiSuggestionSeed: [
+      { id: "ai1", title: "คลิปแนะนำ: เทคนิคจำสูตรคูณด้วยนิ้วมือ", topicMock: "การคูณเลข" },
+      { id: "ai2", title: "คลิปแนะนำ: เกมทบทวนสูตรคูณ 5 นาที", topicMock: "การคูณเลข" }
+    ],
+
+    fileImportBatchMock: [
+      { id: "4114" }, { id: "4115" }, { id: "4116" }
+    ],
+    sheetImportBatchMock: [
+      { id: "4119" }, { id: "4120" }
+    ],
+
+    exportColumnOptionsMock: ["A", "B", "C", "D", "E", "F"],
+    exportFileFormatsMock: ["CSV (.csv)", "Excel (.xlsx)"],
+    // แถวในชีทปลายทางที่ "รหัสไม่ตรงกับระบบ" ใช้สาธิตรายงานแถวที่ถูกข้าม (FE-70)
+    exportUnmatchedSheetCodesMock: ["5001", "5002"]
+  };
+
+  function generatePinMock() {
+    var min = Math.pow(10, MOCK.pinDigitsMock - 1);
+    var max = Math.pow(10, MOCK.pinDigitsMock) - 1;
+    return String(Math.floor(min + Math.random() * (max - min + 1)));
+  }
+
+  /* ======================================================================
+     State ของ prototype (mutable) — ทุกกลไกด้านล่างต้องเปลี่ยน state จริง
+     ====================================================================== */
+  var state = {
+    loggedIn: false,
+
+    students: MOCK.students.map(function (s) { return {
+      id: s.id, nickname: s.nickname, pin: s.pin, active: s.active,
+      lastActiveDaysAgoMock: s.lastActiveDaysAgoMock
+    }; }),
+
+    scores: JSON.parse(JSON.stringify(MOCK.scores)),
+    quizSets: MOCK.quizSets.map(function (q) { return Object.assign({}, q); }),
+
+    lessons: MOCK.lessonSeed.map(function (l) { return Object.assign({}, l); }),
+    aiPending: MOCK.aiSuggestionSeed.map(function (a) { return Object.assign({}, a); }),
+    lessonCounter: 2,
+
+    overview: { sortBy: "id", filterBy: "all" },
+
+    grading: { focusStudentId: null, focusQuizId: null },
+
+    arena: {
+      mode: "student-choice",
+      autoWeeklyEnabled: false,
+      pairs: [],       // { id, aId, bId, announced, winnerId, source }
+      pairCounter: 0,
+      winnerStats: {}, // studentId -> winCount
+      presentIndex: 0
+    },
+
+    exportState: {
+      scope: "per-quiz",
+      selectedQuizIds: ["q1"],
+      channel: "sheets",
+      sheetLink: "",
+      fileFormat: MOCK.exportFileFormatsMock[0],
+      columnMap: {},
+      previewDone: false,
+      matchedCount: 0,
+      skippedRows: [],
+      sentAt: null
+    }
+  };
+
+  /* ======================================================================
+     Helpers ทั่วไป
+     ====================================================================== */
+  function activeStudents() {
+    return state.students.filter(function (s) { return s.active; });
+  }
+  function studentById(id) {
+    for (var i = 0; i < state.students.length; i++) if (state.students[i].id === id) return state.students[i];
+    return null;
+  }
+  function quizById(id) {
+    for (var i = 0; i < state.quizSets.length; i++) if (state.quizSets[i].id === id) return state.quizSets[i];
+    return null;
+  }
+  function shortName(student) {
+    if (!student) return "-";
+    return student.nickname ? student.nickname : ("รหัส " + student.id);
+  }
+  function ensureScoreEntry(studentId, quizId, defaultStatus) {
+    if (!state.scores[studentId]) state.scores[studentId] = {};
+    if (!state.scores[studentId][quizId]) state.scores[studentId][quizId] = { status: defaultStatus, score: null };
+    return state.scores[studentId][quizId];
+  }
+  function computeTotalScore(studentId) {
+    var total = 0;
+    state.quizSets.forEach(function (q) {
+      var entry = state.scores[studentId] && state.scores[studentId][q.id];
+      if (entry && typeof entry.score === "number") total += entry.score;
+    });
+    return total;
+  }
+  function hasCompletedAnyQuiz(studentId) {
+    return state.quizSets.some(function (q) {
+      var entry = state.scores[studentId] && state.scores[studentId][q.id];
+      return entry && typeof entry.score === "number";
+    });
+  }
+  function warningInfo(student) {
+    var reasons = [];
+    if (typeof student.lastActiveDaysAgoMock === "number" && student.lastActiveDaysAgoMock >= MOCK.inactiveDaysThresholdMock) {
+      reasons.push("ไม่เข้าใช้งานมา " + student.lastActiveDaysAgoMock + " วัน");
+    }
+    if (!hasCompletedAnyQuiz(student.id)) {
+      reasons.push("ยังไม่มีชุดใดที่ทำ/ตรวจเสร็จเลย");
+    }
+    return { flag: reasons.length > 0, reasons: reasons };
+  }
+  function hasPendingWorksheetGrading(studentId) {
+    return state.quizSets.some(function (q) {
+      if (q.autograded) return false;
+      var entry = state.scores[studentId] && state.scores[studentId][q.id];
+      return entry && entry.status === "pending-grading";
+    });
+  }
+  function formatLastActive(student) {
+    if (student.lastActiveDaysAgoMock === null || typeof student.lastActiveDaysAgoMock === "undefined") {
+      return "ยังไม่เคยเข้าใช้งาน";
+    }
+    if (student.lastActiveDaysAgoMock === 0) return "วันนี้";
+    if (student.lastActiveDaysAgoMock === 1) return "เมื่อวาน";
+    return student.lastActiveDaysAgoMock + " วันก่อน";
+  }
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* ======================================================================
+     Toast (feedback inline แทน alert)
+     ====================================================================== */
+  function toast(message) {
+    var region = document.getElementById("toast-region");
+    var el = document.createElement("div");
+    el.className = "toast";
+    el.setAttribute("role", "status");
+    var span = document.createElement("span");
+    span.textContent = message;
+    var closeBtn = document.createElement("button");
+    closeBtn.className = "toast-close";
+    closeBtn.setAttribute("aria-label", "ปิดข้อความ");
+    closeBtn.textContent = "×";
+    el.appendChild(span);
+    el.appendChild(closeBtn);
+    region.appendChild(el);
+    function remove() { if (el.parentNode) el.parentNode.removeChild(el); }
+    closeBtn.addEventListener("click", remove);
+    setTimeout(remove, 4500);
+  }
+
+  /* ======================================================================
+     สลับหน้าจอ
+     ====================================================================== */
+  function showScreen(id) {
+    if (id !== "screen-login" && !state.loggedIn) {
+      // แถบรีวิวอนุญาตให้ข้ามหน้าล็อกอินได้ แต่ต้องถือว่า "เข้าสู่ระบบแล้ว" เพื่อให้
+      // เนื้อหาที่ต้องล็อกอินก่อนแสดงผลได้ถูกต้องตอนรีวิว
+      state.loggedIn = true;
+    }
+    document.querySelectorAll(".screen").forEach(function (s) { s.hidden = s.id !== id; });
+    document.querySelectorAll(".review-nav__btn").forEach(function (b) {
+      b.setAttribute("aria-current", b.dataset.target === id ? "true" : "false");
+    });
+    document.querySelectorAll(".app-nav__btn").forEach(function (b) {
+      b.setAttribute("aria-current", b.dataset.target === id ? "true" : "false");
+    });
+    document.getElementById("app-nav").hidden = (id === "screen-login");
+    window.scrollTo(0, 0);
+
+    if (id === "screen-overview") renderOverview();
+    if (id === "screen-roster") renderRoster();
+    if (id === "screen-lessons") renderLessons();
+    if (id === "screen-quizbuilder") renderQuizList();
+    if (id === "screen-grading") renderGrading();
+    if (id === "screen-arena") renderArena();
+    if (id === "screen-export") renderExport();
+  }
+
+  /* ======================================================================
+     1. ล็อกอินครู (FE-03)
+     ====================================================================== */
+  document.getElementById("btn-google-login").addEventListener("click", function () {
+    state.loggedIn = true;
+    toast("เข้าสู่ระบบด้วยบัญชี Google สำเร็จ (จำลอง)");
+    showScreen("screen-overview");
+  });
+
+  document.getElementById("btn-logout").addEventListener("click", function () {
+    state.loggedIn = false;
+    toast("ออกจากระบบแล้ว");
+    showScreen("screen-login");
+  });
+
+  /* ======================================================================
+     2. ภาพรวมชั้นเรียน (FE-57..62)
+     — ห้ามมีแต้ม/ขั้นสัตว์เลี้ยง/ชื่อจริงปรากฏใน DOM ของหน้านี้เลย
+     ====================================================================== */
+  function statusChipHtml(quiz, entry) {
+    if (quiz.autograded) {
+      if (entry && entry.status === "done") {
+        return "<span class=\"status-chip status-chip--done\">ทำแล้ว " + entry.score + "/" + quiz.fullScore + "</span>";
+      }
+      return "<span class=\"status-chip status-chip--not\">ยังไม่ทำ</span>";
+    }
+    if (entry && entry.status === "graded") {
+      return "<span class=\"status-chip status-chip--done\">ตรวจแล้ว " + entry.score + "/" + quiz.fullScore + "</span>";
+    }
+    if (entry && entry.status === "pending-grading") {
+      return "<span class=\"status-chip status-chip--pending\">ส่งแล้ว รอครูตรวจ</span>";
+    }
+    return "<span class=\"status-chip status-chip--not\">ยังไม่ส่ง</span>";
+  }
+
+  function renderOverview() {
+    document.getElementById("overview-threshold-text").textContent = MOCK.inactiveDaysThresholdMock;
+
+    var all = activeStudents();
+    var withWarn = all.filter(function (s) { return warningInfo(s).flag; });
+    var withInactive = all.filter(function (s) { return s.lastActiveDaysAgoMock !== null && typeof s.lastActiveDaysAgoMock !== "undefined" && s.lastActiveDaysAgoMock >= MOCK.inactiveDaysThresholdMock; });
+    var withPendingGrade = all.filter(function (s) { return hasPendingWorksheetGrading(s.id); });
+
+    document.getElementById("overview-summary").innerHTML =
+      "<span>นักเรียนที่ใช้งานอยู่ทั้งหมด: <strong>" + all.length + " คน</strong></span>" +
+      "<span>ต้องดูแล: <strong>" + withWarn.length + " คน</strong></span>" +
+      "<span>ไม่เข้าใช้งานนาน: <strong>" + withInactive.length + " คน</strong></span>" +
+      "<span>มีงานค้างตรวจ: <strong>" + withPendingGrade.length + " คน</strong></span>";
+
+    // header row (คอลัมน์แบบทดสอบเปลี่ยนตามชุดที่ครูสร้างไว้จริง — เจ้าของข้อมูลเดียวคือ state.quizSets)
+    var theadRow = document.getElementById("overview-thead-row");
+    var headHtml = "<th>รหัสประจำตัว</th><th>ชื่อเล่น</th>";
+    state.quizSets.forEach(function (q) { headHtml += "<th>" + escapeHtml(q.title) + "</th>"; });
+    headHtml += "<th>เข้าใช้งานล่าสุด</th><th>สัญลักษณ์เตือน</th><th>การจัดการ</th>";
+    theadRow.innerHTML = headHtml;
+
+    var filterBy = state.overview.filterBy;
+    var sortBy = state.overview.sortBy;
+    var rows = all.slice();
+
+    if (filterBy === "warn") rows = rows.filter(function (s) { return warningInfo(s).flag; });
+    if (filterBy === "inactive") rows = rows.filter(function (s) { return s.lastActiveDaysAgoMock !== null && typeof s.lastActiveDaysAgoMock !== "undefined" && s.lastActiveDaysAgoMock >= MOCK.inactiveDaysThresholdMock; });
+    if (filterBy === "pending-grade") rows = rows.filter(function (s) { return hasPendingWorksheetGrading(s.id); });
+
+    rows.sort(function (a, b) {
+      if (sortBy === "score-desc") return computeTotalScore(b.id) - computeTotalScore(a.id);
+      if (sortBy === "score-asc") return computeTotalScore(a.id) - computeTotalScore(b.id);
+      if (sortBy === "inactive") return (b.lastActiveDaysAgoMock || 0) - (a.lastActiveDaysAgoMock || 0);
+      if (sortBy === "warn-first") {
+        var wa = warningInfo(a).flag ? 0 : 1;
+        var wb = warningInfo(b).flag ? 0 : 1;
+        if (wa !== wb) return wa - wb;
+        return a.id.localeCompare(b.id);
+      }
+      return a.id.localeCompare(b.id);
+    });
+
+    var tbody = document.getElementById("overview-tbody");
+    tbody.innerHTML = "";
+    rows.forEach(function (s) {
+      var tr = document.createElement("tr");
+      var cells = "<td>" + escapeHtml(s.id) + "</td><td>" + escapeHtml(s.nickname || "ยังไม่ตั้งชื่อเล่น") + "</td>";
+      state.quizSets.forEach(function (q) {
+        var entry = state.scores[s.id] && state.scores[s.id][q.id];
+        cells += "<td>" + statusChipHtml(q, entry) + "</td>";
+      });
+      var w = warningInfo(s);
+      cells += "<td>" + escapeHtml(formatLastActive(s)) + "</td>";
+      cells += "<td>" + (w.flag ? "<span class=\"warn-badge\" title=\"" + escapeHtml(w.reasons.join(" · ")) + "\">▲ ควรดูแล</span>" : "<span class=\"muted-learn\" style=\"font-size:var(--text-xs);\">-</span>") + "</td>";
+      cells +=
+        "<td class=\"actions-cell\"><div class=\"row-actions\">" +
+          "<button class=\"btn btn-secondary btn-compact\" data-grade=\"" + s.id + "\">ตรวจ/บันทึกคะแนน</button>" +
+          "<button class=\"btn btn-ghost-learn btn-compact\" data-resetpin=\"" + s.id + "\">รีเซ็ต PIN</button>" +
+        "</div></td>";
+      tr.innerHTML = cells;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("[data-grade]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.grading.focusStudentId = btn.dataset.grade;
+        state.grading.focusQuizId = null;
+        showScreen("screen-grading");
+      });
+    });
+    tbody.querySelectorAll("[data-resetpin]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        doResetPin(btn.dataset.resetpin);
+      });
+    });
+  }
+
+  function doResetPin(studentId) {
+    var s = studentById(studentId);
+    if (!s) return;
+    var newPin = generatePinMock();
+    s.pin = newPin;
+    document.getElementById("pin-modal-body").textContent =
+      shortName(s) + " (รหัส " + s.id + ") มี PIN ใหม่คือ " + newPin + " — แจ้งให้นักเรียนคนนี้ทราบ";
+    document.getElementById("pin-modal").hidden = false;
+    toast("รีเซ็ต PIN ของ " + shortName(s) + " สำเร็จ");
+    renderOverview();
+    if (!document.getElementById("screen-roster").hidden) renderRoster();
+  }
+
+  document.getElementById("btn-close-pin-modal").addEventListener("click", function () {
+    document.getElementById("pin-modal").hidden = true;
+  });
+  document.getElementById("btn-ack-pin-modal").addEventListener("click", function () {
+    document.getElementById("pin-modal").hidden = true;
+  });
+
+  document.getElementById("overview-sort").addEventListener("change", function (e) {
+    state.overview.sortBy = e.target.value;
+    renderOverview();
+  });
+  document.getElementById("overview-filter").addEventListener("change", function (e) {
+    state.overview.filterBy = e.target.value;
+    renderOverview();
+  });
+
+  /* ======================================================================
+     3. จัดการรายชื่อนักเรียน (FE-02/04..07/50/51/55/56)
+     ====================================================================== */
+  function renderRoster() {
+    document.getElementById("roster-pin-digits-text").textContent = MOCK.pinDigitsMock;
+    var tbody = document.getElementById("roster-tbody");
+    tbody.innerHTML = "";
+    state.students.forEach(function (s) {
+      var tr = document.createElement("tr");
+      var statusHtml = s.active
+        ? "<span class=\"status-chip status-chip--done\">ใช้งานอยู่</span>"
+        : "<span class=\"status-chip status-chip--off\">ปิดใช้งานแล้ว</span>";
+      tr.innerHTML =
+        "<td>" + escapeHtml(s.id) + "</td>" +
+        "<td>" + escapeHtml(s.nickname || "ยังไม่ตั้งชื่อเล่น") + "</td>" +
+        "<td>" + escapeHtml(s.pin) + "</td>" +
+        "<td>" + statusHtml + "</td>" +
+        "<td class=\"actions-cell\"><div class=\"row-actions\">" +
+          "<button class=\"btn btn-secondary btn-compact\" data-resetpin=\"" + s.id + "\">รีเซ็ต PIN</button>" +
+          "<button class=\"btn btn-ghost-learn btn-compact\" data-clearnick=\"" + s.id + "\" " + (s.nickname ? "" : "disabled") + ">ล้างชื่อเล่น</button>" +
+          "<button class=\"btn " + (s.active ? "btn-danger-outline" : "btn-secondary") + " btn-compact\" data-toggleactive=\"" + s.id + "\">" + (s.active ? "ปิดการใช้งาน" : "เปิดการใช้งาน") + "</button>" +
+        "</div></td>";
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("[data-resetpin]").forEach(function (btn) {
+      btn.addEventListener("click", function () { doResetPin(btn.dataset.resetpin); });
+    });
+    tbody.querySelectorAll("[data-clearnick]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var s = studentById(btn.dataset.clearnick);
+        if (!s) return;
+        s.nickname = null;
+        toast("ล้างชื่อเล่นของรหัส " + s.id + " แล้ว");
+        renderRoster();
+      });
+    });
+    tbody.querySelectorAll("[data-toggleactive]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var s = studentById(btn.dataset.toggleactive);
+        if (!s) return;
+        s.active = !s.active;
+        toast(s.active
+          ? "เปิดการใช้งานรหัส " + s.id + " แล้ว จะกลับมาปรากฏในหน้าภาพรวมและการแข่งขัน"
+          : "ปิดการใช้งานรหัส " + s.id + " แล้ว ข้อมูลไม่ถูกลบ แต่จะไม่ปรากฏในรายการที่ใช้งานประจำวัน");
+        renderRoster();
+      });
+    });
+  }
+
+  function addStudentsBatch(list) {
+    var added = [];
+    list.forEach(function (item) {
+      if (studentById(item.id)) return; // กันรหัสซ้ำ
+      var newStudent = { id: item.id, nickname: null, pin: generatePinMock(), active: true, lastActiveDaysAgoMock: null };
+      state.students.push(newStudent);
+      state.quizSets.forEach(function (q) {
+        ensureScoreEntry(newStudent.id, q.id, q.autograded ? "not-done" : "not-submitted");
+      });
+      added.push(newStudent);
+    });
+    return added;
+  }
+
+  document.getElementById("btn-preview-file").addEventListener("click", function () {
+    document.getElementById("file-import-preview").hidden = false;
+    toast("อ่านไฟล์แล้ว (จำลอง) — เลือกคอลัมน์รหัสประจำตัวก่อนนำเข้า");
+  });
+  document.getElementById("btn-confirm-import-file").addEventListener("click", function () {
+    var col = document.getElementById("file-id-column").value;
+    if (!col) { toast("กรุณาเลือกคอลัมน์ที่เป็นรหัสประจำตัวก่อน"); return; }
+    var added = addStudentsBatch(MOCK.fileImportBatchMock);
+    toast("นำเข้ารายชื่อจากไฟล์สำเร็จ " + added.length + " คน (ใช้คอลัมน์ที่เลือกเป็นรหัสประจำตัว ไม่นำเข้าชื่อจริง)");
+    document.getElementById("file-import-preview").hidden = true;
+    document.getElementById("file-id-column").value = "";
+    renderRoster();
+  });
+
+  document.getElementById("btn-preview-sheet").addEventListener("click", function () {
+    var link = document.getElementById("import-sheet-link").value.trim();
+    if (!link) { toast("กรุณาวางลิงก์ Google Sheets ก่อน"); return; }
+    document.getElementById("sheet-import-preview").hidden = false;
+    toast("ดึงข้อมูลจากลิงก์แล้ว (จำลอง) — เลือกคอลัมน์รหัสประจำตัวก่อนนำเข้า");
+  });
+  document.getElementById("btn-confirm-import-sheet").addEventListener("click", function () {
+    var col = document.getElementById("sheet-id-column").value;
+    if (!col) { toast("กรุณาเลือกคอลัมน์ที่เป็นรหัสประจำตัวก่อน"); return; }
+    var added = addStudentsBatch(MOCK.sheetImportBatchMock);
+    toast("นำเข้ารายชื่อจากลิงก์ Google Sheets สำเร็จ " + added.length + " คน (ไม่นำเข้าชื่อจริง)");
+    document.getElementById("sheet-import-preview").hidden = true;
+    document.getElementById("sheet-id-column").value = "";
+    renderRoster();
+  });
+
+  document.getElementById("btn-manual-add").addEventListener("click", function () {
+    var input = document.getElementById("manual-add-id");
+    var feedback = document.getElementById("manual-add-feedback");
+    var id = input.value.trim();
+    if (!id) { feedback.textContent = "กรุณากรอกรหัสประจำตัว"; return; }
+    if (studentById(id)) { feedback.textContent = "รหัสประจำตัวนี้มีอยู่ในระบบแล้ว"; return; }
+    var added = addStudentsBatch([{ id: id }]);
+    feedback.textContent = "เพิ่มนักเรียนรหัส " + id + " สำเร็จ PIN เริ่มต้นคือ " + added[0].pin;
+    toast("เพิ่มนักเรียนรหัส " + id + " สำเร็จ");
+    input.value = "";
+    renderRoster();
+  });
+
+  /* ======================================================================
+     4. ลงบทเรียน (FE-08/09/11/37/39/40)
+     ====================================================================== */
+  function renderLessons() {
+    var pendingSection = document.getElementById("ai-pending-section");
+    var pendingList = document.getElementById("ai-pending-list");
+    pendingSection.hidden = state.aiPending.length === 0;
+    pendingList.innerHTML = "";
+    state.aiPending.forEach(function (a) {
+      var row = document.createElement("div");
+      row.className = "card-learn";
+      row.innerHTML =
+        "<p><strong>" + escapeHtml(a.title) + "</strong></p>" +
+        "<p class=\"muted-learn\" style=\"font-size:var(--text-sm);\">AI ค้นหาจากหัวข้อ: " + escapeHtml(a.topicMock) + " — คลิปนี้ยังไม่ปรากฏต่อนักเรียน</p>" +
+        "<div style=\"display:flex; gap:var(--space-2); flex-wrap:wrap;\">" +
+          "<button class=\"btn btn-secondary btn-compact\" data-approve=\"" + a.id + "\">อนุมัติให้นักเรียนเห็น</button>" +
+          "<button class=\"btn btn-ghost-learn btn-compact\" data-reject=\"" + a.id + "\">ไม่อนุมัติ</button>" +
+        "</div>";
+      pendingList.appendChild(row);
+    });
+    pendingList.querySelectorAll("[data-approve]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var idx = state.aiPending.findIndex(function (a) { return a.id === btn.dataset.approve; });
+        if (idx === -1) return;
+        var a = state.aiPending[idx];
+        state.aiPending.splice(idx, 1);
+        state.lessonCounter += 1;
+        state.lessons.push({ id: "l" + state.lessonCounter, kind: "link", title: a.title, sourceLabel: "คลิปที่ AI ค้นหาให้ — ครูอนุมัติแล้ว (FE-39)" });
+        toast("อนุมัติคลิปแล้ว นักเรียนจะเห็นบทเรียนนี้ได้ทันที");
+        renderLessons();
+      });
+    });
+    pendingList.querySelectorAll("[data-reject]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.aiPending = state.aiPending.filter(function (a) { return a.id !== btn.dataset.reject; });
+        toast("ปฏิเสธคลิปนี้แล้ว จะไม่ปรากฏต่อนักเรียน");
+        renderLessons();
+      });
+    });
+
+    var list = document.getElementById("published-lesson-list");
+    list.innerHTML = "";
+    if (state.lessons.length === 0) {
+      list.innerHTML = "<p class=\"muted-learn\">ยังไม่มีบทเรียนที่เผยแพร่</p>";
+    }
+    state.lessons.forEach(function (l) {
+      var kindLabel = l.kind === "link" ? "คลิป/สื่อภายนอก" : (l.kind === "document" ? "เอกสาร" : "เนื้อหาที่พิมพ์เอง");
+      var row = document.createElement("div");
+      row.className = "card-learn";
+      row.innerHTML =
+        "<span class=\"status-chip status-chip--done\">" + kindLabel + "</span>" +
+        "<h3 style=\"margin:var(--space-2) 0 4px;\">" + escapeHtml(l.title) + "</h3>" +
+        "<p class=\"muted-learn\" style=\"margin:0; font-size:var(--text-sm);\">" + escapeHtml(l.sourceLabel) + "</p>";
+      list.appendChild(row);
+    });
+  }
+
+  document.getElementById("btn-add-lesson-link").addEventListener("click", function () {
+    var title = document.getElementById("lesson-link-title").value.trim();
+    var url = document.getElementById("lesson-link-url").value.trim();
+    if (!title || !url) { toast("กรุณากรอกชื่อบทเรียนและลิงก์ให้ครบ"); return; }
+    state.lessonCounter += 1;
+    state.lessons.push({ id: "l" + state.lessonCounter, kind: "link", title: title, sourceLabel: "ลิงก์คลิป/สื่อภายนอกที่ครูแปะไว้ (FE-08)" });
+    document.getElementById("lesson-link-title").value = "";
+    document.getElementById("lesson-link-url").value = "";
+    toast("เพิ่มบทเรียนจากลิงก์สำเร็จ");
+    renderLessons();
+  });
+
+  document.getElementById("btn-add-lesson-doc").addEventListener("click", function () {
+    var title = document.getElementById("lesson-doc-title").value.trim();
+    var fileInput = document.getElementById("lesson-doc-file");
+    var fileName = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : "เอกสารตัวอย่าง.pdf";
+    if (!title) { toast("กรุณากรอกชื่อบทเรียน"); return; }
+    state.lessonCounter += 1;
+    state.lessons.push({ id: "l" + state.lessonCounter, kind: "document", title: title, sourceLabel: "เอกสารที่ครูอัปโหลด: " + fileName + " (FE-09)" });
+    document.getElementById("lesson-doc-title").value = "";
+    fileInput.value = "";
+    toast("เพิ่มบทเรียนจากไฟล์สำเร็จ");
+    renderLessons();
+  });
+
+  document.getElementById("btn-add-lesson-typed").addEventListener("click", function () {
+    var title = document.getElementById("lesson-typed-title").value.trim();
+    var body = document.getElementById("lesson-typed-body").value.trim();
+    if (!title || !body) { toast("กรุณากรอกชื่อบทเรียนและเนื้อหาให้ครบ"); return; }
+    state.lessonCounter += 1;
+    state.lessons.push({ id: "l" + state.lessonCounter, kind: "typed", title: title, sourceLabel: "เนื้อหาที่ครูพิมพ์ตรงในระบบ (FE-37) — AI อ่านออกเสียงได้ง่าย" });
+    document.getElementById("lesson-typed-title").value = "";
+    document.getElementById("lesson-typed-body").value = "";
+    toast("บันทึกเนื้อหาที่พิมพ์สำเร็จ");
+    renderLessons();
+  });
+
+  document.getElementById("btn-ai-search").addEventListener("click", function () {
+    var topic = document.getElementById("ai-topic-input").value.trim();
+    if (!topic) { toast("กรุณาระบุหัวข้อก่อนค้นหา"); return; }
+    state.aiPending.push({ id: "ai" + Date.now() + "a", title: "คลิปแนะนำ: แนะนำแนวคิดพื้นฐานเรื่อง " + topic, topicMock: topic });
+    state.aiPending.push({ id: "ai" + Date.now() + "b", title: "คลิปแนะนำ: แบบฝึกทบทวนเรื่อง " + topic, topicMock: topic });
+    toast("AI ค้นหาคลิปตามหัวข้อ \"" + topic + "\" แล้ว รอครูอนุมัติก่อนถึงนักเรียน");
+    document.getElementById("ai-topic-input").value = "";
+    renderLessons();
+  });
+
+  /* ======================================================================
+     5. สร้างแบบทดสอบ (FE-12..15/18/19/21)
+     ====================================================================== */
+  var QUIZ_TYPE_LABEL = {
+    "mcq-teacher": "ปรนัย (ครูสร้างเอง)",
+    "worksheet": "ใบงาน",
+    "attachment": "แนบชิ้นงาน",
+    "ai-mcq": "AI ช่วยออกข้อสอบปรนัย"
+  };
+  function isAutogradedType(type) { return type === "mcq-teacher" || type === "ai-mcq"; }
+
+  function renderQuizList() {
+    var tbody = document.getElementById("quizlist-tbody");
+    tbody.innerHTML = "";
+    state.quizSets.forEach(function (q) {
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td>" + escapeHtml(q.title) + "</td>" +
+        "<td>" + escapeHtml(QUIZ_TYPE_LABEL[q.type] || q.type) + "</td>" +
+        "<td>" + q.fullScore + "</td>" +
+        "<td>" + q.maxAttempts + "</td>" +
+        "<td>" + escapeHtml(q.openDate) + " – " + escapeHtml(q.closeDate) + "</td>" +
+        "<td>" + (q.autograded ? "ระบบตรวจอัตโนมัติ" : "ครูตรวจเอง") + "</td>";
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById("quiz-builder-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var title = document.getElementById("qb-title").value.trim();
+    var type = document.querySelector("input[name=\"qb-type\"]:checked").value;
+    var fullScore = parseInt(document.getElementById("qb-fullscore").value, 10);
+    var attempts = parseInt(document.getElementById("qb-attempts").value, 10);
+    var openDate = document.getElementById("qb-open").value;
+    var closeDate = document.getElementById("qb-close").value;
+    var feedback = document.getElementById("qb-feedback");
+
+    if (!title) { feedback.textContent = "กรุณากรอกชื่อชุดแบบทดสอบ"; return; }
+    if (!fullScore || fullScore <= 0) { feedback.textContent = "กรุณากรอกคะแนนเต็มที่มากกว่า 0"; return; }
+    if (!attempts || attempts <= 0) { feedback.textContent = "กรุณากรอกจำนวนรอบที่ทำซ้ำได้อย่างน้อย 1 รอบ"; return; }
+    if (!openDate || !closeDate) { feedback.textContent = "กรุณากำหนดวันเปิดและวันปิด"; return; }
+
+    var id = "q" + (state.quizSets.length + 1) + "_" + Date.now();
+    var autograded = isAutogradedType(type);
+    var newQuiz = { id: id, title: title, type: type, autograded: autograded, fullScore: fullScore, maxAttempts: attempts, openDate: openDate, closeDate: closeDate };
+    state.quizSets.push(newQuiz);
+    state.students.forEach(function (s) {
+      ensureScoreEntry(s.id, id, autograded ? "not-done" : "not-submitted");
+    });
+
+    feedback.textContent = "สร้างแบบทดสอบ \"" + title + "\" สำเร็จ ปรากฏในหน้าภาพรวมชั้นเรียนแล้ว";
+    toast("สร้างแบบทดสอบ \"" + title + "\" สำเร็จ");
+    document.getElementById("qb-title").value = "";
+    renderQuizList();
+  });
+
+  /* ======================================================================
+     6. ตรวจงานและบันทึกคะแนน (FE-16/17)
+     ====================================================================== */
+  function renderGrading() {
+    var focusBar = document.getElementById("grading-focus-bar");
+    if (state.grading.focusStudentId) {
+      var fs = studentById(state.grading.focusStudentId);
+      focusBar.hidden = false;
+      focusBar.innerHTML =
+        "<p style=\"margin:0;\">กำลังเปิดดูจากหน้าภาพรวมชั้นเรียน: <strong>" + escapeHtml(shortName(fs)) + "</strong> — แถวของนักเรียนคนนี้ถูกไฮไลต์ไว้ด้านล่าง</p>" +
+        "<button class=\"btn btn-ghost-learn btn-compact\" id=\"btn-clear-grading-focus\" style=\"margin-top:var(--space-2);\">ล้างตัวกรอง</button>";
+      document.getElementById("btn-clear-grading-focus").addEventListener("click", function () {
+        state.grading.focusStudentId = null;
+        renderGrading();
+      });
+    } else {
+      focusBar.hidden = true;
+      focusBar.innerHTML = "";
+    }
+
+    var autoQuizzes = state.quizSets.filter(function (q) { return q.autograded; });
+    var manualQuizzes = state.quizSets.filter(function (q) { return !q.autograded; });
+
+    var autoHead = document.getElementById("auto-grade-thead");
+    var autoHeadHtml = "<th>รหัสประจำตัว</th><th>ชื่อเล่น</th>";
+    autoQuizzes.forEach(function (q) { autoHeadHtml += "<th>" + escapeHtml(q.title) + "</th>"; });
+    autoHead.innerHTML = autoHeadHtml;
+
+    var autoBody = document.getElementById("auto-grade-tbody");
+    autoBody.innerHTML = "";
+    activeStudents().forEach(function (s) {
+      var tr = document.createElement("tr");
+      if (state.grading.focusStudentId === s.id) tr.classList.add("row-highlighted");
+      var rowHtml = "<td>" + escapeHtml(s.id) + "</td><td>" + escapeHtml(s.nickname || "ยังไม่ตั้งชื่อเล่น") + "</td>";
+      autoQuizzes.forEach(function (q) {
+        var entry = state.scores[s.id] && state.scores[s.id][q.id];
+        rowHtml += "<td>" + statusChipHtml(q, entry) + "</td>";
+      });
+      tr.innerHTML = rowHtml;
+      autoBody.appendChild(tr);
+    });
+
+    var groupsWrap = document.getElementById("manual-grade-groups");
+    groupsWrap.innerHTML = "";
+    if (manualQuizzes.length === 0) {
+      groupsWrap.innerHTML = "<p class=\"muted-learn\">ยังไม่มีชุดที่ต้องให้ครูตรวจเอง</p>";
+    }
+    manualQuizzes.forEach(function (q) {
+      var wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      var tbl = document.createElement("table");
+      tbl.className = "data-table";
+      var theadHtml = "<thead><tr><th>รหัสประจำตัว</th><th>ชื่อเล่น</th><th>สถานะ</th><th>คะแนน (เต็ม " + q.fullScore + ")</th><th>การจัดการ</th></tr></thead>";
+      var bodyHtml = "<tbody>";
+      activeStudents().forEach(function (s) {
+        var entry = ensureScoreEntry(s.id, q.id, "not-submitted");
+        var isFocus = state.grading.focusStudentId === s.id;
+        var statusText = entry.status === "graded" ? "ตรวจแล้ว" : (entry.status === "pending-grading" ? "ส่งแล้ว รอตรวจ" : "ยังไม่ส่งงาน");
+        var canScore = entry.status === "graded" || entry.status === "pending-grading";
+        bodyHtml +=
+          "<tr" + (isFocus ? " class=\"row-highlighted\"" : "") + ">" +
+            "<td>" + escapeHtml(s.id) + "</td>" +
+            "<td>" + escapeHtml(s.nickname || "ยังไม่ตั้งชื่อเล่น") + "</td>" +
+            "<td>" + statusText + "</td>" +
+            "<td>" + (canScore
+              ? "<input type=\"number\" min=\"0\" max=\"" + q.fullScore + "\" value=\"" + (entry.score === null ? "" : entry.score) + "\" data-score-input=\"" + s.id + "|" + q.id + "\" style=\"width:110px; min-height:var(--tap-min); border-radius:8px; border:1px solid var(--border-learn); padding: 0 8px; font-size:var(--text-md);\">"
+              : "<span class=\"muted-learn\" style=\"font-size:var(--text-xs);\">ยังตรวจไม่ได้</span>") + "</td>" +
+            "<td>" + (canScore
+              ? "<button class=\"btn btn-secondary btn-compact\" data-save-score=\"" + s.id + "|" + q.id + "\">บันทึกคะแนน</button>"
+              : "-") + "</td>" +
+          "</tr>";
+      });
+      bodyHtml += "</tbody>";
+      tbl.innerHTML = theadHtml + bodyHtml;
+      wrap.appendChild(tbl);
+
+      var titleEl = document.createElement("h3");
+      titleEl.textContent = q.title + " (" + QUIZ_TYPE_LABEL[q.type] + ")";
+      groupsWrap.appendChild(titleEl);
+      groupsWrap.appendChild(wrap);
+
+      tbl.querySelectorAll("[data-save-score]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var parts = btn.dataset.saveScore.split("|");
+          var studentId = parts[0], quizId = parts[1];
+          var input = tbl.querySelector("[data-score-input=\"" + studentId + "|" + quizId + "\"]");
+          var val = parseInt(input.value, 10);
+          var quiz = quizById(quizId);
+          if (isNaN(val) || val < 0 || val > quiz.fullScore) {
+            toast("กรุณากรอกคะแนนระหว่าง 0 ถึง " + quiz.fullScore);
+            return;
+          }
+          var entry = ensureScoreEntry(studentId, quizId, "not-submitted");
+          entry.status = "graded";
+          entry.score = val;
+          var st = studentById(studentId);
+          toast("บันทึกคะแนนของ " + shortName(st) + " ชุด \"" + quiz.title + "\" แล้ว");
+          renderGrading();
+        });
+      });
+    });
+  }
+
+  /* ======================================================================
+     7. จัดการแข่งขันรายสัปดาห์ (FE-27..32/42/43/46)
+     — ห้ามแสดงค่าพลัง ขั้น หรือแต้มของนักเรียนที่ใดในหน้านี้เลย
+     แสดงได้เพียงรหัส+ชื่อเล่น, รายชื่อคู่, และผลแพ้-ชนะเท่านั้น
+     ====================================================================== */
+  function shuffleIds(ids) {
+    var arr = ids.slice();
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  function makePairsFromIds(ids, source) {
+    var shuffled = shuffleIds(ids);
+    var pairs = [];
+    for (var i = 0; i + 1 < shuffled.length; i += 2) {
+      state.arena.pairCounter += 1;
+      pairs.push({ id: "pair" + state.arena.pairCounter, aId: shuffled[i], bId: shuffled[i + 1], announced: false, winnerId: null, source: source });
+    }
+    return pairs;
+  }
+
+  function seedStudentChoicePairsMock() {
+    var ids = activeStudents().map(function (s) { return s.id; });
+    var chosenCount = Math.min(8, ids.length - (ids.length % 2 === 0 ? 0 : 1));
+    var chosen = ids.slice(0, chosenCount);
+    return makePairsFromIds(chosen, "student");
+  }
+
+  function resetArenaPairs() {
+    state.arena.pairs = [];
+  }
+
+  function pairedStudentIds() {
+    var used = {};
+    state.arena.pairs.forEach(function (p) { used[p.aId] = true; used[p.bId] = true; });
+    return used;
+  }
+
+  function renderArenaModePanel() {
+    var panel = document.getElementById("arena-mode-panel");
+    var active = activeStudents();
+    if (state.arena.mode === "student-choice") {
+      var used = pairedStudentIds();
+      var waiting = active.filter(function (s) { return !used[s.id]; });
+      panel.innerHTML =
+        "<h3>นักเรียนเลือกคู่แข่งเอง</h3>" +
+        "<p class=\"muted-learn\">นี่คือสถานะการเลือกคู่ของนักเรียน (จำลอง) — ครูไม่ต้องจับคู่ให้ในโหมดนี้</p>" +
+        "<p>นักเรียนที่ยังรอเลือกคู่แข่ง: " + (waiting.length
+          ? waiting.map(function (s) { return escapeHtml(shortName(s)); }).join(", ")
+          : "ไม่มี — ทุกคนเลือกคู่แล้ว") + "</p>";
+    } else if (state.arena.mode === "random") {
+      panel.innerHTML =
+        "<h3>ครูกดสุ่มจับคู่</h3>" +
+        "<p class=\"muted-learn\">กดปุ่มด้านล่างเพื่อให้ระบบสุ่มจับคู่นักเรียนที่ใช้งานอยู่ทั้งหมดใหม่ทุกครั้ง</p>" +
+        "<button id=\"btn-random-pair\" class=\"btn btn-secondary\">สุ่มจับคู่ทั้งห้อง</button>";
+      document.getElementById("btn-random-pair").addEventListener("click", function () {
+        var ids = active.map(function (s) { return s.id; });
+        state.arena.pairs = makePairsFromIds(ids, "random");
+        toast("สุ่มจับคู่แข่งแล้ว " + state.arena.pairs.length + " คู่");
+        renderArena();
+      });
+    } else if (state.arena.mode === "teacher-choice") {
+      var used2 = pairedStudentIds();
+      var avail = active.filter(function (s) { return !used2[s.id]; });
+      var optionsHtml = avail.map(function (s) { return "<option value=\"" + s.id + "\">" + escapeHtml(shortName(s)) + "</option>"; }).join("");
+      panel.innerHTML =
+        "<h3>ครูเลือกคู่เอง</h3>" +
+        "<p class=\"muted-learn\">เลือกนักเรียน 2 คนแล้วกด \"เพิ่มคู่\" ทำซ้ำได้จนกว่าจะจับคู่ครบตามต้องการ</p>" +
+        "<div class=\"form-row form-row--2\">" +
+          "<div class=\"field\"><label for=\"pair-select-a\">นักเรียนคนที่ 1</label><select id=\"pair-select-a\">" + optionsHtml + "</select></div>" +
+          "<div class=\"field\"><label for=\"pair-select-b\">นักเรียนคนที่ 2</label><select id=\"pair-select-b\">" + optionsHtml + "</select></div>" +
+        "</div>" +
+        "<button id=\"btn-add-pair\" class=\"btn btn-secondary\" " + (avail.length < 2 ? "disabled" : "") + ">เพิ่มคู่</button>" +
+        (avail.length < 2 ? "<p class=\"hint\">นักเรียนที่ใช้งานอยู่ทั้งหมดถูกจับคู่ครบแล้ว</p>" : "");
+      var addBtn = document.getElementById("btn-add-pair");
+      if (addBtn) {
+        addBtn.addEventListener("click", function () {
+          var aId = document.getElementById("pair-select-a").value;
+          var bId = document.getElementById("pair-select-b").value;
+          if (!aId || !bId || aId === bId) { toast("กรุณาเลือกนักเรียน 2 คนที่ไม่ซ้ำกัน"); return; }
+          state.arena.pairCounter += 1;
+          state.arena.pairs.push({ id: "pair" + state.arena.pairCounter, aId: aId, bId: bId, announced: false, winnerId: null, source: "teacher" });
+          toast("เพิ่มคู่แข่งแล้ว");
+          renderArena();
+        });
+      }
+    } else if (state.arena.mode === "auto-weekly") {
+      panel.innerHTML =
+        "<h3>ตั้งให้ระบบจับคู่เองทุกสัปดาห์</h3>" +
+        "<div class=\"toggle-row\">" +
+          "<label class=\"toggle-switch\">" +
+            "<input type=\"checkbox\" id=\"auto-weekly-toggle\" aria-label=\"เปิดหรือปิดการจับคู่แข่งอัตโนมัติรายสัปดาห์\" " + (state.arena.autoWeeklyEnabled ? "checked" : "") + ">" +
+            "<span class=\"toggle-switch__track\"><span class=\"toggle-switch__thumb\"></span></span>" +
+          "</label>" +
+          "<span class=\"toggle-label-text\">" + (state.arena.autoWeeklyEnabled ? "เปิดใช้งาน — ระบบจับคู่ให้เองทุกสัปดาห์" : "ปิดใช้งาน") + "</span>" +
+        "</div>" +
+        "<p class=\"hint\">เมื่อเปิดใช้งาน ครูไม่ต้องเข้ามาจัดการเรื่องนี้อีก ระบบจะสุ่มจับคู่ให้ทุกสัปดาห์โดยอัตโนมัติ (จำลองผลของสัปดาห์นี้ไว้ให้ดูตัวอย่างด้านล่าง)</p>";
+      document.getElementById("auto-weekly-toggle").addEventListener("change", function (e) {
+        state.arena.autoWeeklyEnabled = e.target.checked;
+        if (state.arena.autoWeeklyEnabled) {
+          var ids = active.map(function (s) { return s.id; });
+          state.arena.pairs = makePairsFromIds(ids, "auto");
+          toast("ตั้งให้ระบบจับคู่เองทุกสัปดาห์แล้ว — จำลองผลของสัปดาห์นี้ไว้ให้ดูตัวอย่าง");
+        } else {
+          toast("ปิดการจับคู่อัตโนมัติรายสัปดาห์แล้ว");
+        }
+        renderArena();
+      });
+    }
+  }
+
+  function renderArenaPairsList() {
+    var listEl = document.getElementById("arena-pairs-list");
+    if (state.arena.pairs.length === 0) {
+      listEl.innerHTML = "<p class=\"muted-learn\">ยังไม่มีคู่แข่งของสัปดาห์นี้</p>";
+    } else {
+      listEl.innerHTML = "";
+      state.arena.pairs.forEach(function (p) {
+        var a = studentById(p.aId), b = studentById(p.bId);
+        var resultHtml = p.announced
+          ? "<span class=\"status-chip status-chip--done\">ประกาศแล้ว</span>"
+          : "<span class=\"status-chip status-chip--pending\">ยังไม่ประกาศ</span>";
+        var row = document.createElement("div");
+        row.className = "pair-row";
+        var nameHtml =
+          "<span class=\"pair-row__names\">" + escapeHtml(shortName(a)) +
+          (p.announced ? (p.winnerId === p.aId ? " <span style=\"color:var(--state-success-on-learn);\">(ชนะ)</span>" : " <span class=\"muted-learn\">(ยังไม่ชนะรอบนี้)</span>") : "") +
+          "<span class=\"pair-row__vs\">VS</span>" + escapeHtml(shortName(b)) +
+          (p.announced ? (p.winnerId === p.bId ? " <span style=\"color:var(--state-success-on-learn);\">(ชนะ)</span>" : " <span class=\"muted-learn\">(ยังไม่ชนะรอบนี้)</span>") : "") +
+          "</span>";
+        row.innerHTML = nameHtml + resultHtml;
+        listEl.appendChild(row);
+      });
+    }
+
+    var announceBtn = document.getElementById("btn-announce-results");
+    var presentBtn = document.getElementById("btn-open-present");
+    var hasUnannounced = state.arena.pairs.some(function (p) { return !p.announced; });
+    var hasAnnounced = state.arena.pairs.some(function (p) { return p.announced; });
+    announceBtn.disabled = !hasUnannounced;
+    presentBtn.disabled = !hasAnnounced;
+  }
+
+  function renderWinnerStats() {
+    var listEl = document.getElementById("winner-stats-list");
+    var entries = activeStudents().map(function (s) {
+      return { student: s, wins: state.arena.winnerStats[s.id] || 0 };
+    }).filter(function (e) { return e.wins > 0; });
+    entries.sort(function (a, b) { return b.wins - a.wins; });
+    if (entries.length === 0) {
+      listEl.innerHTML = "<li>ยังไม่มีผู้ชนะที่ประกาศผลในระบบ</li>";
+      return;
+    }
+    listEl.innerHTML = "";
+    entries.forEach(function (e) {
+      var li = document.createElement("li");
+      li.innerHTML = "<span>" + escapeHtml(shortName(e.student)) + "</span><span>⭐ ชนะสะสม " + e.wins + " ครั้ง</span>";
+      listEl.appendChild(li);
+    });
+  }
+
+  function renderArena() {
+    renderArenaModePanel();
+    renderArenaPairsList();
+    renderWinnerStats();
+  }
+
+  document.querySelectorAll("input[name=\"arena-mode\"]").forEach(function (radio) {
+    radio.addEventListener("change", function (e) {
+      state.arena.mode = e.target.value;
+      resetArenaPairs();
+      if (state.arena.mode === "student-choice") {
+        state.arena.pairs = seedStudentChoicePairsMock();
+      }
+      if (state.arena.mode === "auto-weekly" && state.arena.autoWeeklyEnabled) {
+        var ids = activeStudents().map(function (s) { return s.id; });
+        state.arena.pairs = makePairsFromIds(ids, "auto");
+      }
+      toast("เปลี่ยนวิธีจับคู่แล้ว รายการคู่ของสัปดาห์นี้ถูกล้างเพื่อเริ่มใหม่");
+      renderArena();
+    });
+  });
+
+  document.getElementById("btn-announce-results").addEventListener("click", function () {
+    state.arena.pairs.forEach(function (p) {
+      if (p.announced) return;
+      p.announced = true;
+      // ตัดสินผลจำลอง — ในระบบจริงตัดสินด้วยค่าพลังจากขั้นการเติบโตที่ครูไม่เห็น (FE-27)
+      p.winnerId = Math.random() < 0.5 ? p.aId : p.bId;
+      state.arena.winnerStats[p.winnerId] = (state.arena.winnerStats[p.winnerId] || 0) + 1;
+    });
+    toast("ประกาศผลการแข่งขันแล้ว");
+    renderArena();
+  });
+
+  document.getElementById("btn-open-present").addEventListener("click", function () {
+    state.arena.presentIndex = 0;
+    document.getElementById("present-modal").hidden = false;
+    renderPresentPanel();
+  });
+
+  function announcedPairs() {
+    return state.arena.pairs.filter(function (p) { return p.announced; });
+  }
+  function renderPresentPanel() {
+    var pairs = announcedPairs();
+    var body = document.getElementById("present-panel-body");
+    if (pairs.length === 0) {
+      body.innerHTML = "<p>ยังไม่มีผลที่ประกาศแล้วให้ฉาย</p>";
+      return;
+    }
+    if (state.arena.presentIndex >= pairs.length) state.arena.presentIndex = 0;
+    if (state.arena.presentIndex < 0) state.arena.presentIndex = pairs.length - 1;
+    var p = pairs[state.arena.presentIndex];
+    var a = studentById(p.aId), b = studentById(p.bId);
+    var winner = studentById(p.winnerId);
+    body.innerHTML =
+      "<p class=\"present-panel__vs\">" + escapeHtml(shortName(a)) + " <span class=\"muted-learn\">VS</span> " + escapeHtml(shortName(b)) + "</p>" +
+      "<p class=\"present-panel__winner\">⭐ ผู้ชนะรอบนี้: " + escapeHtml(shortName(winner)) + "</p>" +
+      "<p class=\"muted-learn\" style=\"margin-top:var(--space-3);\">คู่ที่ " + (state.arena.presentIndex + 1) + " / " + pairs.length + "</p>";
+  }
+  document.getElementById("btn-present-prev").addEventListener("click", function () {
+    state.arena.presentIndex -= 1;
+    renderPresentPanel();
+  });
+  document.getElementById("btn-present-next").addEventListener("click", function () {
+    state.arena.presentIndex += 1;
+    renderPresentPanel();
+  });
+  function closePresentModal() { document.getElementById("present-modal").hidden = true; }
+  document.getElementById("btn-present-close").addEventListener("click", closePresentModal);
+  document.getElementById("btn-close-present").addEventListener("click", closePresentModal);
+
+  /* ======================================================================
+     8. ส่งออกคะแนน (FE-34/63..71)
+     ====================================================================== */
+  function exportFields() {
+    // รายการฟิลด์ที่ต้องเลือกคอลัมน์ปลายทาง — เริ่มด้วยรหัสประจำตัวเสมอ (ใช้จับคู่แถว FE-69)
+    var fields = [{ key: "student-id", label: "รหัสประจำตัวนักเรียน (ใช้จับคู่แถว)" }];
+    if (state.exportState.scope === "per-quiz") {
+      state.exportState.selectedQuizIds.forEach(function (qid) {
+        var q = quizById(qid);
+        if (q) fields.push({ key: "quiz-" + qid, label: "คะแนนชุด: " + q.title });
+      });
+    } else {
+      fields.push({ key: "total-score", label: "คะแนนรวมทั้งหมด" });
+    }
+    return fields;
+  }
+
+  function renderExportQuizCheckboxes() {
+    var wrap = document.getElementById("export-quiz-checkboxes");
+    if (state.exportState.scope !== "per-quiz") { wrap.innerHTML = ""; wrap.hidden = true; return; }
+    wrap.hidden = false;
+    wrap.innerHTML = "<p class=\"hint\" style=\"margin-top:var(--space-2);\">เลือกชุดที่ต้องการส่งออก (FE-64)</p>";
+    state.quizSets.forEach(function (q) {
+      var checked = state.exportState.selectedQuizIds.indexOf(q.id) !== -1;
+      var label = document.createElement("label");
+      label.className = "qopt";
+      label.innerHTML =
+        "<input type=\"checkbox\" data-export-quiz=\"" + q.id + "\" " + (checked ? "checked" : "") + ">" +
+        "<span class=\"qopt__body\"><strong>" + escapeHtml(q.title) + "</strong></span>";
+      wrap.appendChild(label);
+    });
+    wrap.querySelectorAll("[data-export-quiz]").forEach(function (chk) {
+      chk.addEventListener("change", function () {
+        var qid = chk.dataset.exportQuiz;
+        var idx = state.exportState.selectedQuizIds.indexOf(qid);
+        if (chk.checked && idx === -1) state.exportState.selectedQuizIds.push(qid);
+        if (!chk.checked && idx !== -1) state.exportState.selectedQuizIds.splice(idx, 1);
+        state.exportState.previewDone = false;
+        renderExport();
+      });
+    });
+  }
+
+  function renderExportChannelDetail() {
+    var wrap = document.getElementById("export-channel-detail");
+    if (state.exportState.channel === "sheets") {
+      wrap.innerHTML =
+        "<div class=\"field\" style=\"margin-top:var(--space-3);\">" +
+          "<label for=\"export-sheet-link\">ลิงก์ Google Sheets ปลายทาง</label>" +
+          "<input type=\"url\" id=\"export-sheet-link\" placeholder=\"https://docs.google.com/spreadsheets/...\" value=\"" + escapeHtml(state.exportState.sheetLink) + "\">" +
+        "</div>";
+      document.getElementById("export-sheet-link").addEventListener("input", function (e) {
+        state.exportState.sheetLink = e.target.value;
+        state.exportState.previewDone = false;
+      });
+    } else {
+      var optionsHtml = MOCK.exportFileFormatsMock.map(function (f) {
+        return "<option value=\"" + escapeHtml(f) + "\" " + (f === state.exportState.fileFormat ? "selected" : "") + ">" + escapeHtml(f) + "</option>";
+      }).join("");
+      wrap.innerHTML =
+        "<div class=\"field\" style=\"margin-top:var(--space-3);\">" +
+          "<label for=\"export-file-format\">รูปแบบไฟล์ <span class=\"mock-tag\">ค่าสมมติ — spec 05 ยังไม่ล็อกรูปแบบไฟล์</span></label>" +
+          "<select id=\"export-file-format\">" + optionsHtml + "</select>" +
+        "</div>";
+      document.getElementById("export-file-format").addEventListener("change", function (e) {
+        state.exportState.fileFormat = e.target.value;
+        state.exportState.previewDone = false;
+      });
+    }
+  }
+
+  function renderExportColumnMap() {
+    var wrap = document.getElementById("export-column-map");
+    var fields = exportFields();
+    wrap.innerHTML = "";
+    fields.forEach(function (f) {
+      if (!state.exportState.columnMap[f.key]) {
+        var idx = fields.indexOf(f);
+        state.exportState.columnMap[f.key] = MOCK.exportColumnOptionsMock[idx] || MOCK.exportColumnOptionsMock[0];
+      }
+      var optionsHtml = MOCK.exportColumnOptionsMock.map(function (c) {
+        return "<option value=\"" + c + "\" " + (c === state.exportState.columnMap[f.key] ? "selected" : "") + ">คอลัมน์ " + c + "</option>";
+      }).join("");
+      var row = document.createElement("div");
+      row.className = "field";
+      row.innerHTML =
+        "<label for=\"col-" + f.key + "\">" + escapeHtml(f.label) + "</label>" +
+        "<select id=\"col-" + f.key + "\" data-colmap=\"" + f.key + "\">" + optionsHtml + "</select>";
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll("[data-colmap]").forEach(function (sel) {
+      sel.addEventListener("change", function (e) {
+        state.exportState.columnMap[sel.dataset.colmap] = e.target.value;
+        state.exportState.previewDone = false;
+        document.getElementById("btn-confirm-export").disabled = true;
+      });
+    });
+  }
+
+  function renderExport() {
+    document.querySelector("input[name=\"export-scope\"][value=\"" + state.exportState.scope + "\"]").checked = true;
+    document.querySelector("input[name=\"export-channel\"][value=\"" + state.exportState.channel + "\"]").checked = true;
+    renderExportQuizCheckboxes();
+    renderExportChannelDetail();
+    renderExportColumnMap();
+
+    var previewEl = document.getElementById("export-preview-result");
+    previewEl.hidden = !state.exportState.previewDone;
+    document.getElementById("btn-confirm-export").disabled = !state.exportState.previewDone;
+
+    var sentEl = document.getElementById("export-sent-result");
+    sentEl.hidden = !state.exportState.sentAt;
+    if (state.exportState.sentAt) {
+      sentEl.innerHTML =
+        "<div class=\"card-learn\" style=\"margin:0; border-color:var(--state-success-on-learn);\">" +
+          "<p style=\"margin:0; color:var(--state-success-on-learn); font-weight:700;\">ส่งคะแนนสำเร็จ</p>" +
+          "<p class=\"muted-learn\" style=\"margin:4px 0 0; font-size:var(--text-sm);\">ส่งล่าสุดเมื่อ " + escapeHtml(state.exportState.sentAt) + "</p>" +
+        "</div>";
+    }
+  }
+
+  document.querySelectorAll("input[name=\"export-scope\"]").forEach(function (radio) {
+    radio.addEventListener("change", function (e) {
+      state.exportState.scope = e.target.value;
+      state.exportState.previewDone = false;
+      renderExport();
+    });
+  });
+  document.querySelectorAll("input[name=\"export-channel\"]").forEach(function (radio) {
+    radio.addEventListener("change", function (e) {
+      state.exportState.channel = e.target.value;
+      state.exportState.previewDone = false;
+      renderExport();
+    });
+  });
+
+  document.getElementById("btn-preview-export").addEventListener("click", function () {
+    if (state.exportState.scope === "per-quiz" && state.exportState.selectedQuizIds.length === 0) {
+      toast("กรุณาเลือกชุดแบบทดสอบที่จะส่งออกอย่างน้อย 1 ชุด");
+      return;
+    }
+    if (state.exportState.channel === "sheets" && !state.exportState.sheetLink.trim()) {
+      toast("กรุณาวางลิงก์ Google Sheets ปลายทางก่อน");
+      return;
+    }
+    // จำลองแถวในชีทปลายทาง: รหัสของนักเรียนที่ใช้งานอยู่จริงทุกคน + รหัสสมมติที่ไม่ตรงกับระบบ (FE-70)
+    var matched = activeStudents();
+    var skipped = MOCK.exportUnmatchedSheetCodesMock.map(function (code) {
+      return { code: code, reason: "ไม่พบรหัสนี้ในระบบ (FE-69)" };
+    });
+    state.exportState.matchedCount = matched.length;
+    state.exportState.skippedRows = skipped;
+    state.exportState.previewDone = true;
+
+    var resultEl = document.getElementById("export-preview-result");
+    resultEl.hidden = false;
+    var skippedRowsHtml = skipped.map(function (r) {
+      return "<tr><td>" + escapeHtml(r.code) + "</td><td>" + escapeHtml(r.reason) + "</td></tr>";
+    }).join("");
+    resultEl.innerHTML =
+      "<p>จะส่งคะแนนของนักเรียน <strong>" + matched.length + " คน</strong> · ข้ามแถวที่รหัสไม่ตรง <strong>" + skipped.length + " แถว</strong></p>" +
+      "<div class=\"table-wrap\"><table class=\"data-table\" style=\"min-width:0;\">" +
+        "<thead><tr><th>รหัสในชีทปลายทาง</th><th>สาเหตุที่ถูกข้าม</th></tr></thead>" +
+        "<tbody>" + skippedRowsHtml + "</tbody>" +
+      "</table></div>" +
+      "<p class=\"hint\">ระบบจะไม่เขียนทับแถวที่รหัสไม่ตรงเหล่านี้ — ครูตรวจสอบและแก้ไขเองในชีทของตนได้ตามสะดวก</p>";
+    document.getElementById("btn-confirm-export").disabled = false;
+    toast("ตรวจสอบข้อมูลก่อนส่งเรียบร้อยแล้ว");
+  });
+
+  document.getElementById("btn-confirm-export").addEventListener("click", function () {
+    if (!state.exportState.previewDone) return;
+    var now = new Date();
+    var stamp = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0") +
+      " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0") + " (เวลาจำลอง)";
+    state.exportState.sentAt = stamp;
+    if (state.exportState.channel === "sheets") {
+      toast("ส่งคะแนนเข้า Google Sheets สำเร็จ (จำลอง)");
+    } else {
+      toast("สร้างไฟล์คะแนนให้ดาวน์โหลดสำเร็จ (จำลอง — " + state.exportState.fileFormat + ")");
+    }
+    renderExport();
+  });
+
+  /* ======================================================================
+     Nav bindings + init
+     ====================================================================== */
+  document.querySelectorAll(".review-nav__btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { showScreen(btn.dataset.target); });
+  });
+  document.querySelectorAll(".app-nav__btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { showScreen(btn.dataset.target); });
+  });
+
+  // ค่าเริ่มต้นของโหมดจับคู่คือ "นักเรียนเลือกเอง" — สร้างคู่ตัวอย่างไว้ให้ดูตั้งแต่แรก
+  state.arena.pairs = seedStudentChoicePairsMock();
+
+  showScreen("screen-login");
+})();
+</script>
+</body>
+</html>
+
+
