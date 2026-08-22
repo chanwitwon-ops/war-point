@@ -3,7 +3,7 @@
 - **วันที่สร้าง:** 2026-08-21
 - **เวอร์ชัน:** v1 (`v1-20260821-student-learn-and-pet`)
 - **สถานะ:** Draft — ยังไม่ผ่านการตรวจสอบ (`prototype-auditor`)
-- **อ้างอิงต้นทาง:** [[../../../DESIGN|DESIGN.md]], [[../../../01-requirements/user-journey|user-journey (UJ-01)]], [[../../../01-requirements/feature-list|feature-list]], [[../../../01-requirements/01-spec/20260821-01-lesson-and-quiz-system|spec 01 ระบบบทเรียนและแบบทดสอบ]], [[../../../01-requirements/01-spec/20260821-02-pet-points-and-weekly-arena|spec 02 ระบบสัตว์เลี้ยง แต้ม และการแข่งขันรายสัปดาห์]], [[../../../01-requirements/01-spec/20260821-03-student-identity-and-roster|spec 03 ระบบตัวตนและการจัดการรายชื่อนักเรียน]]
+- **อ้างอิงต้นทาง:** [[../../../../DESIGN|DESIGN.md]], [[../../../01-requirements/user-journey|user-journey (UJ-01)]], [[../../../01-requirements/feature-list|feature-list]], [[../../../01-requirements/01-spec/20260821-01-lesson-and-quiz-system|spec 01 ระบบบทเรียนและแบบทดสอบ]], [[../../../01-requirements/01-spec/20260821-02-pet-points-and-weekly-arena|spec 02 ระบบสัตว์เลี้ยง แต้ม และการแข่งขันรายสัปดาห์]], [[../../../01-requirements/01-spec/20260821-03-student-identity-and-roster|spec 03 ระบบตัวตนและการจัดการรายชื่อนักเรียน]]
 
 ## ครอบคลุมอะไร
 
