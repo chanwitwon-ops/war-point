@@ -8,3 +8,7 @@
 - เทคโนโลยีและไลบรารีที่เลือกใช้ พร้อมเหตุผล
 
 เอกสารในโฟลเดอร์นี้คือพิมพ์เขียวที่ทีมพัฒนาใช้อ้างอิงตอนลงมือเขียนโค้ด และเป็นฐานในการวางแผนทดสอบใน [[../../03-testing/01-test-plan/index|01-test-plan]]
+
+## เอกสารในโฟลเดอร์นี้
+
+- [[architecture|architecture]] — High-Level Architecture ระดับ Conceptual (3-tier monolith, CMP-01 ถึง CMP-20, DF-01 ถึง DF-04) รับ input จาก [[../../01-requirements/feature-list|feature-list]], [[../../01-requirements/user-journey|user-journey]] และ [[../../03-testing/01-test-plan/acceptance-criteria|acceptance-criteria]]

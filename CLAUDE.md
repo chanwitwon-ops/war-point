@@ -4,7 +4,7 @@
 
 ## สถานะปัจจุบันของ repository
 
-repository นี้**เพิ่งตั้งโครง ยังไม่มีทั้งซอร์สโค้ดและเอกสารเนื้อหา** — มีเพียงโครงโฟลเดอร์ `docs/` พร้อม `index.md` ของแต่ละชั้น และชุด agent/skill ใน `.claude/` ยังไม่มี build system, package manifest, linter หรือ test runner ใดๆ
+repository นี้**เป็น repo เอกสารล้วน ยังไม่มีซอร์สโค้ดของระบบจริง** — มี `docs/` (requirement, feature list, user journey, prototype, เอกสารทดสอบ), `DESIGN.md` และชุด agent/skill ใน `.claude/` แต่**ยังไม่มี build system, package manifest, linter หรือ test runner ใดๆ**
 
 **อย่าคิดคำสั่ง build/lint/test ขึ้นมาเอง** เมื่อมีการเพิ่มโค้ดจริงเข้ามาใน repo นี้ในอนาคต ให้อัปเดตไฟล์นี้ด้วยคำสั่งที่ใช้งานได้จริงในตอนนั้น
 
@@ -14,7 +14,8 @@ repository นี้**เพิ่งตั้งโครง ยังไม่
 2. `/sync-feature-journey` — สร้าง `feature-list.md` (FE-XX + MoSCoW) และ `user-journey.md` (UJ-XX + Mermaid)
 3. `/build-prototype` — สร้าง `DESIGN.md` (ถ้ายังไม่มี skill จะถามโทนสี/สไตล์ให้) แล้วสร้าง interactive prototype
 4. `/sync-test-plan` — สร้าง acceptance criteria, test plan และ test case
-5. `/audit-backlog` + `/audit-prototype` — ตรวจความสอดคล้องทั้งสายก่อน commit
+5. `/sync-architecture` → `/sync-api-db` → `/sync-detailed-design` → `/sync-nfr` — สาย technical spec (ต้องเรียงตามนี้ เพราะแต่ละตัวอ่าน output ของตัวก่อนหน้า)
+6. `/audit-backlog` + `/audit-prototype` + `/audit-technical-spec` — ตรวจความสอดคล้องทั้งสายก่อน commit
 
 prototype ที่สร้างแล้วเปิดดูได้โดยเปิดไฟล์ `index.html` ในโฟลเดอร์เวอร์ชันนั้นด้วย browser ตรงๆ ไม่ต้อง build และไม่ต้องรัน dev server
 
@@ -58,22 +59,28 @@ prototype ที่สร้างแล้วเปิดดูได้โด�
          └─> feature-list.md (FE-XX, MoSCoW)
                └─> user-journey.md (UJ-XX, Mermaid)
                      ├─> 02-design/01-prototypes  (อ้างอิง DESIGN.md)
-                     ├─> 02-design/02-technical
+                     ├─> 02-design/02-technical/architecture.md (CMP-XX, DF-XX)
+                     │     ├─> database-schema.md (ENT-XX, ERD)
+                     │     ├─> api-spec.md (API-XX)
+                     │     │     └─> detailed-design.md + detailed-design/{flow}.md (DD-XX, BR-XX, ERR-XX)
+                     │     └─> non-functional-requirement.md (NFR-XX)
                      └─> 03-testing/01-test-plan/acceptance-criteria.md
                            ├─> test-plan.md
                            └─> test-cases/{feature-slug}.md
                                  └─> 03-testing/02-test-result
 ```
 
+สาย technical spec รับ input จาก `feature-list.md` + `user-journey.md` + `acceptance-criteria.md` พร้อมกัน — **`acceptance-criteria.md` คือแหล่งความจริงของกฎธุรกิจและตัวเลข** เอกสาร technical ห้ามตั้งตัวเลขใหม่เอง ถ้าต้องการกฎที่ยังไม่มี ให้เปิด requirement ใหม่
+
 **กฎการอ้างอิงข้ามเอกสาร:**
 
 - Feature ทุกตัวต้อง trace กลับไปหา requirement spec ได้ — **ห้ามแต่ง feature ที่ไม่มีต้นทางในเอกสาร** ถ้าเห็นสิ่งที่ระบบควรมีแต่ยังไม่มี requirement รองรับ ให้บันทึกในหัวข้อ "ช่องว่างที่พบ (Gap)" ท้ายเอกสาร แล้วเปิด requirement ใหม่ผ่าน skill `new-requirement`
-- รหัส `FE-XX`, `UJ-XX`, `AC-*`, `TC-*` ที่ออกไปแล้ว **ห้ามเปลี่ยน** เพราะมีเอกสารอื่นอ้างถึง — ถ้าเลิกใช้ ให้คงรหัสไว้แล้วระบุสถานะ
+- รหัส `FE-XX`, `UJ-XX`, `AC-*`, `TC-*`, `CMP-XX`, `ENT-XX`, `API-XX`, `DD-XX`, `BR-XX`, `ERR-XX`, `NFR-XX` ที่ออกไปแล้ว **ห้ามเปลี่ยน** เพราะมีเอกสารอื่นอ้างถึง — ถ้าเลิกใช้ ให้คงรหัสไว้แล้วระบุสถานะ
 - ทุก node ใน Mermaid diagram ต้องครอบข้อความด้วย double quote (`A["ข้อความ (FE-01)"]`) เพราะข้อความภาษาไทยและวงเล็บทำให้ Mermaid parse พลาด และต้องมีรหัส FE-XX กำกับท้ายข้อความเพื่อ mapping กลับได้
 
 ## Design System (`DESIGN.md`)
 
-`DESIGN.md` ที่ root คือ **แหล่งเดียว** ของ design token (สี, ฟอนต์, spacing), UI component pattern และกฎ UX ของโปรเจกต์ — **โปรเจกต์นี้ยังไม่มีไฟล์นี้** skill `build-prototype` จะถามโทนสี/สไตล์/แบรนด์แล้วสร้างให้ก่อนเริ่มงาน UI ชิ้นแรก (ห้ามเดาสีเอง)
+`DESIGN.md` ที่ root คือ **แหล่งเดียว** ของ design token (สี, ฟอนต์, spacing), UI component pattern และกฎ UX ของโปรเจกต์ — **ไฟล์นี้มีอยู่แล้ว** ห้ามสร้างทับ ถ้าต้องเพิ่ม token ให้ถาม user ก่อน (ห้ามเดาสีเอง)
 
 - งาน UI/prototype ทุกชิ้น **ต้องอ่าน `DESIGN.md` ก่อนเขียนโค้ด** และคัดลอกค่า token มาประกาศเป็น CSS custom properties ที่ `:root` แล้วอ้างผ่าน `var(--token)` เท่านั้น — **ห้าม hardcode ค่า hex ใน rule ของ component และห้ามเดาสี/สไตล์เอง**
 - prototype ต้องเป็น **single file, self-contained** เปิดแบบ offline ได้ — ห้ามอ้างอิง CDN, ฟอนต์ภายนอก หรือไฟล์รูปภายนอก (ใช้ inline SVG หรือ CSS shape แทน)
@@ -88,8 +95,13 @@ prototype ที่สร้างแล้วเปิดดูได้โด�
 | Feature & Journey | `sync-feature-journey` | `feature-journey-writer` | `feature-list.md`, `user-journey.md` |
 | Prototype | `build-prototype` | `prototype-writer` | `02-design/01-prototypes/v{n}-*/` |
 | Testing | `sync-test-plan` | `test-writer` | `acceptance-criteria.md`, `test-plan.md`, `test-cases/*.md` |
+| Architecture | `sync-architecture` | `architecture-writer` | `02-design/02-technical/architecture.md` |
+| DB & API | `sync-api-db` | `api-db-writer` | `database-schema.md`, `api-spec.md` |
+| Detailed Design | `sync-detailed-design` | `detailed-design-writer` | `detailed-design.md`, `detailed-design/{flow}.md` |
+| NFR | `sync-nfr` | `nfr-writer` | `non-functional-requirement.md` |
 | ตรวจสอบเอกสาร | `audit-backlog` | `backlog-auditor` *(read-only)* | รายงานความไม่สอดคล้องทั้งสาย spec → test-cases |
 | ตรวจสอบ prototype | `audit-prototype` | `prototype-auditor` *(read-only)* | รายงานความไม่สอดคล้องของ prototype กับ DESIGN.md + เอกสารต้นทาง |
+| ตรวจสอบ tech spec | `audit-technical-spec` | `technical-spec-auditor` *(read-only)* | รายงานความไม่สอดคล้องของ architecture/DB/API/detailed design/NFR กับเอกสารต้นทาง |
 
 **ตัวตรวจกับตัวแก้ต้องแยกกัน:** agent ที่ลงท้ายด้วย `-auditor` เป็น **read-only** (ไม่มี Write/Edit) หน้าที่คือรายงานปัญหาพร้อมหลักฐานตัวเลขเท่านั้น การแก้ต้องผ่าน skill ที่ถาม user ก่อน แล้วส่งงานต่อให้ writer agent ของเอกสารนั้น — ห้ามให้ตัวตรวจแก้เอกสารเองแล้วรายงานว่า "ผ่าน"
 
