@@ -24,7 +24,12 @@
 - [[test-cases/points-ledger|test-cases/points-ledger]]
 - [[test-cases/pet-growth-economy|test-cases/pet-growth-economy]]
 - [[test-cases/pet-species-and-egg|test-cases/pet-species-and-egg]]
-- [[test-cases/weekly-arena|test-cases/weekly-arena]]
+- [[test-cases/weekly-arena|test-cases/weekly-arena]] **(อัปเดต 2026-08-25 — เพิ่ม FE-78/79/80/81 ปิด Coverage Gap G-14)**
 - [[test-cases/pet-care-and-bonding|test-cases/pet-care-and-bonding]] **(เพิ่มใหม่ 2026-08-25 — FE-82/83/84)**
+- [[test-cases/student-identity-and-roster|test-cases/student-identity-and-roster]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
+- [[test-cases/teacher-lesson-and-quiz|test-cases/teacher-lesson-and-quiz]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
+- [[test-cases/student-learn-and-pet|test-cases/student-learn-and-pet]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
+- [[test-cases/teacher-class-overview|test-cases/teacher-class-overview]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
+- [[test-cases/score-export-gradebook|test-cases/score-export-gradebook]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
 
 **หมายเหตุ:** ช่อง Actual Result ในไฟล์ test case ทุกไฟล์ต้องเว้นว่างไว้เสมอ — ผลการทดสอบจริงและบั๊กที่พบให้บันทึกที่ [[../02-test-result/index|02-test-result]] เท่านั้น

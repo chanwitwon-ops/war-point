@@ -844,7 +844,8 @@ h3 { font-size: var(--text-md); }
 
     arena: {
       selectedCode: null, phase: "idle", stars: 0,
-      myHp: 0, oppHp: 0, _counted: false
+      myHp: 0, oppHp: 0, _counted: false,
+      guardAutoTriggered: false // FE-81/AC-FE-81-1: ไอเทมป้องกันการโจมตีถึงตายทำงานอัตโนมัติแล้วในแมตช์นี้หรือไม่
     }
   };
 
@@ -1203,14 +1204,17 @@ h3 { font-size: var(--text-md); }
 
   function itemChipHtml(item) {
     var used = state.items.usedThisMatch[item.id];
-    var remainText = used ? "ใช้แล้วในแมตช์นี้" : "เหลือ 1 ครั้งต่อแมตช์นี้";
+    var isGuard = item.id === "guard"; // FE-81/AC-FE-81-1: ไอเทมนี้ทำงานอัตโนมัติเท่านั้น ไม่มีปุ่มกดใช้เอง (กันสับสน/กันเสียสิทธิ์ก่อนถึงจุดที่ต้องป้องกันจริง)
+    var remainText = used
+      ? "ใช้แล้วในแมตช์นี้"
+      : (isGuard ? "พร้อมป้องกันอัตโนมัติเมื่อ HP จะถึง 0" : "เหลือ 1 ครั้งต่อแมตช์นี้");
     return (
       "<div class=\"item-chip" + (used ? " item-chip--used" : "") + "\">" +
         "<span class=\"item-chip__icon\">" + itemIconSvg(item.id) + "</span>" +
         "<span class=\"item-chip__body\"><strong>" + item.name + "</strong><br><span style=\"font-size:var(--text-xs);\">" + remainText + "</span></span>" +
         (used
           ? "<span class=\"badge-pill\">✓ ใช้แล้ว</span>"
-          : "<button class=\"btn btn-arena-secondary\" data-use-item=\"" + item.id + "\">ใช้</button>") +
+          : (isGuard ? "" : "<button class=\"btn btn-arena-secondary\" data-use-item=\"" + item.id + "\">ใช้</button>")) +
       "</div>"
     );
   }
@@ -1727,10 +1731,28 @@ h3 { font-size: var(--text-md); }
     } else {
       var op2 = MOCK.opponents.filter(function (o) { return o.code === state.arena.selectedCode; })[0];
       var win = op2 ? op2.outcomeMock === "win" : true;
-      state.arena.myHp = win ? 15 : 0;
-      state.arena.oppHp = win ? 0 : 15;
-      if (win) state.arena.stars += (state.arena._counted ? 0 : 1);
+      var firstResultRender = !state.arena._counted; // เข้าเงื่อนไข "ครั้งแรกที่คำนวณผลของแมตช์นี้" เท่านั้น กัน render ซ้ำแล้วเช็คเงื่อนไขซ้ำ
+      var guardJustTriggered = false;
+      if (win) {
+        state.arena.myHp = 15;
+        state.arena.oppHp = 0;
+        if (firstResultRender) state.arena.stars += 1;
+      } else {
+        // FE-81/AC-FE-81-1: ไอเทมป้องกันการโจมตีถึงตายทำงานอัตโนมัติ กัน HP ไม่ให้ลดถึง 0
+        // เงื่อนไข: ถือไอเทมอยู่ + ยังไม่เคยใช้สิทธิ์นี้ในแมตช์นี้ (ไม่ว่าจะเคยกดปุ่ม "ใช้" เองมาก่อนหรือไม่ก็ตาม)
+        if (firstResultRender && state.items.owned.guard && !state.items.usedThisMatch.guard) {
+          state.items.usedThisMatch.guard = true;
+          state.arena.guardAutoTriggered = true;
+          guardJustTriggered = true;
+        }
+        state.arena.myHp = state.arena.guardAutoTriggered ? 1 : 0; // AC-FE-81-1: กัน HP ไม่ให้ถึง 0 / AC-FE-81-2: ใช้ไปแล้วครั้งเดียวก็ถึง 0 ได้ตามปกติ
+        state.arena.oppHp = 15;
+      }
       state.arena._counted = true;
+
+      if (guardJustTriggered) {
+        toast("ไอเทมป้องกันการโจมตีถึงตายทำงานอัตโนมัติ! HP เหลือ 1", "arena");
+      }
 
       var usedNames = MOCK.shopItems.filter(function (it) { return state.items.usedThisMatch[it.id]; }).map(function (it) { return it.name; });
       var usedSummary = usedNames.length ? ("ใช้ไอเทมในแมตช์นี้: " + usedNames.join(", ")) : "ไม่ได้ใช้ไอเทมช่วยในแมตช์นี้";
@@ -1746,6 +1768,9 @@ h3 { font-size: var(--text-md); }
         resultHtml =
           "<div class=\"result-panel result-panel--neutral\">" +
             "<p class=\"result-panel__title\">ยังไม่ชนะในสัปดาห์นี้</p>" +
+            (state.arena.guardAutoTriggered
+              ? "<p><span class=\"badge-pill\">🛡️ ไอเทมป้องกันการโจมตีถึงตายทำงานอัตโนมัติ</span> กัน HP ไม่ให้ลดถึง 0 ได้ทันโดยไม่ต้องกดใช้เอง (FE-81)</p>"
+              : "") +
             "<p>ไม่มีผลเสียใดๆ ต่อแต้ม ขั้นการเติบโต หรือสัตว์เลี้ยง — ลองใหม่ได้สัปดาห์หน้า</p>" +
           "</div>";
       }
@@ -1767,6 +1792,7 @@ h3 { font-size: var(--text-md); }
         state.arena.phase = "idle";
         state.arena.selectedCode = null;
         state.arena._counted = false;
+        state.arena.guardAutoTriggered = false;
         state.items.usedThisMatch = { cleanse: false, guard: false };
         renderArena();
       });

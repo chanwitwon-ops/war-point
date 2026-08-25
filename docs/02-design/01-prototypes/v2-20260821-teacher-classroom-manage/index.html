@@ -58,13 +58,6 @@
   --state-info-on-learn:    #00707F;
   --state-info-on-arena:    #3ED8EB;
 
-  /* สายพันธุ์ — ไม่ใช้ในไฟล์นี้ (หน้าครูไม่แสดงข้อมูลสัตว์เลี้ยง) */
-  --species-1: #FF6A13;
-  --species-2: #00B3C8;
-  --species-3: #21C46A;
-  --species-4: #C4A5FF;
-  --species-5: #FF7BAC;
-
   /* spacing / radius / text */
   --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
   --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;
@@ -276,6 +269,7 @@ h3 { font-size: var(--text-md); }
 }
 .field textarea { padding: var(--space-3) var(--space-4); min-height: 96px; resize: vertical; }
 .hint { font-size: var(--text-xs); color: var(--ink-learn-muted); margin-top: var(--space-1); }
+.field-error { font-size: var(--text-xs); color: var(--state-error-on-learn); font-weight: 700; margin-top: var(--space-1); }
 
 .qopt {
   display: flex;
@@ -1319,6 +1313,15 @@ h3 { font-size: var(--text-md); }
 
     var tbody = document.getElementById("overview-tbody");
     tbody.innerHTML = "";
+
+    // AC-FE-62-3 — ตัวกรองที่ไม่มีนักเรียนตรงเงื่อนไขต้องแสดงข้อความเป็นกลาง ไม่ปล่อยตารางว่างเปล่า
+    if (rows.length === 0) {
+      var colCount = 2 + state.quizSets.length + 3; // รหัสประจำตัว + ชื่อเล่น + คอลัมน์แบบทดสอบ + เข้าใช้งานล่าสุด + สัญลักษณ์เตือน + การจัดการ
+      tbody.innerHTML =
+        "<tr><td colspan=\"" + colCount + "\" class=\"muted-learn\" style=\"text-align:center; padding:var(--space-5) var(--space-3);\">ไม่มีนักเรียนที่ตรงเงื่อนไขนี้ในขณะนี้</td></tr>";
+      return;
+    }
+
     rows.forEach(function (s) {
       var tr = document.createElement("tr");
       var cells = "<td>" + escapeHtml(s.id) + "</td><td>" + escapeHtml(s.nickname || "ยังไม่ตั้งชื่อเล่น") + "</td>";
@@ -2067,21 +2070,39 @@ h3 { font-size: var(--text-md); }
         var idx = fields.indexOf(f);
         state.exportState.columnMap[f.key] = MOCK.exportColumnOptionsMock[idx] || MOCK.exportColumnOptionsMock[0];
       }
+    });
+
+    // นับจำนวนฟิลด์ที่ตั้งคอลัมน์ปลายทางเดียวกันไว้ซ้ำกัน (AC-FE-68-2)
+    var valueCounts = {};
+    fields.forEach(function (f) {
+      var v = state.exportState.columnMap[f.key];
+      valueCounts[v] = (valueCounts[v] || 0) + 1;
+    });
+    var hasDuplicate = false;
+
+    fields.forEach(function (f) {
+      var selectedValue = state.exportState.columnMap[f.key];
       var optionsHtml = MOCK.exportColumnOptionsMock.map(function (c) {
-        return "<option value=\"" + c + "\" " + (c === state.exportState.columnMap[f.key] ? "selected" : "") + ">คอลัมน์ " + c + "</option>";
+        return "<option value=\"" + c + "\" " + (c === selectedValue ? "selected" : "") + ">คอลัมน์ " + c + "</option>";
       }).join("");
+      var isDup = valueCounts[selectedValue] > 1;
+      if (isDup) hasDuplicate = true;
       var row = document.createElement("div");
       row.className = "field";
       row.innerHTML =
         "<label for=\"col-" + f.key + "\">" + escapeHtml(f.label) + "</label>" +
-        "<select id=\"col-" + f.key + "\" data-colmap=\"" + f.key + "\">" + optionsHtml + "</select>";
+        "<select id=\"col-" + f.key + "\" data-colmap=\"" + f.key + "\">" + optionsHtml + "</select>" +
+        (isDup ? "<span class=\"field-error\" role=\"alert\">คอลัมน์นี้ถูกเลือกไปแล้ว กรุณาเลือกคอลัมน์อื่น</span>" : "");
       wrap.appendChild(row);
     });
+
+    state.exportState.hasDuplicateColumns = hasDuplicate;
+
     wrap.querySelectorAll("[data-colmap]").forEach(function (sel) {
       sel.addEventListener("change", function (e) {
         state.exportState.columnMap[sel.dataset.colmap] = e.target.value;
         state.exportState.previewDone = false;
-        document.getElementById("btn-confirm-export").disabled = true;
+        renderExport();
       });
     });
   }
@@ -2093,9 +2114,12 @@ h3 { font-size: var(--text-md); }
     renderExportChannelDetail();
     renderExportColumnMap();
 
+    // AC-FE-68-2 — ห้ามดำเนินการต่อ (ทั้งตรวจสอบข้อมูลและยืนยันส่ง) จนกว่าคอลัมน์ปลายทางจะไม่ซ้ำกัน
+    document.getElementById("btn-preview-export").disabled = !!state.exportState.hasDuplicateColumns;
+
     var previewEl = document.getElementById("export-preview-result");
     previewEl.hidden = !state.exportState.previewDone;
-    document.getElementById("btn-confirm-export").disabled = !state.exportState.previewDone;
+    document.getElementById("btn-confirm-export").disabled = !state.exportState.previewDone || !!state.exportState.hasDuplicateColumns;
 
     var sentEl = document.getElementById("export-sent-result");
     sentEl.hidden = !state.exportState.sentAt;
@@ -2124,6 +2148,10 @@ h3 { font-size: var(--text-md); }
   });
 
   document.getElementById("btn-preview-export").addEventListener("click", function () {
+    if (state.exportState.hasDuplicateColumns) {
+      toast("มีคอลัมน์ปลายทางที่ถูกเลือกซ้ำกัน กรุณาแก้ไขให้ไม่ซ้ำก่อน");
+      return;
+    }
     if (state.exportState.scope === "per-quiz" && state.exportState.selectedQuizIds.length === 0) {
       toast("กรุณาเลือกชุดแบบทดสอบที่จะส่งออกอย่างน้อย 1 ชุด");
       return;
@@ -2158,7 +2186,7 @@ h3 { font-size: var(--text-md); }
   });
 
   document.getElementById("btn-confirm-export").addEventListener("click", function () {
-    if (!state.exportState.previewDone) return;
+    if (!state.exportState.previewDone || state.exportState.hasDuplicateColumns) return;
     var now = new Date();
     var stamp = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0") +
       " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0") + " (เวลาจำลอง)";
