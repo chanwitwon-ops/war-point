@@ -2,6 +2,7 @@
 
 - **อัปเดตล่าสุด:** 2026-08-25 — เพิ่ม API-62/API-63 สำหรับ FE-82/FE-83 (CMP-21 Pet Care and Bonding Module, ผูก ENT-27) ไม่มี endpoint เดิมถูกแก้ไข
 - **รูปแบบ:** REST over HTTP, ข้อมูล JSON, Authentication แบบ Session-based (stateful) ตามที่ล็อกไว้ใน [[architecture#7-authentication--authorization|architecture.md ข้อ 7]]
+- **ระดับความละเอียด:** Conceptual + Contract-level (ระบุ HTTP method/path/JSON shape ตามที่ [[architecture#7-authentication--authorization|architecture.md ข้อ 7]] ตัดสินใจไปแล้ว ไม่ผูกกับ framework ที่ implement จริง)
 - **Base path:** `/api/v1`
 - **ที่มา:** [[architecture|architecture]], [[database-schema|database-schema]], [[../../03-testing/01-test-plan/acceptance-criteria|acceptance-criteria]]
 - **ส่งต่อไป:** [[detailed-design|detailed-design]]
@@ -1227,6 +1228,7 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 
 | Status | เมื่อไหร่ | รหัสข้อผิดพลาด | ข้อความถึงผู้ใช้ |
 |---|---|---|---|
+| 400 | ไม่ส่ง shopItemId หรือรูปแบบไม่ถูกต้อง | VALIDATION_ERROR | "กรุณาเลือกไอเทมที่ต้องการซื้อ" |
 | 404 | ไม่พบ shopItemId | NOT_FOUND | "ไม่พบไอเทมนี้" |
 | 422 | `available_points` ไม่พอ | INSUFFICIENT_POINTS | "ยังสะสมแต้มที่ใช้ได้ไม่พอสำหรับไอเทมนี้" |
 
@@ -1331,6 +1333,7 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 
 | Status | เมื่อไหร่ | รหัสข้อผิดพลาด | ข้อความถึงผู้ใช้ |
 |---|---|---|---|
+| 400 | ไม่ส่ง shopItemId หรือรูปแบบไม่ถูกต้อง | VALIDATION_ERROR | "กรุณาเลือกไอเทมที่ต้องการใช้" |
 | 404 | ไม่พบ matchId หรือไม่ใช่คู่ของตนเอง | NOT_FOUND | "ไม่พบแมตช์นี้" |
 | 409 | เคยใช้ไอเทมนี้ในแมตช์นี้ไปแล้ว | ITEM_ALREADY_USED | "ใช้ไอเทมนี้ในแมตช์นี้ไปแล้ว" |
 | 409 | แมตช์นี้ประกาศผลแล้ว | MATCH_ALREADY_ANNOUNCED | "แมตช์นี้จบไปแล้ว ใช้ไอเทมไม่ได้อีก" |

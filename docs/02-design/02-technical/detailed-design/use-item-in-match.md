@@ -81,6 +81,7 @@ sequenceDiagram
 | ID | สถานการณ์ | ระบบต้องทำ | Status + ข้อความ |
 |---|---|---|---|
 | ERR-01 | ไม่มี session / session หมดอายุ | ปฏิเสธทันที | 401 UNAUTHENTICATED |
+| ERR-07 | ไม่ส่ง `shopItemId` หรือรูปแบบไม่ถูกต้อง (ตาม API-45) | ปฏิเสธก่อนแตะ transaction ใดๆ | 400 VALIDATION_ERROR — "กรุณาเลือกไอเทมที่ต้องการใช้" |
 | ERR-03 | ไม่พบ `matchId` หรือไม่ใช่คู่ของตนเอง | ปฏิเสธก่อนแตะ transaction ไม่เปิดเผยว่ามีแมตช์นี้อยู่จริงหรือไม่ | 404 NOT_FOUND |
 | ERR-09 | แมตช์ประกาศผลแล้ว | ปฏิเสธก่อนแตะ transaction | 409 MATCH_ALREADY_ANNOUNCED |
 | ERR-10 | ไม่มีไอเทมนี้ถือครองอยู่ | ปฏิเสธก่อนแตะ transaction | 422 ITEM_NOT_OWNED |

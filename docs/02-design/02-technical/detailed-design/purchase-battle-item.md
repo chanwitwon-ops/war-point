@@ -78,6 +78,7 @@ sequenceDiagram
 | ID | สถานการณ์ | ระบบต้องทำ | Status + ข้อความ |
 |---|---|---|---|
 | ERR-01 | ไม่มี session / session หมดอายุ | ปฏิเสธทันที | 401 UNAUTHENTICATED |
+| ERR-07 | ไม่ส่ง `shopItemId` หรือรูปแบบไม่ถูกต้อง (ตาม API-41) | ปฏิเสธก่อนแตะ transaction ใดๆ | 400 VALIDATION_ERROR — "กรุณาเลือกไอเทมที่ต้องการซื้อ" |
 | ERR-03 | `shopItemId` ไม่พบหรือ `is_active=false` | ปฏิเสธก่อนแตะ transaction | 404 NOT_FOUND — "ไม่พบไอเทมนี้" |
 | ERR-16 | ไอเทมยังไม่มีราคาจริงถูกกำหนด | ปฏิเสธก่อนแตะ transaction | 409 ITEM_NOT_PRICED |
 | ERR-04 | `available_points` ไม่พอ | ไม่หักแต้ม ไม่เพิ่มคลัง | 422 INSUFFICIENT_POINTS — ข้อความต้องเป็นกลาง ไม่ตำหนิผู้ใช้ (AC-FE-23-2) |
