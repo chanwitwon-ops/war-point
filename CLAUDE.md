@@ -76,7 +76,7 @@ prototype ที่สร้างแล้วเปิดดูได้โด�
 
 - Feature ทุกตัวต้อง trace กลับไปหา requirement spec ได้ — **ห้ามแต่ง feature ที่ไม่มีต้นทางในเอกสาร** ถ้าเห็นสิ่งที่ระบบควรมีแต่ยังไม่มี requirement รองรับ ให้บันทึกในหัวข้อ "ช่องว่างที่พบ (Gap)" ท้ายเอกสาร แล้วเปิด requirement ใหม่ผ่าน skill `new-requirement`
 - รหัส `FE-XX`, `UJ-XX`, `AC-*`, `TC-*`, `CMP-XX`, `ENT-XX`, `API-XX`, `DD-XX`, `BR-XX`, `ERR-XX`, `NFR-XX` ที่ออกไปแล้ว **ห้ามเปลี่ยน** เพราะมีเอกสารอื่นอ้างถึง — ถ้าเลิกใช้ ให้คงรหัสไว้แล้วระบุสถานะ
-- ทุก node ใน Mermaid diagram ต้องครอบข้อความด้วย double quote (`A["ข้อความ (FE-01)"]`) เพราะข้อความภาษาไทยและวงเล็บทำให้ Mermaid parse พลาด และต้องมีรหัส FE-XX กำกับท้ายข้อความเพื่อ mapping กลับได้
+- ทุก node ใน Mermaid diagram ต้องครอบข้อความด้วย double quote (`A["ข้อความ (FE-01)"]`) เพราะข้อความภาษาไทยและวงเล็บทำให้ Mermaid parse พลาด และต้องมีรหัส FE-XX กำกับท้ายข้อความเพื่อ mapping กลับได้ — **ยกเว้น `stateDiagram-v2`** ที่ห้ามครอบชื่อ state ด้วย quote ตรงในเส้น transition (`"A" --> "B"` parse ไม่ผ่าน) ต้องประกาศ `state "ข้อความไทย" as shortId` ก่อนแล้วเขียน transition ด้วย shortId ที่ไม่มี quote (label บนเส้น เช่น `shortId --> shortId2 : "ข้อความ"` ยังครอบ quote ได้ปกติ) — บั๊กนี้เคยเกิดจริงกับ `detailed-design/*.md` ทั้ง 6 ไฟล์เมื่อ 2026-08-23 แก้แล้วเมื่อ 2026-08-25
 
 ## Design System (`DESIGN.md`)
 

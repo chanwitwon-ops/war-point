@@ -114,10 +114,13 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> "submitted"
-    "submitted" --> "graded" : "format=mcq (ตรวจอัตโนมัติทันที)"
-    "submitted" --> "pending_review" : "format=worksheet/attachment (รอครูตรวจ)"
-    "pending_review" --> "graded" : "ครูให้คะแนนผ่าน endpoint อื่น (นอกขอบเขต flow นี้)"
+    state "submitted" as s_submitted
+    state "graded" as s_graded
+    state "pending_review" as s_pending_review
+    [*] --> s_submitted
+    s_submitted --> s_graded : "format=mcq (ตรวจอัตโนมัติทันที)"
+    s_submitted --> s_pending_review : "format=worksheet/attachment (รอครูตรวจ)"
+    s_pending_review --> s_graded : "ครูให้คะแนนผ่าน endpoint อื่น (นอกขอบเขต flow นี้)"
 ```
 
 | จาก | ไป | เงื่อนไข | เกิดที่ |

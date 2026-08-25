@@ -103,10 +103,15 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    "PET เดิม (is_active=true, stage ใดๆ)" --> "PET เดิม (is_active=false, disabled_at=now)" : "รีเซ็ตสำเร็จ (DD-03)"
-    "PET เดิม (is_active=false, disabled_at=now)" --> "รายการในอัลบั้มบันทึกเส้นทางการเติบโต" : "ถาวร (BR-08)"
-    "STUDENT_ITEM_INVENTORY (quantity ใดๆ)" --> "STUDENT_ITEM_INVENTORY (quantity=0 ทุกแถว)" : "รีเซ็ตสำเร็จ (DD-03, พร้อมกับ PET)"
-    note right of "PET เดิม (is_active=false, disabled_at=now)"
+    state "PET เดิม (is_active=true, stage ใดๆ)" as s_active
+    state "PET เดิม (is_active=false, disabled_at=now)" as s_inactive
+    state "รายการในอัลบั้มบันทึกเส้นทางการเติบโต" as s_album
+    state "STUDENT_ITEM_INVENTORY (quantity ใดๆ)" as s_inv_before
+    state "STUDENT_ITEM_INVENTORY (quantity=0 ทุกแถว)" as s_inv_after
+    s_active --> s_inactive : "รีเซ็ตสำเร็จ (DD-03)"
+    s_inactive --> s_album : "ถาวร (BR-08)"
+    s_inv_before --> s_inv_after : "รีเซ็ตสำเร็จ (DD-03, พร้อมกับ PET)"
+    note right of s_inactive
         ไม่มี PET ที่ is_active=true อีกจนกว่าจะทำ DD-01 (ซื้อไข่) ใหม่
     end note
 ```

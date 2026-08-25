@@ -103,7 +103,7 @@ sequenceDiagram
 
 ### 4. กฎการเขียน Mermaid
 
-- **ทุก node ต้องครอบข้อความด้วย double quote** เช่น `A["ข้อความ (CMP-01)"]` เพราะข้อความไทยและวงเล็บทำให้ parse พลาด
+- **ทุก node ต้องครอบข้อความด้วย double quote** เช่น `A["ข้อความ (CMP-01)"]` เพราะข้อความไทยและวงเล็บทำให้ parse พลาด — **ยกเว้น `stateDiagram-v2`** (ถ้าต้องใช้) ที่ห้ามครอบชื่อ state ด้วย quote ตรงในเส้น transition ต้องประกาศ `state "ข้อความไทย" as shortId` ก่อนแล้วเขียน transition ด้วย shortId ที่ไม่มี quote
 - ทุก node ในแผนภาพสถาปัตยกรรมต้องมีรหัส `CMP-XX` กำกับ เพื่อ mapping กลับไปหาตาราง
 - `sequenceDiagram` ต้องครอบชื่อ participant และข้อความด้วย double quote เช่นกัน
 - ห้ามใส่ `;` ปิดบรรทัด และห้ามใช้อักขระ `()` `,` นอก double quote

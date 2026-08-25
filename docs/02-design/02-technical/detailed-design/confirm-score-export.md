@@ -115,9 +115,13 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    "validated" --> "กำลังส่ง (in-progress)" : "ครูกดยืนยันส่ง (DD-08)"
-    "กำลังส่ง (in-progress)" --> "completed" : "เขียนสำเร็จทั้งหมด"
-    "กำลังส่ง (in-progress)" --> "failed" : "เขียนไม่สำเร็จ/ระบบภายนอกล่ม"
+    state "validated" as s_validated
+    state "กำลังส่ง (in-progress)" as s_inprogress
+    state "completed" as s_completed
+    state "failed" as s_failed
+    s_validated --> s_inprogress : "ครูกดยืนยันส่ง (DD-08)"
+    s_inprogress --> s_completed : "เขียนสำเร็จทั้งหมด"
+    s_inprogress --> s_failed : "เขียนไม่สำเร็จ/ระบบภายนอกล่ม"
 ```
 
 | จาก | ไป | เงื่อนไข | เกิดที่ |

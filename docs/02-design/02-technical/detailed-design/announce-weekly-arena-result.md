@@ -114,9 +114,12 @@ sequenceDiagram
 
 ```mermaid
 stateDiagram-v2
-    "pending" --> "computed" : "คำนวณผลครั้งแรก (ภายใน DD-07)"
-    "computed" --> "announced" : "ครูกดประกาศผล (DD-07)"
-    "pending" --> "announced" : "คำนวณและประกาศในคำขอเดียวกัน (กรณีไม่เคยคำนวณมาก่อน)"
+    state "pending" as s_pending
+    state "computed" as s_computed
+    state "announced" as s_announced
+    s_pending --> s_computed : "คำนวณผลครั้งแรก (ภายใน DD-07)"
+    s_computed --> s_announced : "ครูกดประกาศผล (DD-07)"
+    s_pending --> s_announced : "คำนวณและประกาศในคำขอเดียวกัน (กรณีไม่เคยคำนวณมาก่อน)"
 ```
 
 | จาก | ไป | เงื่อนไข | เกิดที่ |
