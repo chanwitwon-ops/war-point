@@ -59,6 +59,8 @@ sequenceDiagram
       related_entity_type='pet', related_entity_id=<petId ที่เพิ่ง insert>)
    f. โหลด SPECIES_STAT_SPLIT ของ speciesId ที่เลือก แล้ว insert PET_STAT ต่อ stat_key ตาม points_per_stage ของสัดส่วนนั้น
       ตรวจว่าผลรวมของ PET_STAT ที่ insert ทั้งหมด = 50 พอดี (BR-02, AC-FE-77-2) — ถ้าผลรวมไม่เท่ากับ 50 ถือเป็นข้อผิดพลาดของ seed data ให้ rollback ทั้งหมดและแจ้ง error ภายใน ไม่ตอบสำเร็จบางส่วน
+   f2. insert แถวใหม่ PET_CARE_STATE(pet_id=<petId ที่เพิ่ง insert>, hunger_today=0, daily_bonding_quota_used=0, total_bonding_score=0, last_recorded_date=วันนี้)
+       (ทุก PET ที่ active ต้องมี PET_CARE_STATE คู่กันเสมอ 1:1 — ดู ENT-27 ใน database-schema.md, รองรับ FE-82/FE-83 ผ่าน DD-09)
    g. commit transaction
 
 5. คืนค่า { petId, stage: "egg", statTotal: 50, availablePoints: ยอดใหม่หลังหัก }
