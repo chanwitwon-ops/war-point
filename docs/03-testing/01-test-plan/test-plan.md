@@ -3,6 +3,7 @@
 - **วันที่บันทึก:** 2026-08-22
 - **สถานะ:** Draft รอบที่ 1 — เขียนจากขอบเขตที่ [[acceptance-criteria|acceptance-criteria]] ปิดเอกสารแล้ว รอบนี้ทดสอบได้จริงเฉพาะบน prototype เพราะยังไม่มีซอร์สโค้ดจริงในโปรเจกต์
 - **อัปเดตล่าสุด (รอบที่ 2 — 2026-08-22):** ปรับตัวเลขให้ตรงกับ [[acceptance-criteria|acceptance-criteria]] หลังเพิ่ม FE-75/76/77 (AC = 167 รหัส รวม 3 รหัสที่ถูกแทนที่แล้ว คือ 164 รหัสที่ยังใช้งานจริง, FE ในขอบเขต = 68), แก้คำ "ค่าพลัง"→"ค่าสเตตัส" และ "5 สาย"→"3 สาย" ทั้งไฟล์, เพิ่มความเสี่ยงเฉพาะของเศรษฐกิจแต้มในหัวข้อ 2, เพิ่มรายการไฟล์ test-cases ที่มีจริง 4 ไฟล์ในหัวข้อ 3, และปรับปรุง Coverage Gap ในหัวข้อ Risk Management
+- **อัปเดตรอบที่ 3 — 2026-08-25:** เพิ่มการอ้างอิง FE-82/83/84 (ระบบดูแลสัตว์เลี้ยง Pet Care & Bonding, spec `20260825-07-pet-care-and-bonding`) และไฟล์ [[test-cases/pet-care-and-bonding|test-cases/pet-care-and-bonding]] ใหม่ (สร้างแล้ว) เข้าหัวข้อ 1.1 และ 3.5 — ทั้ง 3 FE เป็นระดับ **Could** ที่เขียน AC เต็มรูปแบบเป็นข้อยกเว้น (ดู Coverage Gap G-12 ใน [[acceptance-criteria|acceptance-criteria]]) จำนวน AC รวมทั้งไฟล์เปลี่ยนจาก 167 เป็น **178 รหัส** (175 ที่ยังใช้งาน + 3 ที่ถูกแทนที่แล้ว) — **ไม่แตะ Test Strategy ระดับโปรเจกต์หรือหัวข้ออื่นที่ไม่เกี่ยวข้อง**
 - **ที่มา:**
   - [[acceptance-criteria|acceptance-criteria]] — 167 รหัส AC (164 ที่ยังใช้งาน + 3 ที่ถูกแทนที่แล้ว), 68 FE (Must 26 + Should 42), Traceability Matrix 3 ตาราง, Coverage Gap G-01 ถึง G-11
   - [[../../01-requirements/01-spec/20260821-00-problem-statement|00-problem-statement]]
@@ -11,10 +12,12 @@
   - [[../../01-requirements/01-spec/20260821-03-student-identity-and-roster|03-student-identity-and-roster]]
   - [[../../01-requirements/01-spec/20260821-04-teacher-class-overview|04-teacher-class-overview]]
   - [[../../01-requirements/01-spec/20260821-05-score-export-and-gradebook|05-score-export-and-gradebook]]
-  - [[../../01-requirements/feature-list|feature-list]] (FE-01 ถึง FE-77)
+  - [[../../01-requirements/feature-list|feature-list]] (FE-01 ถึง FE-77 + FE-82/83/84 เพิ่มเมื่อ 2026-08-25)
+  - [[../../01-requirements/01-spec/20260825-07-pet-care-and-bonding|20260825-07-pet-care-and-bonding]] **(เพิ่มใหม่ 2026-08-25)**
   - [[../../01-requirements/user-journey|user-journey]] (UJ-01 ถึง UJ-04)
   - [[../../02-design/01-prototypes/v1-20260821-student-learn-and-pet/README|prototype v1 README]]
   - [[../../02-design/01-prototypes/v2-20260821-teacher-classroom-manage/README|prototype v2 README]]
+  - [[../../02-design/01-prototypes/v3-20260823-student-egg-economy/README|prototype v3 README]] **(เพิ่มใหม่ 2026-08-25 — ใช้ทดสอบ FE-82/83/84 ทั้งหมด)**
   - [[../../../DESIGN|DESIGN.md]] (root) — หัวข้อ 4.1 ถึง 4.10
 - **ส่งต่อไป:** *(ไฟล์ที่มีอยู่จริงในโฟลเดอร์ `test-cases/` ณ วันที่ 2026-08-22 มีเพียง 4 ไฟล์ — ดูหัวข้อ 3.5 — ไฟล์อื่นด้านล่างยังเป็นแผนที่ยังไม่ได้สร้าง)*
   - [[test-cases/student-identity-and-roster|test-cases/student-identity-and-roster]] *(ยังไม่ได้สร้าง)*
@@ -24,11 +27,14 @@
   - [[test-cases/pet-growth-economy|test-cases/pet-growth-economy]] *(สร้างแล้ว — ดูหัวข้อ 3.5)*
   - [[test-cases/pet-species-and-egg|test-cases/pet-species-and-egg]] *(สร้างแล้ว — ดูหัวข้อ 3.5)*
   - [[test-cases/weekly-arena|test-cases/weekly-arena]] *(สร้างแล้ว — ดูหัวข้อ 3.5)*
+  - [[test-cases/pet-care-and-bonding|test-cases/pet-care-and-bonding]] *(สร้างแล้ว 2026-08-25 — ดูหัวข้อ 3.5)*
   - [[test-cases/teacher-class-overview|test-cases/teacher-class-overview]] *(ยังไม่ได้สร้าง)*
   - [[test-cases/score-export-gradebook|test-cases/score-export-gradebook]] *(ยังไม่ได้สร้าง)*
   - [[../02-test-result/index|02-test-result]]
 
 > **ตัวเลขที่ยืนยันแล้วจากไฟล์จริง ณ วันที่แก้ไขเอกสารนี้ (2026-08-22):** AC = 167 รหัส (164 ที่ยังใช้งาน + 3 ที่ถูกแทนที่แล้ว คือ AC-FE-24-1~3), FE ในขอบเขต (Must+Should) = 68, Must = 26, Should = 42, Could (นอกขอบเขต) = 7, Won't (นอกขอบเขต) = 2, รวม FE ทั้งหมด = 77 (FE-01 ถึง FE-77), spec ต้นทาง = 6 ไฟล์, UJ = 4 เส้น (UJ-01 ถึง UJ-04), Coverage Gap = 11 ข้อ (G-01 ถึง G-11) — นับใหม่จากไฟล์ [[acceptance-criteria|acceptance-criteria]] จริง ไม่ใช้ตัวเลขเดิมของรอบที่แล้ว
+>
+> **[อัปเดต 2026-08-25]** หลังเพิ่ม AC-FE-82-1~5, AC-FE-83-1~5, AC-FE-84-1 (11 ข้อใหม่): AC รวม = **178 รหัส** (175 ที่ยังใช้งาน + 3 ที่ถูกแทนที่แล้ว), FE ที่มี AC ครบ = 68 (Must+Should) + **3 FE ระดับ Could ที่เขียน AC เป็นข้อยกเว้น** (FE-82, FE-83, FE-84 — ดู Coverage Gap G-12) รวมเป็น **71 FE ที่มี AC**, spec ต้นทาง = 7 ไฟล์ (เพิ่ม `20260825-07-pet-care-and-bonding`), Coverage Gap = 12 ข้อ (G-01 ถึง G-12) — นับใหม่จากไฟล์ [[acceptance-criteria|acceptance-criteria]] จริง
 
 ---
 
@@ -42,6 +48,7 @@
   - หมวด C — แบบทดสอบและงาน (10 FE: FE-12, 13, 14, 15, 16, 17, 18, 19, 20, 41)
   - หมวด D — คะแนนและแต้ม (3 FE: FE-21, 22, 23)
   - หมวด E — สัตว์เลี้ยงและการเติบโต (9 FE — เพิ่ม FE-75/76/77 เมื่อ 2026-08-22: FE-24, 25, 44, 72, 73, 74, 75, 76, 77)
+  - **ส่วนต่อขยายหมวด E (2026-08-25 — ระดับ Could ที่เขียน AC เป็นข้อยกเว้น ดู Coverage Gap G-12):** FE-82, FE-83, FE-84 (ระบบดูแลสัตว์เลี้ยง Pet Care & Bonding — ให้อาหาร/อาบน้ำ/ลูบหัว/เล่น-ออกกำลังกาย, ค่าความผูกพัน, animation overlay)
   - หมวด F — การแข่งขันรายสัปดาห์ (9 FE: FE-27, 28, 29, 30, 31, 32, 42, 45, 46)
   - หมวด G — การเข้าถึงข้ามอุปกรณ์ (1 FE: FE-33)
   - หมวด H — หน้าภาพรวมของครู (6 FE: FE-57, 58, 59, 60, 61, 62)
@@ -234,9 +241,9 @@
 - **การจับคู่และตัดสินผลการแข่งขัน** — v1 ใช้สูตรค่าสเตตัส=ขั้น×10 เทียบตรง, v2 ใช้การสุ่ม 50/50 (ดูหัวข้อ 3.3) — ทั้งสองเป็นค่าจำลอง ไม่ใช่สูตรตัดสินจริงของระบบ (ยังไม่ล็อกใน spec 02 ตาม Coverage Gap G-03)
 - **ระบบหารแต้มสเตตัส +50 ตามสัดส่วนประจำสายพันธุ์ (FE-77)** — ยังไม่มีสูตรสัดส่วนจริงในทั้ง spec และ prototype (จำนวนค่าสเตตัสยังเป็น placeholder 3 ค่า) การทดสอบผลรวม 50 ต่อขั้นทำได้ตามหลักการ แต่การทดสอบสัดส่วนจริงต่อสายทำไม่ได้จนกว่าทีมจะล็อกตัวเลข (ดู Coverage Gap G-03)
 
-### 3.5 ไฟล์ test-cases ที่มีจริง ณ วันที่ 2026-08-22 (เพิ่มใหม่)
+### 3.5 ไฟล์ test-cases ที่มีจริง ณ วันที่ 2026-08-25 (อัปเดต)
 
-โฟลเดอร์ `docs/03-testing/01-test-plan/test-cases/` มีไฟล์จริง **4 ไฟล์** จากรอบนี้ (ไฟล์อื่นที่อ้างถึงในหัวข้อ "ส่งต่อไป" ท้ายเอกสารยังเป็นแผนที่ยังไม่ได้สร้าง):
+โฟลเดอร์ `docs/03-testing/01-test-plan/test-cases/` มีไฟล์จริง **5 ไฟล์** สะสมมาจากหลายรอบ (ไฟล์อื่นที่อ้างถึงในหัวข้อ "ส่งต่อไป" ท้ายเอกสารยังเป็นแผนที่ยังไม่ได้สร้าง):
 
 | ไฟล์ | ครอบ FE | เนื้อหาหลัก |
 |---|---|---|
@@ -244,8 +251,9 @@
 | [[test-cases/pet-species-and-egg|test-cases/pet-species-and-egg]] | FE-44, FE-76 | เลือกสายพันธุ์ 3 สายตอนซื้อไข่, ไข่มีค่าสเตตัสตั้งต้น 50 และลงแข่งขันได้, ไข่ไม่ถูกกันออกจากการจับคู่ |
 | [[test-cases/weekly-arena|test-cases/weekly-arena]] | FE-27, FE-28, FE-29, FE-30, FE-31, FE-32, FE-42, FE-45, FE-46 | การจับคู่ทุกโหมด, การประกาศผล, การแพ้ไม่มีผลเสีย, พลังพิเศษประจำสาย, สิทธิ์ที่ครูไม่เห็นค่าสเตตัส |
 | [[test-cases/points-ledger|test-cases/points-ledger]] | FE-21, FE-22, FE-23, FE-25 | การแปลงคะแนนเป็นแต้ม, ยอดสะสมรวมไม่ลด, ยอดที่ใช้ได้หักออกได้, ของแต่งตัวไม่กระทบค่าสเตตัส |
+| [[test-cases/pet-care-and-bonding|test-cases/pet-care-and-bonding]] **(เพิ่มใหม่ 2026-08-25)** | FE-82, FE-83, FE-84 | ให้อาหารครั้งที่ 3 vs 4 (ขอบเขตอิ่ม), เพดานรวมค่าความผูกพัน 9→10→11 หน่วย/วัน, ข้ามเที่ยงคืนด้วยปุ่ม QA (ความหิว/โควตารีเซ็ตแต่ยอดสะสมรวมไม่ลด), รีเซ็ตตัวละครแล้วยอดสะสมรวมกลับเป็น 0, ยืนยันไม่กระทบแต้มที่ใช้ได้/สะสมรวม/ค่าสเตตัสต่อสู้, animation overlay — ทุกเคสรันได้ 100% บน prototype v3 วันนี้ |
 
-**FE ที่ยังไม่มีไฟล์ test-case ในรอบนี้ (นอกขอบเขตของ 4 ไฟล์ข้างต้น):** FE-72, FE-73, FE-74 (บันทึกเส้นทางการเติบโต/จำกัดสัตว์เลี้ยงตัวเดียว — มี AC ครบใน [[acceptance-criteria|acceptance-criteria]] แล้ว แต่ยังไม่ถูกแปลงเป็น test case ในรอบนี้), รวมถึงทุก FE นอกกลุ่มสัตว์เลี้ยง/แต้ม/การแข่งขัน (หมวด A, B, C, G, H, I) ตามขอบเขตที่ตกลงไว้
+**FE ที่ยังไม่มีไฟล์ test-case ในรอบนี้ (นอกขอบเขตของ 5 ไฟล์ข้างต้น):** FE-72, FE-73, FE-74 (บันทึกเส้นทางการเติบโต/จำกัดสัตว์เลี้ยงตัวเดียว — มี AC ครบใน [[acceptance-criteria|acceptance-criteria]] แล้ว แต่ยังไม่ถูกแปลงเป็น test case ในรอบนี้), รวมถึงทุก FE นอกกลุ่มสัตว์เลี้ยง/แต้ม/การแข่งขัน (หมวด A, B, C, G, H, I) ตามขอบเขตที่ตกลงไว้
 
 ---
 
