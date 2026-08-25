@@ -1,6 +1,6 @@
 # API Spec — war-point
 
-- **อัปเดตล่าสุด:** 2026-08-23
+- **อัปเดตล่าสุด:** 2026-08-25 — เพิ่ม API-62/API-63 สำหรับ FE-82/FE-83 (CMP-21 Pet Care and Bonding Module, ผูก ENT-27) ไม่มี endpoint เดิมถูกแก้ไข
 - **รูปแบบ:** REST over HTTP, ข้อมูล JSON, Authentication แบบ Session-based (stateful) ตามที่ล็อกไว้ใน [[architecture#7-authentication--authorization|architecture.md ข้อ 7]]
 - **Base path:** `/api/v1`
 - **ที่มา:** [[architecture|architecture]], [[database-schema|database-schema]], [[../../03-testing/01-test-plan/acceptance-criteria|acceptance-criteria]]
@@ -120,8 +120,10 @@
 | API-59 | POST | /api/v1/teacher/score-export/jobs/{jobId}/validate | ตรวจสอบข้อมูลก่อนส่ง | ครู | FE-69, FE-70 |
 | API-60 | POST | /api/v1/teacher/score-export/jobs/{jobId}/confirm | ยืนยันส่งคะแนนจริง | ครู | FE-66, FE-71 |
 | API-61 | GET | /api/v1/teacher/score-export/jobs/{jobId}/download | ดาวน์โหลดไฟล์คะแนน | ครู | FE-67 |
+| API-62 | GET | /api/v1/student/me/pet/care-status | ดูสถานะการดูแลสัตว์เลี้ยงวันนี้ (โควตาหาแต้ม/ยอดสะสมรวม) | นักเรียน | FE-82, FE-83 |
+| API-63 | POST | /api/v1/student/me/pet/care-actions | ทำ action ดูแลสัตว์เลี้ยง (ให้อาหาร/อาบน้ำ/ลูบหัว/เล่น-ออกกำลังกาย) | นักเรียน | FE-82, FE-83 |
 
-**สรุปจำนวนแยกตาม Method:** GET 22, POST 32, PUT 5, PATCH 2 (รวม 61 endpoint)
+**สรุปจำนวนแยกตาม Method:** GET 23, POST 33, PUT 5, PATCH 2 (รวม 63 endpoint)
 
 ---
 
@@ -1733,6 +1735,80 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 
 ---
 
+### API-62 — สถานะการดูแลสัตว์เลี้ยงวันนี้
+- **Method / Path:** `GET /api/v1/student/me/pet/care-status`
+- **หน้าที่:** อ่าน `PET_CARE_STATE` (ENT-27) ของ `PET` ที่ active อยู่ของตนเอง คืน "โควตาหาแต้มต่อวัน" ที่ใช้ไปแล้ว + เพดาน และ "ยอดสะสมรวม" — **ห้ามคืนค่า `hunger_today` ดิบ** (เป็นค่าซ่อนล้วนๆ ตามสเปก FE-82 ไม่ต้องส่งให้ client เห็นตัวเลขจริง)
+- **Feature ต้นทาง:** FE-82, FE-83 | **Journey:** UJ-01 node PC1/PC2
+- **สิทธิ์ที่ต้องมี:** session นักเรียน, ดูได้เฉพาะของตนเองเท่านั้น (pet_id derive จาก session ไม่รับเป็น query param)
+
+**Response สำเร็จ** — `200 OK`
+
+```json
+{ "data": { "dailyQuotaUsed": 4, "dailyQuotaCap": 10, "totalBonding": 27 } }
+```
+
+**Response ผิดพลาด**
+
+| Status | เมื่อไหร่ | รหัสข้อผิดพลาด | ข้อความถึงผู้ใช้ |
+|---|---|---|---|
+| 401 | ไม่มี session | UNAUTHENTICATED | "กรุณาเข้าสู่ระบบใหม่อีกครั้ง" |
+| 404 | ไม่มี `PET` ที่ active อยู่ (ยังไม่เคยซื้อไข่) | NO_ACTIVE_PET | "ยังไม่มีสัตว์เลี้ยง — ไปซื้อไข่ตัวแรกกันเถอะ" |
+
+- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** ก่อนอ่านค่าต้องรัน lazy reset ตามกฎของ `PET_CARE_STATE` (database-schema.md ENT-27) ก่อนเสมอ — ถ้า `last_recorded_date` ไม่ใช่วันนี้ ให้ตั้ง `hunger_today=0`, `daily_bonding_quota_used=0` (ไม่แตะ `total_bonding_score`) แล้วอัปเดต `last_recorded_date` ก่อนค่อยคืนค่า `dailyQuotaUsed`/`totalBonding` (ตรงกับ AC-FE-83-4 ซึ่งเช็คผลตอน "เปิดหน้าสัตว์เลี้ยงของฉัน" ไม่ใช่แค่ตอนกด action); `dailyQuotaCap` คืนค่าคงที่ 10 เสมอเพื่อให้ client ไม่ต้อง hardcode เพดานเอง
+
+---
+
+### API-63 — ทำ action ดูแลสัตว์เลี้ยง
+- **Method / Path:** `POST /api/v1/student/me/pet/care-actions`
+- **หน้าที่:** บันทึกผลของการกด action ดูแลสัตว์เลี้ยง 1 ครั้งลง `PET_CARE_STATE` (ENT-27) ของ `PET` ที่ active อยู่ของตนเอง ตามกฎความหิว (เฉพาะ `feed`) และเพดานรวม 10 หน่วย/วัน
+- **Feature ต้นทาง:** FE-82, FE-83 | **Journey:** UJ-01 node PC1/PC2
+- **สิทธิ์ที่ต้องมี:** session นักเรียน, กระทำได้เฉพาะกับ `PET` ที่ active ของตนเองเท่านั้น (pet_id derive จาก session เช่นเดียวกับ API-34/API-37/API-38 ไม่รับ `petId` ใน request)
+
+**Request**
+
+| ส่วน | ชื่อ | ชนิด | บังคับ | กฎตรวจสอบ |
+|---|---|---|---|---|
+| body | actionType | ข้อความสั้น (enum) | ใช่ | ต้องเป็น 1 ใน `feed`(ให้อาหาร), `bathe`(อาบน้ำ), `pat`(ลูบหัว), `play`(เล่น/ออกกำลังกาย) — ตรงกับ 4 action ที่ล็อกไว้ในสเปก ห้ามขยายเพิ่มเอง |
+
+```json
+{ "actionType": "feed" }
+```
+
+**Response สำเร็จ — นับผลปกติ (ยังไม่ติดเพดานใดๆ)** — `200 OK`
+
+```json
+{ "data": { "actionType": "feed", "resultStatus": "counted", "dailyQuotaUsed": 4, "totalBonding": 27, "message": null } }
+```
+
+**Response สำเร็จ — `actionType=feed` แต่ความหิวเต็มแล้ว (ครั้งที่ 4+ ของวัน)** — `200 OK` (ไม่ error เพราะเป็นพฤติกรรมปกติที่ระบบยอมรับ ปุ่มยังกดได้ตามปกติ)
+
+```json
+{ "data": { "actionType": "feed", "resultStatus": "already_full", "dailyQuotaUsed": 3, "totalBonding": 27, "message": "ตัวละครอิ่มแล้ว" } }
+```
+
+**Response สำเร็จ — ถึงเพดานรวม 10/วันแล้ว (ทุก action)** — `200 OK` (ไม่ error เช่นกัน ปุ่มยังกดได้ตามปกติ)
+
+```json
+{ "data": { "actionType": "bathe", "resultStatus": "daily_cap_reached", "dailyQuotaUsed": 10, "totalBonding": 30, "message": "วันนี้ดูแลเต็มที่แล้ว พรุ่งนี้ค่อยมาใหม่นะ" } }
+```
+
+**Response ผิดพลาด**
+
+| Status | เมื่อไหร่ | รหัสข้อผิดพลาด | ข้อความถึงผู้ใช้ |
+|---|---|---|---|
+| 400 | ไม่ส่ง `actionType` หรือค่าไม่ตรงกับ 4 ค่าที่กำหนด | VALIDATION_ERROR | "กรุณาเลือก action ดูแลสัตว์เลี้ยงที่ถูกต้อง" |
+| 401 | ไม่มี session | UNAUTHENTICATED | "กรุณาเข้าสู่ระบบใหม่อีกครั้ง" |
+| 404 | ไม่มี `PET` ที่ active อยู่ (ยังไม่เคยซื้อไข่) | NO_ACTIVE_PET | "ยังไม่มีสัตว์เลี้ยง — ไปซื้อไข่ตัวแรกกันเถอะ" |
+
+- **กฎทางธุรกิจที่ endpoint นี้บังคับ:**
+  1. ก่อนประมวลผลทุกครั้งต้องรัน lazy reset ของ `PET_CARE_STATE` ก่อนเสมอ (เทียบ `last_recorded_date` กับวันนี้ — เหมือน API-62)
+  2. ลำดับการตรวจสำหรับ `actionType=feed`: ตรวจ `hunger_today < 3` ก่อน — ถ้าเต็มแล้ว (`hunger_today = 3`) คืน `resultStatus="already_full"` ทันที **ไม่แตะ `hunger_today`, `daily_bonding_quota_used`, `total_bonding_score` เลย** (AC-FE-82-2); ถ้ายังไม่เต็ม ให้ `hunger_today += 1` แล้วไปเช็คเพดานรวมต่อในข้อ 3 (AC-FE-82-1)
+  3. สำหรับ `bathe`/`pat`/`play` (ไม่มีเพดานของตัวเอง — AC-FE-82-3) และกรณี `feed` ที่ผ่านข้อ 2 มาแล้ว: ตรวจ `daily_bonding_quota_used < 10` — ถ้าเต็มแล้ว (`= 10`) คืน `resultStatus="daily_cap_reached"` โดย**ไม่เพิ่ม** `daily_bonding_quota_used`/`total_bonding_score` อีก (AC-FE-83-3); ถ้ายังไม่เต็ม ให้ `daily_bonding_quota_used += 1` และ `total_bonding_score += 1` แล้วคืน `resultStatus="counted"` (AC-FE-83-1/83-2, ทดสอบขอบที่ 9→10)
+  4. Action ทั้ง 4 แบบ**ไม่มีผลใดๆ ต่อ `POINTS_ACCOUNT`/`available_points` (FE-23) และไม่มีผลใดๆ ต่อ `PET_STAT`/ค่าสเตตัสต่อสู้ (FE-77) ไม่ว่ากรณีใด** — endpoint นี้ต้องไม่ query หรือแก้ไข 2 entity ดังกล่าวเลย (AC-FE-82-4, AC-FE-82-5)
+  5. `message` เป็น `null` เมื่อ `resultStatus="counted"` (ไม่ต้องมี feedback พิเศษ) และเป็นข้อความภาษาไทยตามสเปกเป๊ะเมื่อ `resultStatus` เป็น `already_full`/`daily_cap_reached` เพื่อให้ client แสดง feedback ได้ทุกครั้งที่กด (ห้ามกดเงียบๆ ตามสเปก)
+
+---
+
 ## 4. ช่องว่างที่พบ (Gap)
 
 - **G-API-01:** จำนวนหลักของ PIN และเกณฑ์ล็อคชั่วคราว (จำนวนครั้งที่กรอกผิด + ระยะเวลาล็อค) ยังไม่ล็อก — กระทบ validation ของ API-01/API-02 และเงื่อนไขที่แน่นอนของ `423 ACCOUNT_LOCKED`
@@ -1746,4 +1822,5 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 - **G-API-09:** นโยบายส่งคะแนนซ้ำรอบสอง (API-56/60) — เขียนทับ/เพิ่มคอลัมน์ใหม่/ถามครูก่อน ยังไม่ล็อก — ปัจจุบัน schema/endpoint ออกแบบเป็น "งานใหม่ทุกครั้ง" ยังไม่มีกลไกอ้างอิงงานก่อนหน้า
 - **G-API-10:** ยังไม่ตัดสินว่าคะแนนที่ API-56 ส่งออกใช้คะแนนดิบ (`score_awarded`) หรือคะแนนที่ปรับสัดส่วนแล้ว และยังไม่ตัดสินว่ารวมคะแนนจากงานที่ครูตรวจเอง (worksheet/attachment) ด้วยหรือไม่
 - **G-API-11:** โหมดฉายผลในห้อง (API-52, FE-43) ต้องเป็น real-time push หรือครูรีเฟรชเองพอ ยังไม่ตัดสิน — กระทบว่าต้องมี WebSocket/SSE gateway เพิ่มหรือไม่ (Open Decision ของ architecture.md ข้อ 8)
+- **G-API-12 (พบใหม่ 2026-08-25):** สเปก FE-82/FE-83 (`20260825-07-pet-care-and-bonding.md`) และ AC-FE-82/AC-FE-83 ไม่มีข้อทดสอบกรณีที่ "ความหิวเต็ม" (`hunger_today=3`) กับ "เพดานรวม 10/วัน" (`daily_bonding_quota_used=10`) เกิดพร้อมกันตอนกด `feed` (เช่น กด `feed` ครั้งที่ 3 ของวันในจังหวะที่เพดานรวมเต็มพอดีจากการกด action อื่นมาก่อน) — API-63 ในเอกสารนี้เลือกลำดับตรวจ "เช็คความหิวเต็มก่อนสำหรับ `feed` เท่านั้น แล้วจึงเช็คเพดานรวมทีหลัง" เป็นการตีความที่สอดคล้องกับข้อความสเปกที่มีอยู่ (ไม่ใช่ตัวเลขใหม่) แต่ยังไม่ผ่านการยืนยันจาก requirement โดยตรง — ถ้าต้องการล็อกลำดับนี้อย่างเป็นทางการ ควรเปิด requirement เพิ่มเติมหรือเพิ่ม AC ทดสอบเคสนี้ชัดเจน
 - **ไม่มีช่องว่างอื่นที่กระทบโครงสร้าง endpoint ระดับนี้นอกเหนือจากที่ระบุข้างต้น** — ทุก endpoint ใน spec นี้ trace กลับไปหา FE ได้ครบ ไม่มี endpoint ใดที่ไม่มีต้นทาง
