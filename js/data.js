@@ -32,9 +32,10 @@ window.WAR_POINT_DATA = {
       status: "pending_review", scoreAwarded: null, submittedAt: "2026-08-25 14:02"
     },
     {
+      // format=attachment → ตรวจอัตโนมัติไม่ได้ ตาม DD-05 ต้องเป็น pending_review ทันทีที่ส่ง ไม่ใช่ submitted
       id: "att003", studentId: "std003", studentNickname: "เต่าทอง",
       quizSetId: "quiz003", quizSetTitle: "งานส่งไฟล์ภาษาไทย เรื่องคำควบกล้ำ",
-      status: "submitted", scoreAwarded: null, submittedAt: "2026-08-29 10:30"
+      status: "pending_review", scoreAwarded: null, submittedAt: "2026-08-29 10:30"
     },
     {
       id: "att004", studentId: "std001", studentNickname: "มดแดง",
