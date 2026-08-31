@@ -29,7 +29,7 @@ window.WAR_POINT_DATA = {
     {
       id: "att002", studentId: "std002", studentNickname: "พลอยใส",
       quizSetId: "quiz002", quizSetTitle: "ใบงานวิทยาศาสตร์ เรื่องพืช",
-      status: "pending_review", scoreAwarded: null, submittedAt: "2026-08-25 14:02"
+      status: "graded", scoreAwarded: 16, submittedAt: "2026-08-25 14:02"
     },
     {
       // format=attachment → ตรวจอัตโนมัติไม่ได้ ตาม DD-05 ต้องเป็น pending_review ทันทีที่ส่ง ไม่ใช่ submitted
@@ -43,18 +43,20 @@ window.WAR_POINT_DATA = {
       status: "graded", scoreAwarded: 18, submittedAt: "2026-08-21 11:00"
     },
     {
+      // format=mcq → ตรวจอัตโนมัติทันทีตาม DD-05 เช่นเดียวกับ att001 ต้องเป็น graded พร้อมคะแนน ไม่ใช่ pending_review
       id: "att005", studentId: "std002", studentNickname: "พลอยใส",
       quizSetId: "quiz001", quizSetTitle: "แบบทดสอบคณิตศาสตร์ บทที่ 1",
-      status: "pending_review", scoreAwarded: null, submittedAt: "2026-08-30 08:45"
+      status: "graded", scoreAwarded: 8, submittedAt: "2026-08-30 08:45"
     }
   ],
 
-  // reviews = approvals subfolder — มีเฉพาะ attempt ที่ status = graded เท่านั้น
+  // reviews = approvals subfolder — มีเฉพาะ attempt ที่ครูตรวจมือจริง (format=worksheet/attachment ที่ graded แล้ว)
+  // mcq (att001, att005) ตรวจอัตโนมัติ ไม่มีครูเข้ามาเกี่ยว จึงไม่มี review subdoc
   reviews: [
     {
-      attemptId: "att001", id: "rev001",
-      teacherName: "ครูสมศรี", feedback: "ทำได้ดีมาก ตรวจทานอีกนิดเรื่องเครื่องหมาย",
-      scoreGiven: 9, reviewedAt: "2026-08-20 15:00"
+      attemptId: "att002", id: "rev001",
+      teacherName: "ครูสมศรี", feedback: "ทดลองสรุปได้ชัดเจน ตารางข้อมูลถูกต้องครบ",
+      scoreGiven: 16, reviewedAt: "2026-08-25 16:20"
     },
     {
       attemptId: "att004", id: "rev002",
