@@ -4,9 +4,13 @@
 
 ## สถานะปัจจุบันของ repository
 
-repository นี้**เป็น repo เอกสารล้วน ยังไม่มีซอร์สโค้ดของระบบจริง** — มี `docs/` (requirement, feature list, user journey, prototype, เอกสารทดสอบ), `DESIGN.md` และชุด agent/skill ใน `.claude/` แต่**ยังไม่มี build system, package manifest, linter หรือ test runner ใดๆ**
+repository นี้มี `docs/` (requirement, feature list, user journey, prototype, เอกสารทดสอบ), `DESIGN.md`, ชุด agent/skill ใน `.claude/` **และตั้งแต่การบ้าน Module 2 (Firestore) มีซอร์สโค้ดจริงส่วนหนึ่งแล้ว** — เฉพาะขอบเขตที่ระบุใน [SCOPE.md](../SCOPE.md) (quizAttempts + students + quizSets + reviews) ยังไม่ใช่ทั้งระบบตาม feature-list.md/database-schema.md ฉบับเต็ม
 
-**อย่าคิดคำสั่ง build/lint/test ขึ้นมาเอง** เมื่อมีการเพิ่มโค้ดจริงเข้ามาใน repo นี้ในอนาคต ให้อัปเดตไฟล์นี้ด้วยคำสั่งที่ใช้งานได้จริงในตอนนั้น
+**ไฟล์ที่มีจริงตอนนี้:** `quiz-attempts.html`, `seed.html`, `js/*.js`, `css/style.css`, `static-server.ps1` (ยังไม่มี `index.html`) — ยังไม่มี build system/npm/bundler ใดๆ เป็น static HTML/JS ธรรมดา + Firebase Web SDK โหลดจาก CDN แบบ ES module
+
+**วิธีรัน:** เปิด PowerShell ที่โฟลเดอร์นี้แล้วรัน `powershell -File static-server.ps1` (เปิดที่ port 3000) แล้วเข้า `http://localhost:3000/seed.html` เพื่อใส่ข้อมูลตัวอย่างก่อน จากนั้นเข้า `http://localhost:3000/quiz-attempts.html` เพื่อดูรายการจริงจาก Firestore — **ต้องเปิดผ่าน http:// เท่านั้น เปิดไฟล์ตรงๆ (`file://`) จะพังเพราะ ES module ของ Firebase ต้องการ origin ที่ไม่ใช่ file**
+
+**อย่าคิดคำสั่ง build/lint/test ขึ้นมาเอง** ถ้ามีการเพิ่ม npm/bundler เข้ามาในอนาคต ให้อัปเดตไฟล์นี้ด้วยคำสั่งที่ใช้งานได้จริงในตอนนั้น
 
 **ลำดับการเริ่มงานที่แนะนำ**
 
