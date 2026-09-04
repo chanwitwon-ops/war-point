@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ทดสอบระบบต่อสู้ — Pixie vs Pixie (mock)</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Noto Sans Thai", sans-serif; background:#1E2247; color:#F6F8FF; margin:0; padding:20px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .warn { background:#2B3163; border:1px solid #FFB020; color:#FFD98A; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:16px; }
+  .arena { display:flex; align-items:center; justify-content:center; gap:40px; position:relative; height:340px; }
+  .combatant { text-align:center; }
+  .hpbar-wrap { width:220px; height:16px; background:#151833; border-radius:8px; overflow:hidden; margin:0 auto 8px; border:1px solid #444; }
+  .hpbar { height:100%; background:#3ED07A; transition:width .3s; }
+  .hpbar.low { background:#FF5A5A; }
+  .name { font-size:13px; margin-bottom:6px; opacity:.8; }
+  canvas.sprite { width:220px; height:220px; display:block; }
+  .mirrored { transform: scaleX(-1); }
+  .projectile-canvas { position:absolute; width:80px; height:80px; pointer-events:none; opacity:0; }
+  .controls { text-align:center; margin:20px 0; }
+  button { background:#FF6A13; color:#fff; border:none; padding:10px 20px; border-radius:8px; font-size:14px; cursor:pointer; margin:0 6px; }
+  button:disabled { opacity:.4; cursor:default; }
+  label { font-size:13px; }
+  #log { max-width:600px; margin:16px auto; background:#151833; border-radius:8px; padding:10px 14px; font-size:13px; height:140px; overflow-y:auto; }
+  #log div { padding:2px 0; border-bottom:1px solid #262a4d; }
+</style>
+</head>
+<body>
+
+<h1>ทดสอบระบบต่อสู้ระยะไกล (mock)</h1>
+<div class="warn">
+  ⚠️ หน้านี้เป็นการทดสอบ pipeline อนิเมชั่น/กลไกเท่านั้น — <b>HP เริ่มต้น, % โอกาสโดน, ค่าดาเมจ ล้วนเป็นค่าสมมติที่ตั้งขึ้นเพื่อทดสอบ</b>
+  ไม่ใช่ตัวเลขที่ล็อกในสเปก (สูตรจริงยังเป็น Open Question ในหัวข้อ ง.๑ ของ <code>20260821-02-pet-points-and-weekly-arena.md</code>)
+  ลำดับผู้โจมตี (สลับซ้าย-ขวาทุกยก) ก็เป็นค่าสมมติเช่นกัน ยังไม่ใช่กติกาจริง
+</div>
+
+<div class="arena">
+  <div class="combatant" id="p1">
+    <div class="name">Pixie (ฝั่งซ้าย)</div>
+    <div class="hpbar-wrap"><div class="hpbar" id="hp1"></div></div>
+    <canvas class="sprite" width="864" height="496" id="canvas1"></canvas>
+  </div>
+
+  <canvas class="projectile-canvas" width="200" height="120" id="projCanvas"></canvas>
+
+  <div class="combatant" id="p2">
+    <div class="name">Pixie (ฝั่งขวา — mirror)</div>
+    <div class="hpbar-wrap"><div class="hpbar" id="hp2"></div></div>
+    <canvas class="sprite" width="864" height="496" id="canvas2"></canvas>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btnAttack">โจมตี (ยิงเวรถัดไป)</button>
+  <label><input type="checkbox" id="autoPlay"> เล่นอัตโนมัติ</label>
+  <button id="btnReset">รีเซ็ต</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+const CLIPS = {
+  idle: "clips/idle.mp4",
+  cast: "clips/cast.mp4",
+  hit:  "clips/hit.mp4",
+  dodge:"clips/dodge.mp4"
+};
+const PROJECTILE_SRC = "clips/projectile.mp4";
+
+// Seconds to skip into each clip before its real reaction motion starts (measured by eye from
+// extracted frames). The dodge clip in particular has ~1.7s of dead idle-looking footage before
+// the actual sidestep — starting playback there instead of at 0 keeps the reaction in sync with
+// the fast-traveling projectile that triggers it.
+const CLIP_START_OFFSET = { idle: 0, cast: 0, hit: 0, dodge: 1.6 };
+// NOTE (2026-09-04): this used to hold `{ cast: 2.2 }` to cut the OLD glowing-wand cast clip off
+// right at its brightest peak (it would otherwise fade back down before the projectile launched —
+// see the same-day log entry). That clip is being replaced by a new "aim skyward, wand raised
+// overhead" cast built from a start/end-frame interpolation (no glow, no peak-then-fade arc) —
+// its intended end pose IS the clip's natural last frame, so it should play out fully via the
+// normal `onended` path below instead of being cut short. Leave this empty until/unless the new
+// clip turns out to need its own early cutoff for a different reason.
+const CLIP_STOP_AT = {};
+
+// NOTE: the background isn't actually one flat color across clips — several of these AI-generated
+// clips render it as a soft sky-like gradient (lighter/more cyan lower in frame) rather than a single
+// flat fill, so any single-threshold key (fixed color OR relative blueness) either leaves parts of the
+// gradient un-removed or eats into the character. This reverts to the original hard cutoff that was
+// already confirmed working for background removal on the current clips — real fix is at generation
+// time (ask for a FLAT, non-gradient, evenly-lit background), not more clever math here.
+function keyAlpha(r, g, b){
+  return (b > 150 && b - r > 60 && b - g > 40) ? 0 : 255;
+}
+
+function chromaKeyDraw(ctx, video, w, h, srcRect){
+  if (srcRect){
+    ctx.drawImage(video, srcRect.x, srcRect.y, srcRect.w, srcRect.h, 0, 0, w, h);
+  } else {
+    ctx.drawImage(video, 0, 0, w, h);
+  }
+  const frame = ctx.getImageData(0,0,w,h);
+  const d = frame.data;
+  for (let i=0; i<d.length; i+=4){
+    const a = keyAlpha(d[i], d[i+1], d[i+2]);
+    if (a < d[i+3]) d[i+3] = a;
+  }
+  ctx.putImageData(frame, 0, 0);
+}
+
+// A plain `<video src="...">` only downloads/decodes enough to play forward from where it
+// currently is — seeking to a new spot (our CLIP_START_OFFSET trick, or pinning the projectile
+// on one frame) has to fetch+decode that part first, which is NOT instant and left us reading
+// stale/blank frames right after setting currentTime. Fully fetching each clip into memory once
+// and playing it back from a blob: URL removes the network/buffering step entirely, so any seek
+// afterward is effectively instant.
+async function toBlobUrl(url){
+  const blob = await (await fetch(url)).blob();
+  return URL.createObjectURL(blob);
+}
+
+function makeCombatant(canvasId, hpBarId, baseMirror){
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const videos = {};
+  for (const key in CLIPS){
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
+    toBlobUrl(CLIPS[key]).then((blobUrl) => { v.src = blobUrl; });
+    // Seeking mid-playback isn't instant (decoder has to seek to the nearest keyframe and
+    // decode forward before a new frame paints), so doing `currentTime = offset` at the exact
+    // moment we need to react adds its own extra lag on top of the clip's own lead-in — which is
+    // likely why skipping the lead-in alone didn't fully fix the delay. Pre-seek once up front
+    // (and again right after each play-through) so the clip is already parked at its start frame
+    // and .play() can begin painting immediately with no seek latency in the critical moment.
+    const offset = CLIP_START_OFFSET[key] || 0;
+    if (offset > 0){
+      v.addEventListener('loadedmetadata', () => { v.currentTime = offset; }, { once: true });
+    }
+    videos[key] = v;
+  }
+  let current = videos.idle;
+  let rafId = null;
+
+  // "dodge" is a directional action (must move AWAY from the attacker),
+  // so its mirror state is always the OPPOSITE of this combatant's resting orientation —
+  // otherwise the character visually dodges toward the incoming attack instead of away from it.
+  function mirrorForClip(name){
+    return name === 'dodge' ? !baseMirror : baseMirror;
+  }
+  canvas.style.transform = mirrorForClip('idle') ? 'scaleX(-1)' : 'none';
+
+  function loop(){
+    if (current.readyState >= 2) chromaKeyDraw(ctx, current, canvas.width, canvas.height);
+    rafId = requestAnimationFrame(loop);
+  }
+  loop();
+
+  function play(name, {loop: doLoop=false} = {}){
+    return new Promise((resolve) => {
+      Object.values(videos).forEach(v => { if (v!==videos[name]) { v.pause(); } });
+      current = videos[name];
+      current.loop = doLoop;
+      // most of these AI-generated clips have a long dead "idle" lead-in before the actual
+      // reaction happens (measured ~1.7s of nothing before the dodge clip's sidestep, for example) —
+      // starting from 0 makes the reaction visibly lag behind the projectile that triggered it.
+      // Skip straight to where the real motion begins instead of playing the dead air first.
+      const offset = CLIP_START_OFFSET[name] || 0;
+      if (Math.abs(current.currentTime - offset) > 0.05) current.currentTime = offset;
+      canvas.style.transform = mirrorForClip(name) ? 'scaleX(-1)' : 'none';
+      current.play();
+      if (doLoop){
+        resolve(); // don't wait for looped clips
+      } else if (CLIP_STOP_AT[name] != null){
+        // resolve early at the chosen peak moment instead of waiting for the clip to play out
+        // and fade — the video keeps playing quietly in the background, but nothing is looking
+        // at it once the next play() call (idle / whatever comes next) takes over the canvas
+        setTimeout(resolve, Math.max(0, (CLIP_STOP_AT[name] - offset) * 1000));
+      } else {
+        current.onended = () => {
+          // re-park at the offset now, while nothing needs this clip, so the NEXT time it's
+          // played there's no seek latency either (see the pre-seek comment above)
+          if (offset > 0) current.currentTime = offset;
+          resolve();
+        };
+      }
+    });
+  }
+
+  let hp = 100;
+  const hpBar = document.getElementById(hpBarId);
+  function damage(amount){
+    hp = Math.max(0, hp - amount);
+    hpBar.style.width = hp + '%';
+    hpBar.classList.toggle('low', hp <= 30);
+    return hp;
+  }
+  function resetHp(){ hp = 100; hpBar.style.width = '100%'; hpBar.classList.remove('low'); }
+
+  play('idle', { loop: true });
+
+  return { canvas, play, damage, resetHp, get hp(){ return hp; } };
+}
+
+const p1 = makeCombatant('canvas1', 'hp1', false);
+const p2 = makeCombatant('canvas2', 'hp2', true);
+
+// projectile VFX (shared single instance, chroma-keyed onto floating canvas)
+const projVideo = document.createElement('video');
+projVideo.muted = true; projVideo.playsInline = true; projVideo.preload = 'auto';
+toBlobUrl(PROJECTILE_SRC).then((blobUrl) => { projVideo.src = blobUrl; });
+const projCanvasEl = document.getElementById('projCanvas');
+const projCtx = projCanvasEl.getContext('2d', { willReadFrequently: true });
+let projRaf = null;
+// The orb only fills a modest chunk of the source clip's wide 864x496 frame (lots of empty
+// background around it) — drawing the full frame into our small 200x120 canvas made the orb
+// itself a nearly-invisible speck. Crop tightly around where the orb actually sits at the
+// pinned timestamp (see fireProjectile) so it fills the canvas instead.
+const PROJ_SRC_RECT = { x: 259, y: 74, w: 346, h: 346 };
+function projLoopDraw(){
+  // draws even while paused — the projectile is shown as a static "orb" frame that CSS carries
+  // across the arena (see fireProjectile), so it needs to keep painting without the video playing
+  if (projVideo.readyState >= 2){
+    chromaKeyDraw(projCtx, projVideo, projCanvasEl.width, projCanvasEl.height, PROJ_SRC_RECT);
+  }
+  projRaf = requestAnimationFrame(projLoopDraw);
+}
+projLoopDraw();
+
+// PIVOT (2026-09-03): switched the whole attack from a horizontal beam (attacker -> defender,
+// left/right) to a vertical fall (attacker fires skyward, impact drops straight down onto the
+// defender's spot) — see the same day's log entry for why. This drops a lot of the old
+// complexity: there's no "hit lands on the near edge vs miss continues past the far edge"
+// branch anymore, because gravity doesn't care whether the shot connects. The falling object
+// ALWAYS drops to the same X (directly above where the defender is standing) and the SAME final
+// Y (roughly their feet) — whether it's a hit or a miss is entirely decided by whether the
+// defender's dodge animation has moved their sprite out from under that spot in time, which the
+// existing Promise.all(flight, reaction) concurrency in doTurn already handles.
+//
+// NOTE: no real "falling from the sky" clip exists yet (still pending regeneration on Kling/etc),
+// so this reuses the existing horizontal-flight orb clip pinned on one frame as a stand-in — swap
+// PROJECTILE_SRC (and re-check PROJ_SRC_RECT's crop) once the real vertical asset is ready.
+function fireProjectile(fromEl, toEl, isHit){
+  return new Promise((resolve) => {
+    const arena = document.querySelector('.arena').getBoundingClientRect();
+    const to = toEl.getBoundingClientRect();
+    // Use the canvas's actual ON-SCREEN size (from getBoundingClientRect) for centering math, not
+    // its `.width`/`.height` attributes — those describe the backing pixel buffer (200x120) used
+    // for drawImage, which is a different number from the CSS-displayed size (80x80 per the
+    // `.projectile-canvas` rule) and threw the centering off by a few pixels.
+    const projRect = projCanvasEl.getBoundingClientRect();
+    const targetX = (to.left - arena.left) + to.width/2 - projRect.width/2;
+    const startY = -projRect.height * 1.5; // above the arena's own top edge, out of view
+    const endY = (to.top - arena.top) + to.height * 0.75 - projRect.height/2; // lands near the defender's feet, not their face
+    const duration = 500;
+
+    // Same reasoning as before: play the source clip's own internal motion instead of using it
+    // purely as a still frame, and CSS position is the only thing that actually moves the orb —
+    // see the historical note kept below on why it's "playing" at a near-zero rate rather than
+    // truly paused.
+    projVideo.currentTime = 1.0;
+    projVideo.playbackRate = 0.0625; // browser's actual floor — anything lower throws and silently skips play()
+    projVideo.play();
+
+    projCanvasEl.style.transition = 'none';
+    projCanvasEl.style.left = targetX + 'px';
+    projCanvasEl.style.top = startY + 'px';
+    projCanvasEl.style.transform = 'none';
+    projCanvasEl.style.opacity = '1';
+    requestAnimationFrame(() => {
+      projCanvasEl.style.transition = `top ${duration}ms ease-in`; // ease-in reads as gravity accelerating the fall
+      projCanvasEl.style.top = endY + 'px';
+    });
+    setTimeout(() => {
+      projCanvasEl.style.opacity = '0';
+      resolve();
+    }, duration + 50);
+  });
+}
+
+const logEl = document.getElementById('log');
+function log(msg){
+  const line = document.createElement('div');
+  line.textContent = msg;
+  logEl.prepend(line);
+}
+
+let attackerIsP1 = true;
+let battleOver = false;
+const btnAttack = document.getElementById('btnAttack');
+
+async function doTurn(){
+  if (battleOver) return;
+  btnAttack.disabled = true;
+  const attacker = attackerIsP1 ? p1 : p2;
+  const defender = attackerIsP1 ? p2 : p1;
+  const attackerName = attackerIsP1 ? 'Pixie ซ้าย' : 'Pixie ขวา';
+  const defenderName = attackerIsP1 ? 'Pixie ขวา' : 'Pixie ซ้าย';
+
+  log(`${attackerName} ร่ายเวท...`);
+  await attacker.play('cast');
+
+  // roll BEFORE firing — the fall always drops to the same spot regardless of outcome (gravity
+  // doesn't aim), so whether it's a "hit" or a "miss" is decided purely by whether the defender's
+  // dodge has moved them out from under that spot in time (played concurrently below, not after)
+  const hitChance = 0.7; // mock — สูตรจริงยังไม่ล็อก
+  const isHit = Math.random() < hitChance;
+
+  log(`พลังงานร่วงลงมาใส่ ${defenderName}`);
+  const flight = fireProjectile(attacker.canvas, defender.canvas, isHit);
+  const reaction = isHit ? defender.play('hit') : defender.play('dodge');
+  await Promise.all([flight, reaction]);
+
+  if (isHit){
+    const dmg = 20; // mock
+    const newHp = defender.damage(dmg);
+    log(`โดน! ${defenderName} เสีย ${dmg} HP (เหลือ ${newHp})`);
+  } else {
+    log(`${defenderName} หลบสำเร็จ! พลังงานร่วงลงพื้นเปล่าๆ`);
+  }
+
+  attacker.play('idle', { loop: true });
+  defender.play('idle', { loop: true });
+
+  if (defender.hp <= 0){
+    log(`🏆 ${attackerName} ชนะ!`);
+    battleOver = true;
+    btnAttack.disabled = true;
+    document.getElementById('autoPlay').checked = false;
+    return;
+  }
+
+  attackerIsP1 = !attackerIsP1;
+  btnAttack.disabled = false;
+
+  if (document.getElementById('autoPlay').checked){
+    setTimeout(doTurn, 800);
+  }
+}
+
+btnAttack.addEventListener('click', doTurn);
+document.getElementById('autoPlay').addEventListener('change', (e) => {
+  if (e.target.checked && !battleOver) doTurn();
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+  p1.resetHp(); p2.resetHp();
+  battleOver = false;
+  attackerIsP1 = true;
+  btnAttack.disabled = false;
+  logEl.innerHTML = '';
+  log('รีเซ็ตแมตช์ใหม่');
+  p1.play('idle', { loop: true });
+  p2.play('idle', { loop: true });
+});
+</script>
+</body>
+</html>
