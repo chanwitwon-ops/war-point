@@ -19,6 +19,8 @@
 
   --bright-orange: #FF6A13;
   --ink-on-bright: #171B2A;
+  --deep-teal:     #00707F;
+  --deep-red:      #B3231C;
 
   --font-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai",
                "Leelawadee UI", Tahoma, "Helvetica Neue", sans-serif;
@@ -114,4 +116,118 @@ th {
 
 @media (max-width: 560px) {
   .hide-mobile { display: none; }
+}
+
+/* ── navbar (auth-guard.js / nav.js) ── */
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 20px;
+  background: var(--surface-learn);
+  border-bottom: 1px solid var(--border-learn);
+  font-size: 14px;
+}
+
+.navbar .brand { font-weight: 600; margin-right: 8px; }
+
+.navbar a {
+  color: var(--ink-learn-muted);
+  text-decoration: none;
+}
+
+.navbar a.active { color: var(--ink-learn); font-weight: 600; }
+.navbar a:hover { text-decoration: underline; }
+
+.navbar .nav-user {
+  margin-left: auto;
+  color: var(--ink-learn-muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── ปุ่มรอง / ปุ่มอันตราย / ปุ่มโปร่งใส (DESIGN.md 3.1) ── */
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-learn-muted);
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.btn-ghost:hover { text-decoration: underline; }
+
+.btn-ok {
+  background: transparent;
+  color: var(--state-success-on-learn);
+  border: 1px solid var(--state-success-on-learn);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--deep-red);
+  border: 1px solid var(--deep-red);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btn-row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+
+/* ── ฟอร์ม (login/register) ── */
+label {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: 14px;
+  color: var(--ink-learn-muted);
+}
+
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-learn);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink-learn);
+  background: var(--surface-learn);
+}
+
+.hint {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--ink-learn-muted);
+}
+
+.hint a { color: var(--deep-teal); }
+
+.hidden { display: none !important; }
+
+.alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.alert-error {
+  background: var(--surface-learn-alt);
+  color: var(--deep-red);
+}
+
+.alert-warn {
+  background: var(--surface-learn-alt);
+  color: var(--state-warn-on-learn);
 }

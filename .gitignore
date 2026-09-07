@@ -10,3 +10,16 @@ Thumbs.db
 .idea/
 # local settings ของ Claude Code (เก็บ agent/skill ที่ commit ไว้ แต่ไม่เก็บ settings เครื่องใครเครื่องมัน)
 .claude/settings.local.json
+
+# ── ไฟล์ที่มีคีย์ / ค่าตั้งค่าลับ (เพิ่มการบ้านที่ 2) ──
+# ค่าตั้งค่า Firebase จริงของโปรเจกต์ — ใช้ js/firebase-config.example.js เป็นต้นแบบแทน
+js/firebase-config.js
+.env
+.env.*
+*serviceAccountKey*.json
+
+# ── ไฟล์ชั่วคราวของ Firebase CLI (เพิ่มการบ้านที่ 2) ──
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

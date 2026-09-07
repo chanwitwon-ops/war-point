@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>เข้าสู่ระบบ · war-point</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/util.js" defer></script>
+  <script src="js/firebase-config.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/login.js" defer></script>
+</head>
+<body>
+  <div class="container" style="max-width:420px">
+    <h1>🎮 war-point</h1>
+    <p class="subtitle">เข้าสู่ระบบก่อนใช้งาน</p>
+
+    <div class="card">
+      <div id="ข้อความเตือน" class="alert alert-error hidden"></div>
+
+      <form id="ฟอร์มล็อกอิน">
+        <label for="email">อีเมล</label>
+        <input type="email" id="email" placeholder="เช่น somchai@example.com">
+
+        <label for="password">รหัสผ่าน</label>
+        <input type="password" id="password" placeholder="รหัสผ่าน">
+
+        <div class="btn-row">
+          <button type="submit" id="ปุ่มล็อกอิน">เข้าสู่ระบบ</button>
+        </div>
+      </form>
+
+      <p class="hint">ยังไม่มีบัญชี? <a href="register.html">สมัครสมาชิก</a></p>
+    </div>
+  </div>
+</body>
+</html>
