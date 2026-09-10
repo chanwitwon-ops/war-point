@@ -17,6 +17,8 @@ js/firebase-config.js
 .env
 .env.*
 *serviceAccountKey*.json
+*serviceAccount*.json
+*firebase-adminsdk*.json
 
 # ── ไฟล์ชั่วคราวของ Firebase CLI (เพิ่มการบ้านที่ 2) ──
 .firebase/

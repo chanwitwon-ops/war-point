@@ -4,11 +4,13 @@
 
 ## สถานะปัจจุบันของ repository
 
-repository นี้มี `docs/` (requirement, feature list, user journey, prototype, เอกสารทดสอบ), `DESIGN.md`, ชุด agent/skill ใน `.claude/` **และตั้งแต่การบ้าน Module 2 (Firestore) มีซอร์สโค้ดจริงส่วนหนึ่งแล้ว** — เฉพาะขอบเขตที่ระบุใน [SCOPE.md](../SCOPE.md) (quizAttempts + students + quizSets + reviews) ยังไม่ใช่ทั้งระบบตาม feature-list.md/database-schema.md ฉบับเต็ม
+repository นี้มี `docs/` (requirement, feature list, user journey, prototype, เอกสารทดสอบ), `DESIGN.md`, ชุด agent/skill ใน `.claude/` **และตั้งแต่การบ้าน Module 2 (Firestore + Authentication) มีซอร์สโค้ดจริงส่วนหนึ่งแล้ว** — เฉพาะขอบเขตที่ระบุใน [SCOPE.md](../SCOPE.md) (quizAttempts + students + quizSets + reviews) ยังไม่ใช่ทั้งระบบตาม feature-list.md/database-schema.md ฉบับเต็ม
 
-**ไฟล์ที่มีจริงตอนนี้:** `quiz-attempts.html`, `seed.html`, `js/*.js`, `css/style.css`, `static-server.ps1` (ยังไม่มี `index.html`) — ยังไม่มี build system/npm/bundler ใดๆ เป็น static HTML/JS ธรรมดา + Firebase Web SDK โหลดจาก CDN แบบ ES module
+**ไฟล์ที่มีจริงตอนนี้:** `index.html` (redirect ไป `quiz-attempts.html`), `login.html`, `register.html`, `quiz-attempts.html`, `seed.html`, `js/*.js` (รวม `auth-guard.js`, `login.js`, `register.js`, `nav.js`, `firebase.js`), `css/style.css`, `static-server.ps1`, `firebase.json`, `firestore.rules`, `.firebaserc` — ยังไม่มี build system/npm/bundler ใดๆ เป็น static HTML/JS ธรรมดา + Firebase Web SDK โหลดจาก CDN แบบ ES module ดูสิทธิ์ตามบทบาทที่ [ACL.md](../ACL.md)
 
-**วิธีรัน:** เปิด PowerShell ที่โฟลเดอร์นี้แล้วรัน `powershell -File static-server.ps1` (เปิดที่ port 3000) แล้วเข้า `http://localhost:3000/seed.html` เพื่อใส่ข้อมูลตัวอย่างก่อน จากนั้นเข้า `http://localhost:3000/quiz-attempts.html` เพื่อดูรายการจริงจาก Firestore — **ต้องเปิดผ่าน http:// เท่านั้น เปิดไฟล์ตรงๆ (`file://`) จะพังเพราะ ES module ของ Firebase ต้องการ origin ที่ไม่ใช่ file**
+**วิธีรัน:** ต้องมีไฟล์ `js/firebase-config.js` ก่อน (คัดลอกจาก `js/firebase-config.example.js` แล้วใส่ค่าจริงจาก Firebase Console — ไฟล์นี้ถูก gitignore ไว้ ไม่อยู่ใน repo) จากนั้นเปิด PowerShell ที่โฟลเดอร์นี้แล้วรัน `powershell -File static-server.ps1` (เปิดที่ port 3000) แล้วเข้า `http://localhost:3000/seed.html` เพื่อใส่ข้อมูลตัวอย่างก่อน จากนั้นเข้า `http://localhost:3000/register.html` เพื่อสมัครบัญชีทดสอบ (ทุกหน้ายกเว้น login/register/seed ต้องล็อกอินก่อนถึงจะเข้าได้ ดู `js/auth-guard.js`) — **ต้องเปิดผ่าน http:// เท่านั้น เปิดไฟล์ตรงๆ (`file://`) จะพังเพราะ ES module ของ Firebase ต้องการ origin ที่ไม่ใช่ file**
+
+**Deploy ขึ้นออนไลน์:** `firebase deploy --only hosting,firestore:rules` (ต้องมี `js/firebase-config.js` ในเครื่องก่อน เพราะ Hosting deploy จากไฟล์จริงบนดิสก์ ไม่ใช่จาก git) เว็บจริงอยู่ที่ `https://warpoint-191be.web.app`
 
 **อย่าคิดคำสั่ง build/lint/test ขึ้นมาเอง** ถ้ามีการเพิ่ม npm/bundler เข้ามาในอนาคต ให้อัปเดตไฟล์นี้ด้วยคำสั่งที่ใช้งานได้จริงในตอนนั้น
 

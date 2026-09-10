@@ -18,4 +18,4 @@
 
 ## หมายเหตุ
 
-ยังไม่มีซอร์สโค้ดของแอปพลิเคชันในโปรเจกต์นี้ — เอกสารและ prototype มาก่อน
+ตั้งแต่การบ้าน Module 2 มีซอร์สโค้ดจริงส่วนหนึ่งแล้ว (Firestore + Firebase Authentication) ตามขอบเขตใน [SCOPE.md](SCOPE.md) — วิธีรันดูที่ [CLAUDE.md](CLAUDE.md) หัวข้อ "สถานะปัจจุบันของ repository" เว็บจริงอยู่ที่ https://warpoint-191be.web.app
