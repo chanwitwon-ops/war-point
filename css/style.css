@@ -24,6 +24,8 @@
 
   --font-base: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Thai",
                "Leelawadee UI", Tahoma, "Helvetica Neue", sans-serif;
+
+  --tap-min: 48px; /* DESIGN.md 2.7/3.1 — ทุกปุ่มสูงอย่างน้อย 48px */
 }
 
 * { box-sizing: border-box; }
@@ -73,6 +75,10 @@ h1 {
 .top-links a:hover { text-decoration: underline; }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
   background: var(--bright-orange);
   color: var(--ink-on-bright);
   border: none;
@@ -121,13 +127,18 @@ th {
 /* ── navbar (auth-guard.js / nav.js) ── */
 .navbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  gap: 8px 18px;
   padding: 14px 20px;
   background: var(--surface-learn);
   border-bottom: 1px solid var(--border-learn);
   font-size: 14px;
 }
+
+.navbar .brand,
+.navbar a,
+.navbar .nav-user { white-space: nowrap; }
 
 .navbar .brand { font-weight: 600; margin-right: 8px; }
 
@@ -149,11 +160,15 @@ th {
 
 /* ── ปุ่มรอง / ปุ่มอันตราย / ปุ่มโปร่งใส (DESIGN.md 3.1) ── */
 .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
   background: transparent;
   color: var(--ink-learn-muted);
   border: none;
   border-radius: 8px;
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 14px;
   font-family: inherit;
   cursor: pointer;
@@ -161,6 +176,10 @@ th {
 .btn-ghost:hover { text-decoration: underline; }
 
 .btn-ok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
   background: transparent;
   color: var(--state-success-on-learn);
   border: 1px solid var(--state-success-on-learn);
@@ -172,6 +191,10 @@ th {
 }
 
 .btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
   background: transparent;
   color: var(--deep-red);
   border: 1px solid var(--deep-red);
