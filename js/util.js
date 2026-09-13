@@ -28,3 +28,11 @@ function ชื่อสถานะไทย(สถานะ) {
 function ค่าจากURL(ชื่อ) {
   return new URLSearchParams(location.search).get(ชื่อ) || "";
 }
+
+// เวลาปัจจุบันในรูปแบบอ่านง่าย เช่น "2026-09-12 16:30"
+function เวลาตอนนี้() {
+  var d = new Date();
+  var สองหลัก = function (n) { return String(n).padStart(2, "0"); };
+  return d.getFullYear() + "-" + สองหลัก(d.getMonth() + 1) + "-" + สองหลัก(d.getDate()) +
+         " " + สองหลัก(d.getHours()) + ":" + สองหลัก(d.getMinutes());
+}

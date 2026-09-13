@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>รายการชุดข้อสอบ · war-point</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/util.js" defer></script>
+  <script src="js/firebase-config.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/nav.js" defer></script>
+  <script src="js/auth-guard.js" defer></script>
+  <script src="js/quiz-sets.js" defer></script>
+</head>
+<body>
+  <div id="nav"></div>
+
+  <div class="container">
+    <div class="top-links"><a href="quiz-set-new.html">+ สร้างชุดข้อสอบใหม่ (AI)</a></div>
+    <h1>รายการชุดข้อสอบ</h1>
+    <p class="subtitle">คลิกที่ชุดใดก็ได้เพื่อดูคำถามและตัวเลือกทั้งหมด</p>
+
+    <div class="card">
+      <div id="ผลลัพธ์"><p>กำลังโหลด…</p></div>
+    </div>
+  </div>
+</body>
+</html>

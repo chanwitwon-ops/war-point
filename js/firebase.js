@@ -13,7 +13,8 @@ import {
   query,
   orderBy,
   doc,
-  setDoc
+  setDoc,
+  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import {
   getAuth,
@@ -34,6 +35,7 @@ window.fsQuery = query;
 window.fsOrderBy = orderBy;
 window.fsDoc = doc;
 window.fsSetDoc = setDoc;
+window.fsUpdateDoc = updateDoc;
 
 window.auth = getAuth(app);
 window.fbOnAuthStateChanged = onAuthStateChanged;

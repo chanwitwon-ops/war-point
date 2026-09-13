@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>รายละเอียดการส่งงาน · war-point</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/util.js" defer></script>
+  <script src="js/firebase-config.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/nav.js" defer></script>
+  <script src="js/auth-guard.js" defer></script>
+  <script src="js/quiz-attempt-detail.js" defer></script>
+</head>
+<body>
+  <div id="nav"></div>
+
+  <div class="container">
+    <h1>รายละเอียดการส่งงาน</h1>
+
+    <div id="กล่องงาน" class="card">
+      <p>กำลังโหลดข้อมูล…</p>
+    </div>
+
+    <div id="กล่องรีวิว" class="card hidden">
+      <h2>ความเห็นการตรวจ</h2>
+      <div id="รายการรีวิว"></div>
+    </div>
+
+    <div class="btn-row">
+      <a class="btn-ghost" href="quiz-attempts.html">← กลับไปหน้ารายการ</a>
+    </div>
+  </div>
+</body>
+</html>

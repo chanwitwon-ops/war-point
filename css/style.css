@@ -254,3 +254,59 @@ input[type="text"] {
   background: var(--surface-learn-alt);
   color: var(--state-warn-on-learn);
 }
+
+.alert-ai {
+  background: var(--surface-learn-alt);
+  color: var(--state-info-on-learn);
+}
+
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-learn);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink-learn);
+  background: var(--surface-learn);
+  resize: vertical;
+}
+
+.choice-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.choice-row input[type="text"] { flex: 1; }
+
+.question-card { margin-top: 16px; }
+
+.question-card .btn-row { margin-top: 12px; }
+
+.field-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-learn);
+}
+
+.field-row .k {
+  min-width: 140px;
+  color: var(--ink-learn-muted);
+}
+
+.comment {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-learn);
+}
+
+.comment .meta {
+  font-size: 13px;
+  color: var(--ink-learn-muted);
+  margin-bottom: 4px;
+}
+
+tr.clickable-row { cursor: pointer; }
+tr.clickable-row:hover { background: var(--surface-learn-alt); }

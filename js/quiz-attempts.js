@@ -64,7 +64,7 @@
 
     รายการ.forEach(function (a) {
       html +=
-        "<tr>" +
+        '<tr class="clickable-row" data-id="' + esc(a.id) + '">' +
         "<td>" + esc(a.studentNickname) + "</td>" +
         "<td>" + esc(a.quizSetTitle) + "</td>" +
         "<td>" + ป้ายสถานะ(a.status) + "</td>" +
@@ -75,5 +75,11 @@
 
     html += "</tbody></table>";
     กล่อง.innerHTML = html;
+
+    กล่อง.querySelectorAll("[data-id]").forEach(function (แถว) {
+      แถว.addEventListener("click", function () {
+        location.href = "quiz-attempt-detail.html?id=" + encodeURIComponent(แถว.dataset.id);
+      });
+    });
   }
 })();

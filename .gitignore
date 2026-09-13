@@ -25,3 +25,7 @@ js/firebase-config.js
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# ── คีย์ OpenRouter จริง (เพิ่มการบ้านที่ 3) ──
+# ใช้ js/ai-config.example.js เป็นต้นแบบแทน
+js/ai-config.js
