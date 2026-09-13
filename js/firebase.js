@@ -12,6 +12,7 @@ import {
   getDoc,
   query,
   orderBy,
+  where,
   doc,
   setDoc,
   updateDoc
@@ -33,6 +34,7 @@ window.fsGetDocs = getDocs;
 window.fsGetDoc = getDoc;
 window.fsQuery = query;
 window.fsOrderBy = orderBy;
+window.fsWhere = where;
 window.fsDoc = doc;
 window.fsSetDoc = setDoc;
 window.fsUpdateDoc = updateDoc;

@@ -10,6 +10,8 @@
   <script type="module" src="js/firebase.js"></script>
   <script src="js/nav.js" defer></script>
   <script src="js/auth-guard.js" defer></script>
+  <script src="js/ai-config.js" defer></script>
+  <script src="js/ai.js" defer></script>
   <script src="js/quiz-attempt-detail.js" defer></script>
 </head>
 <body>
@@ -25,6 +27,16 @@
     <div id="กล่องรีวิว" class="card hidden">
       <h2>ความเห็นการตรวจ</h2>
       <div id="รายการรีวิว"></div>
+    </div>
+
+    <div id="กล่องสรุปนักเรียน" class="card hidden">
+      <h2>🤖 ภาพรวมของนักเรียนคนนี้</h2>
+      <p class="subtitle">สรุปจากคะแนน + ความเห็นที่เคยได้รับในทุกชุดที่ตรวจแล้ว — ใช้ประกอบการพิจารณาเท่านั้น ไม่ใช่คำตัดสิน</p>
+      <div id="กล่องข้อความสรุป" class="alert alert-ai hidden"></div>
+      <div id="กล่องเตือนสรุป" class="alert alert-error hidden"></div>
+      <div class="btn-row">
+        <button type="button" class="btn-ghost" id="ปุ่มสรุปนักเรียน">🤖 ให้ AI สรุปภาพรวมของนักเรียนคนนี้</button>
+      </div>
     </div>
 
     <div class="btn-row">

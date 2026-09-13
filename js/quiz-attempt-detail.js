@@ -8,10 +8,16 @@
   var รหัสงาน = ค่าจากURL("id");
   var กล่องงาน = document.getElementById("กล่องงาน");
   var กล่องรีวิว = document.getElementById("กล่องรีวิว");
+  var กล่องสรุปนักเรียน = document.getElementById("กล่องสรุปนักเรียน");
+  var ปุ่มสรุปนักเรียน = document.getElementById("ปุ่มสรุปนักเรียน");
+  var กล่องข้อความสรุป = document.getElementById("กล่องข้อความสรุป");
+  var กล่องเตือนสรุป = document.getElementById("กล่องเตือนสรุป");
 
   var งาน = null;
   var ชุดข้อสอบ = null;
   var รีวิวทั้งหมด = [];
+
+  ปุ่มสรุปนักเรียน.addEventListener("click", ให้AIสรุปภาพรวมนักเรียน);
 
   ถ้าพร้อมแล้วให้โหลด();
 
@@ -53,6 +59,14 @@
       วาดงาน();
       วาดรีวิว();
       กล่องรีวิว.classList.remove("hidden");
+
+      if (window.CURRENT_USER.role === "teacher" && งาน.studentId) {
+        กล่องสรุปนักเรียน.classList.remove("hidden");
+        var สแนปช็อตนักเรียน = await window.fsGetDoc(window.fsDoc(window.db, "students", งาน.studentId));
+        if (สแนปช็อตนักเรียน.exists() && สแนปช็อตนักเรียน.data().aiSummary) {
+          แสดงสรุป(สแนปช็อตนักเรียน.data().aiSummary);
+        }
+      }
     } catch (err) {
       กล่องงาน.innerHTML = "<p>โหลดข้อมูลไม่สำเร็จ: " + esc(err.message) + "</p>";
       console.error(err);
@@ -144,6 +158,97 @@
       console.error(err);
       ปุ่ม.disabled = false;
     }
+  }
+
+  // ── ระดับ 2: AI อ่านประวัติทุกชุดที่นักเรียนคนนี้เคยถูกตรวจ (หลายรายการ + หลายรีวิว) ──
+  // แล้วสรุปภาพรวมให้ครูอ่านประกอบการพิจารณา — เขียนกลับลง students/{id} + จด aiLog ทุกครั้งที่เรียก
+  async function ให้AIสรุปภาพรวมนักเรียน() {
+    กล่องเตือนสรุป.classList.add("hidden");
+    ปุ่มสรุปนักเรียน.disabled = true;
+    ปุ่มสรุปนักเรียน.textContent = "🤖 กำลังอ่านประวัติและสรุป...";
+
+    try {
+      // ① อ่านหลายที่ — งานทุกชิ้นของนักเรียนคนนี้ + รีวิวของแต่ละชิ้น
+      var qงานทั้งหมด = window.fsQuery(
+        window.fsCollection(window.db, "quizAttempts"),
+        window.fsWhere("studentId", "==", งาน.studentId)
+      );
+      var สแนปช็อตงานทั้งหมด = await window.fsGetDocs(qงานทั้งหมด);
+
+      var รายการสรุป = [];
+      for (var i = 0; i < สแนปช็อตงานทั้งหมด.docs.length; i++) {
+        var เอกสารงาน = สแนปช็อตงานทั้งหมด.docs[i];
+        var ข้อมูลงาน = เอกสารงาน.data();
+        if (ข้อมูลงาน.status !== "graded") continue;   // สรุปเฉพาะที่ตรวจแล้วจริง มีข้อมูลให้อ่าน
+
+        var qรีวิวของงานนี้ = window.fsQuery(
+          window.fsCollection(window.db, "quizAttempts", เอกสารงาน.id, "reviews"),
+          window.fsOrderBy("reviewedAt")
+        );
+        var สแนปช็อตรีวิวของงานนี้ = await window.fsGetDocs(qรีวิวของงานนี้);
+        var ความเห็นทั้งหมด = [];
+        สแนปช็อตรีวิวของงานนี้.forEach(function (r) { ความเห็นทั้งหมด.push(r.data().feedback); });
+
+        รายการสรุป.push({
+          quizSetTitle: ข้อมูลงาน.quizSetTitle,
+          scoreAwarded: ข้อมูลงาน.scoreAwarded,
+          feedbacks: ความเห็นทั้งหมด
+        });
+      }
+
+      if (รายการสรุป.length === 0) {
+        เตือนสรุป("นักเรียนคนนี้ยังไม่มีงานที่ตรวจแล้วสักชิ้น จึงยังสรุปภาพรวมไม่ได้");
+        return;
+      }
+
+      // ② ตัดสินใจ/สรุป — ส่งประวัติทั้งหมดให้ AI เขียนสรุปสั้น ๆ
+      var ข้อมูลที่ส่ง = รายการสรุป.map(function (r) {
+        return "ชุด: " + r.quizSetTitle + " · คะแนน: " + r.scoreAwarded +
+               (r.feedbacks.length ? " · ความเห็นครู: " + r.feedbacks.join(" / ") : "");
+      }).join("\n");
+
+      var สรุป = await เรียกโมเดลAI([
+        {
+          role: "system",
+          content:
+            "คุณคือผู้ช่วยสรุปภาพรวมพัฒนาการของนักเรียนให้ครูอ่านประกอบการพิจารณา " +
+            "จากประวัติคะแนนและความเห็นที่เคยได้รับในทุกชุดที่ตรวจแล้ว " +
+            "เขียนสรุปสั้น ๆ ภาษาไทยไม่เกิน 3 ประโยค เน้นข้อเท็จจริงจากข้อมูลที่ให้เท่านั้น " +
+            "ห้ามให้คำแนะนำเชิงตัดสินหรือให้คะแนนใหม่"
+        },
+        { role: "user", content: ข้อมูลที่ส่ง }
+      ]);
+
+      // ③ เขียนกลับ — บันทึกสรุปลงเอกสารนักเรียน
+      await window.fsUpdateDoc(window.fsDoc(window.db, "students", งาน.studentId), {
+        aiSummary: สรุป,
+        aiSummaryUpdatedAt: เวลาตอนนี้()
+      });
+
+      // ④ จดบันทึก — เก็บทุกครั้งที่เรียก AI ไว้ใน aiLog ของนักเรียนคนนี้
+      await window.fsSetDoc(
+        window.fsDoc(window.db, "students", งาน.studentId, "aiLog", "log-" + Date.now()),
+        { input: ข้อมูลที่ส่ง, output: สรุป, createdAt: เวลาตอนนี้() }
+      );
+
+      แสดงสรุป(สรุป);
+    } catch (err) {
+      เตือนสรุป("ให้ AI สรุปไม่สำเร็จ: " + err.message);
+      console.error(err);
+    } finally {
+      ปุ่มสรุปนักเรียน.disabled = false;
+      ปุ่มสรุปนักเรียน.textContent = "🤖 ให้ AI สรุปภาพรวมของนักเรียนคนนี้";
+    }
+  }
+
+  function แสดงสรุป(ข้อความ) {
+    กล่องข้อความสรุป.textContent = "🤖 " + ข้อความ;
+    กล่องข้อความสรุป.classList.remove("hidden");
+  }
+
+  function เตือนสรุป(ข้อความ) {
+    กล่องเตือนสรุป.textContent = "⚠️ " + ข้อความ;
+    กล่องเตือนสรุป.classList.remove("hidden");
   }
 
   function วาดรีวิว() {
