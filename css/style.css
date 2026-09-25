@@ -310,3 +310,47 @@ textarea {
 
 tr.clickable-row { cursor: pointer; }
 tr.clickable-row:hover { background: var(--surface-learn-alt); }
+
+/* ── กลุ่ม/accordion แยกตามนักเรียน (quiz-attempts.html มุมมองครู) ── */
+.accordion-group {
+  border: 1px solid var(--border-learn);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.accordion-group + .accordion-group { margin-top: 0; }
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  min-height: var(--tap-min);
+  background: var(--surface-learn-alt);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.accordion-header::-webkit-details-marker { display: none; }
+
+.accordion-header::after {
+  content: "▾";
+  color: var(--ink-learn-muted);
+  transition: transform 0.15s ease;
+}
+
+.accordion-group[open] .accordion-header::after { transform: rotate(180deg); }
+
+.accordion-header span:first-child { flex: 1; }
+
+.accordion-header .count {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--ink-learn-muted);
+}
+
+.accordion-body { padding: 0 16px; }
+.accordion-body table { margin: 0; }
+.accordion-body tr:last-child td { border-bottom: none; }

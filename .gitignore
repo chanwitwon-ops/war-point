@@ -29,3 +29,16 @@ ui-debug.log
 # ── คีย์ OpenRouter จริง (เพิ่มการบ้านที่ 3) ──
 # ใช้ js/ai-config.example.js เป็นต้นแบบแทน
 js/ai-config.js
+
+# ── บัญชีทดสอบจริงของ Playwright (เพิ่มการบ้านที่ 4) ──
+# คัดลอกจาก tests/test-accounts.example.js แล้วใส่ค่าจริงของคุณเอง
+tests/test-accounts.local.js
+
+# ── ไฟล์ที่ Playwright สร้างขึ้นตอนรันเทสต์ ──
+tests/results.json
+test-results/
+playwright-report/
+node_modules/.cache/
+
+# ── ไฟล์ scratch ของ Playwright MCP ──
+.playwright-mcp/

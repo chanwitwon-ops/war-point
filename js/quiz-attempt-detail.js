@@ -82,6 +82,10 @@
       ["ส่งเมื่อ", esc(งาน.submittedAt)]
     ];
 
+    if (งาน.submittedText) {
+      แถว.push(["คำตอบที่ส่ง", esc(งาน.submittedText)]);
+    }
+
     var html = แถว.map(function (r) {
       return '<div class="field-row"><span class="k">' + r[0] + "</span><span>" + r[1] + "</span></div>";
     }).join("");

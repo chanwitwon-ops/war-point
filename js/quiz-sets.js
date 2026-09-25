@@ -10,12 +10,25 @@
 
   ถ้าพร้อมแล้วให้โหลด();
 
+  // ต้องรอ auth-ready (ไม่ใช่แค่ firebase-ready) เพราะการวาดตารางต้องรู้บทบาทผู้ใช้
+  // ก่อน — ใช้ตัดสินว่าจะแสดงลิงก์ "ทำแบบทดสอบนี้" ต่อแถวหรือไม่ (เฉพาะ student)
   function ถ้าพร้อมแล้วให้โหลด() {
-    if (window.db) {
-      โหลดข้อมูล();
+    if (window.CURRENT_USER) {
+      เริ่มหลังรู้บทบาท();
     } else {
-      window.addEventListener("firebase-ready", โหลดข้อมูล, { once: true });
+      window.addEventListener("auth-ready", เริ่มหลังรู้บทบาท, { once: true });
     }
+  }
+
+  function เริ่มหลังรู้บทบาท() {
+    // ลิงก์ "+ สร้างชุดข้อสอบใหม่ (AI)" ซ่อนไว้ตั้งแต่ต้นใน HTML แล้ว (class="hidden")
+    // โชว์เฉพาะ teacher เท่านั้น — student กดเข้าไปก็โดนกันที่หน้า quiz-set-new.html
+    // อยู่แล้ว (ตรวจสิทธิ์() ใน quiz-set-new.js) แต่ไม่ควรมีลิงก์ให้กดตั้งแต่แรก
+    if (window.CURRENT_USER.role === "teacher") {
+      var ลิงก์ = document.getElementById("ลิงก์สร้างชุดใหม่");
+      if (ลิงก์) ลิงก์.classList.remove("hidden");
+    }
+    โหลดข้อมูล();
   }
 
   async function โหลดข้อมูล() {
@@ -43,10 +56,15 @@
       return;
     }
 
+    // นักเรียนเท่านั้นที่ต้องทำแบบทดสอบ — ครูสร้างชุดข้อสอบ ไม่ต้องทำเอง
+    var เป็นนักเรียน = window.CURRENT_USER && window.CURRENT_USER.role === "student";
+    var จำนวนคอลัมน์ = เป็นนักเรียน ? 6 : 5;
+
     var html =
       "<table><thead><tr>" +
       "<th>ชื่อชุด</th><th>ประเภท</th><th>คะแนนเต็ม</th>" +
       '<th class="hide-mobile">ที่มา</th><th class="hide-mobile">จำนวนข้อ</th>' +
+      (เป็นนักเรียน ? "<th></th>" : "") +
       "</tr></thead><tbody>";
 
     รายการทั้งหมด.forEach(function (q) {
@@ -58,8 +76,12 @@
         "<td>" + esc(q.fullScore) + "</td>" +
         '<td class="hide-mobile">' + esc(ป้ายที่มา[q.creationSource] || q.creationSource || "—") + "</td>" +
         '<td class="hide-mobile">' + esc(จำนวนข้อ) + "</td>" +
+        (เป็นนักเรียน
+          ? '<td><a class="btn-ghost" href="quiz-attempt-new.html?quizSetId=' + esc(q.id) +
+            '" onclick="event.stopPropagation()">ทำแบบทดสอบนี้</a></td>'
+          : "") +
         "</tr>" +
-        '<tr id="แถวกาง-' + esc(q.id) + '" class="hidden"><td colspan="5">' + วาดคำถาม(q) + "</td></tr>";
+        '<tr id="แถวกาง-' + esc(q.id) + '" class="hidden"><td colspan="' + จำนวนคอลัมน์ + '">' + วาดคำถาม(q) + "</td></tr>";
     });
 
     html += "</tbody></table>";
@@ -78,10 +100,14 @@
     if (!Array.isArray(q.questions) || q.questions.length === 0) {
       return "<p>ชุดนี้ยังไม่มีคำถาม</p>";
     }
+    // เฉลย (isCorrect) โชว์ได้เฉพาะ teacher เท่านั้น — นักเรียนเห็นแล้วจะไปทำ
+    // ข้อสอบชุดนี้ต่อได้คะแนนเต็มทุกครั้งโดยไม่ต้องตอบจริง (quiz-attempt-new.html)
+    var เป็นครู = window.CURRENT_USER && window.CURRENT_USER.role === "teacher";
     return q.questions.map(function (ข้อ, qi) {
       var ตัวเลือก = ข้อ.choices.map(function (c) {
-        return "<li" + (c.isCorrect ? ' style="font-weight:600"' : "") + ">" +
-               esc(c.choiceText) + (c.isCorrect ? " ✅" : "") + "</li>";
+        var ถูกและเป็นครู = เป็นครู && c.isCorrect;
+        return "<li" + (ถูกและเป็นครู ? ' style="font-weight:600"' : "") + ">" +
+               esc(c.choiceText) + (ถูกและเป็นครู ? " ✅" : "") + "</li>";
       }).join("");
       return (
         "<p><strong>ข้อ " + (qi + 1) + ".</strong> " + esc(ข้อ.questionText) + "</p>" +

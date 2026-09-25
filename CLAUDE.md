@@ -14,6 +14,12 @@ repository นี้มี `docs/` (requirement, feature list, user journey, pro
 
 **อย่าคิดคำสั่ง build/lint/test ขึ้นมาเอง** ถ้ามีการเพิ่ม npm/bundler เข้ามาในอนาคต ให้อัปเดตไฟล์นี้ด้วยคำสั่งที่ใช้งานได้จริงในตอนนั้น
 
+**อัปเดต (การบ้านที่ 4) — มี `package.json` แล้ว** ใช้สำหรับรัน dev server + Playwright เท่านั้น (แอปหลักยังเป็น static HTML/JS ไม่มี build step เหมือนเดิม):
+- `npm install` — ติดตั้ง `@playwright/test` และ `serve` ครั้งแรก
+- `npm run dev` — เปิด dev server ที่ `http://localhost:3000` (ใช้แทน `static-server.ps1` ตอนรันเทสต์)
+- `npm test` — รันชุดทดสอบ Playwright ใน `tests/` (ต้องมี `tests/test-accounts.local.js` ก่อน — คัดลอกจาก `tests/test-accounts.example.js` แล้วใส่บัญชีทดสอบจริงที่สมัครไว้)
+- MCP `playwright` ต่อไว้แล้วใน `.mcp.json` สำหรับให้ Claude คุยกับเบราว์เซอร์จริงระหว่างเขียนเทสต์
+
 **ลำดับการเริ่มงานที่แนะนำ**
 
 1. `/new-requirement` — บันทึก requirement แรกเข้า `01-spec/` และสร้าง `backlog.md`

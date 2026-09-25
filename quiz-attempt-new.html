@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ทำแบบทดสอบ · war-point</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/util.js" defer></script>
+  <script src="js/firebase-config.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/nav.js" defer></script>
+  <script src="js/auth-guard.js" defer></script>
+  <script src="js/quiz-attempt-new.js" defer></script>
+</head>
+<body>
+  <div id="nav"></div>
+
+  <div class="container">
+    <h1>ทำแบบทดสอบ</h1>
+    <p class="subtitle">อ่านคำถามให้ครบ แล้วกดส่งคำตอบด้านล่าง — ส่งแล้วแก้ไขไม่ได้</p>
+
+    <div id="กล่องไม่มีสิทธิ์" class="card hidden">
+      <p>หน้านี้สำหรับนักเรียนเท่านั้น — ครูไม่ต้องทำแบบทดสอบ</p>
+    </div>
+
+    <div id="กล่องไม่พบ" class="card hidden">
+      <p id="ข้อความไม่พบ"></p>
+    </div>
+
+    <div id="กล่องหลัก" class="hidden">
+      <div class="card">
+        <h2 id="ชื่อชุดข้อสอบ"></h2>
+        <p id="รายละเอียดชุดข้อสอบ" class="subtitle"></p>
+
+        <div id="กล่องคำถาม"></div>
+
+        <div id="กล่องเตือนส่ง" class="alert alert-error hidden"></div>
+
+        <div class="btn-row">
+          <button type="button" class="btn-ok" id="ปุ่มส่งคำตอบ">ส่งคำตอบ</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <a class="btn-ghost" href="quiz-sets.html">← กลับไปหน้ารายการชุดข้อสอบ</a>
+    </div>
+  </div>
+</body>
+</html>

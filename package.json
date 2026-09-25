@@ -1,0 +1,14 @@
+{
+  "name": "war-point",
+  "version": "1.0.0",
+  "private": true,
+  "description": "war-point — การบ้านที่ 4 (สั่งทีเดียวจบจากสเปค แล้วทดสอบด้วย Playwright)",
+  "scripts": {
+    "dev": "serve -l 3001 .",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "serve": "^14.2.1"
+  }
+}

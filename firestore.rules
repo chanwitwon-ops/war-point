@@ -1,8 +1,18 @@
 // ─────────────────────────────────────────────────────────────
-// firestore.rules — กฎขั้นต่ำของการบ้านที่ 2 (เทียบสัปดาห์ที่ 7 leaveeasy): "ต้องล็อกอินก่อน"
+// firestore.rules — การบ้านที่ 3: ปิดช่องข้อมูลรั่วของ quizAttempts
 //
-// ยังไม่แยกสิทธิ์ตาม role (student/teacher) — กฎรายห้องแบบเต็ม
-// จะทำในการบ้านที่ 3 (ดู ACL.md)
+// เดิม (การบ้านที่ 2) เช็คแค่ "ต้องล็อกอินก่อน" (request.auth != null) กับทุก
+// เอกสาร — ทำให้นักเรียนคนหนึ่งเปิด/query การส่งงานของนักเรียนอีกคนได้ตรงๆ
+// รอบนี้แก้เฉพาะส่วน "เจ้าของข้อมูล" ตาม spec.md หัวข้อ 2-3:
+//   - quizAttempts   : อ่านได้เฉพาะเจ้าของ (studentId ตรงกับ uid) หรือ teacher
+//                       สร้างใหม่ได้เฉพาะเมื่อ studentId ที่บันทึกตรงกับ uid ผู้เขียน
+//                       แก้ไข (ให้คะแนน/เปลี่ยนสถานะ) ได้เฉพาะ teacher เท่านั้น
+//   - .../reviews    : เขียนได้เฉพาะ teacher (อ่านได้เฉพาะเจ้าของงานหรือ teacher)
+//   - students/quizSets: อ่านได้ทุกคนที่ล็อกอิน (ต้องใช้แสดงชื่อ/ตัวเลือกชุดข้อสอบ)
+//                       เขียนคงเดิม (auth != null) — ยังไม่ทำ rule แยกสิทธิ์
+//                       teacher-only แบบเต็มรูปแบบ (นอกขอบเขตรอบนี้ ดู spec.md หัวข้อ 5)
+//
+// role ของผู้ใช้อ่านจากเอกสาร users/{uid}.role ("student" | "teacher")
 //
 // วิธี publish: คัดลอกไฟล์นี้ทั้งหมด → Firebase Console →
 // Firestore Database → แท็บ Rules → วางทับของเดิม → กด Publish
@@ -12,7 +22,58 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+
+    // ผู้ใช้ที่ล็อกอินอยู่เป็น teacher หรือไม่ — เช็คจาก users/{uid}.role
+    function isTeacher() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "teacher";
+    }
+
+    // ── quizAttempts: จุดที่ข้อมูลรั่ว — ต้องเป็นเจ้าของหรือ teacher เท่านั้น ──
+    match /quizAttempts/{attemptId} {
+      allow read: if request.auth != null &&
+        (isTeacher() || resource.data.studentId == request.auth.uid);
+
+      // นักเรียนส่งงานใหม่ได้เฉพาะของตัวเอง (studentId ต้องตรงกับ uid ผู้เขียนเสมอ)
+      allow create: if request.auth != null &&
+        request.resource.data.studentId == request.auth.uid;
+
+      // เปลี่ยนสถานะ/ให้คะแนน (ตรวจงาน) ทำได้เฉพาะ teacher เท่านั้น
+      allow update: if isTeacher();
+
+      // ── reviews: มีเฉพาะงานที่ teacher ตรวจมือ — เขียนได้เฉพาะ teacher ──
+      match /reviews/{reviewId} {
+        allow read: if request.auth != null &&
+          (isTeacher() ||
+            get(/databases/$(database)/documents/quizAttempts/$(attemptId)).data.studentId == request.auth.uid);
+        allow write: if isTeacher();
+      }
+    }
+
+    // ── students: อ่านได้ทุกคนที่ล็อกอิน (แสดงชื่อเล่นในรายการ/AI สรุปภาพรวม) ──
+    // เขียนคงเดิมเหมือนก่อนแก้ (auth != null) — ยังไม่จำกัดเป็น teacher-only รอบนี้
+    match /students/{studentId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+
+      match /aiLog/{logId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // ── quizSets: อ่านได้ทุกคนที่ล็อกอิน (ต้องใช้เลือกชุดข้อสอบ/แสดงรายการ) ──
+    // เขียนคงเดิมเหมือนก่อนแก้ (auth != null)
+    match /quizSets/{quizSetId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+
+      match /aiLog/{logId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // ── users: ผูก role กับ Firebase Auth uid — คงพฤติกรรมเดิม (auth != null) ──
+    match /users/{uid} {
       allow read, write: if request.auth != null;
     }
   }

@@ -1,6 +1,8 @@
 # war-point
 
 🌐 **เว็บออนไลน์:** https://warpoint-191be.web.app
+🧪 **รายงานผลการทดสอบ:** [test-results.md](test-results.md) — 6/6 ผ่าน
+📝 **สิ่งที่ยังไม่เสร็จ:** [BACKLOG.md](BACKLOG.md)
 
 โปรเจกต์นี้ใช้กระบวนการทำงานแบบเอกสารนำโค้ด (document-driven) โดยมี agent และ skill ช่วยในแต่ละ phase
 
