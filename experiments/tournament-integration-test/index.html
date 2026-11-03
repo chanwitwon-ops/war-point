@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<title>tournament data-layer + UI contract integration test (scratch tool)</title>
+<style>
+  body { font-family: monospace; padding: 20px; background: #111; color: #ddd; }
+  .pass { color: #7CFC00; }
+  .fail { color: #FF5C5C; font-weight: bold; }
+  #summary { font-size: 1.2em; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<h1>tournament-data.js ↔ tournament.js/tournament-match.js — contract test</h1>
+<p>ตรวจว่า shape ของ object ที่ window.โหลดทัวนาเมนต์() คืนมาจริง ตรงกับที่ tournament.js/tournament-match.js
+(หลังแก้ 2026-11-03) อ่านจริง — ไม่ใช้ Firebase จริง ใช้ mock-firestore.js แทน</p>
+<div id="summary"></div>
+<pre id="log" style="white-space:pre-wrap;background:#000;padding:10px;"></pre>
+
+<script src="../../js/util.js"></script>
+<script src="../../js/combat-engine.js"></script>
+<script src="../../js/tournament-demo-data.js"></script>
+<script src="mock-firestore.js"></script>
+<script src="../../js/tournament-data.js"></script>
+<script>
+(async function () {
+  var logEl = document.getElementById("log");
+  var summaryEl = document.getElementById("summary");
+  var pass = 0, fail = 0;
+
+  function log(ok, label, extra) {
+    if (ok) pass++; else fail++;
+    var line = (ok ? "[PASS] " : "[FAIL] ") + label + (extra ? " — " + extra : "");
+    var div = document.createElement("div");
+    div.className = ok ? "pass" : "fail";
+    div.textContent = line;
+    logEl.appendChild(div);
+    (ok ? console.log : console.error)(line);
+  }
+
+  function makeSlot(name, speciesKey) {
+    var sp = window.TOURNAMENT_DEMO_SPECIES[speciesKey];
+    return { studentName: name, speciesKey: speciesKey, stats: sp.stats, statusAbility: sp.statusAbility };
+  }
+
+  try {
+    // ── 1. สร้างทัวนาเมนต์ (ใช้ payload แบบที่ tournament.js แก้แล้วส่งจริง — มี stats/statusAbility ครบ) ──
+    var tournamentId = await window.สร้างทัวนาเมนต์({
+      semifinal1: { slotA: makeSlot("เอ", "pixie"), slotB: makeSlot("บี", "behemoth") },
+      semifinal2: { slotA: makeSlot("ซี", "cannonTurtle"), slotB: makeSlot("ดี", "dragon") }
+    });
+    log(typeof tournamentId === "string" && tournamentId.length > 0, "สร้างทัวนาเมนต์ คืน tournamentId ที่เป็น string");
+
+    // ── 2. โหลดทัวนาเมนต์ก่อนคำนวณแมตช์ใดๆ — จำลองสิ่งที่ tournament.js's สร้างกล่องคู่ อ่านจริง ──
+    var t0 = await window.โหลดทัวนาเมนต์(tournamentId);
+    log(!!t0, "โหลดทัวนาเมนต์ คืน object ไม่ใช่ null");
+    log(t0.id === tournamentId, "object มี .id ตรงกับ tournamentId");
+
+    // จำลอง exact access pattern ของ สร้างกล่องคู่(key, ทัวนาเมนต์) หลังแก้ไข:
+    //   var คู่ = ทัวนาเมนต์[key] || {};  (ไม่มี .bracket ซ้อนอีกแล้ว)
+    var คู่sf1 = t0["semifinal1"] || {};
+    log(!!(คู่sf1.slotA && คู่sf1.slotB), "semifinal1 เป็น top-level key มี slotA/slotB ตรงๆ (ไม่ต้องผ่าน .bracket)", JSON.stringify({slotA: คู่sf1.slotA && คู่sf1.slotA.studentName, slotB: คู่sf1.slotB && คู่sf1.slotB.studentName}));
+    log(คู่sf1.matchLog === undefined, "ยังไม่คำนวณ — matchLog ต้องไม่มี (undefined) ก่อนกดต่อสู้");
+    log((t0["final"] || {}).slotA === null, "final.slotA ยังเป็น null ก่อน semifinal จบ (รอผู้เข้ารอบ ตามที่ UI คาดหวัง)");
+
+    // ── 3. คำนวณ semifinal1 + semifinal2 — จำลองปุ่ม "ต่อสู้" ──
+    await window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId, "semifinal1");
+    await window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId, "semifinal2");
+
+    var t1 = await window.โหลดทัวนาเมนต์(tournamentId);
+    var คู่sf1b = t1["semifinal1"] || {};
+    log(!!คู่sf1b.matchLog, "หลังคำนวณแล้ว semifinal1.matchLog มีข้อมูลจริง (ไม่ต้องผ่าน .matches ซ้อนอีกต่อไป)");
+    log(["A", "B", null].indexOf(คู่sf1b.matchLog && คู่sf1b.matchLog.result.winner) !== -1, "matchLog.result.winner เป็น A/B/null ตามสัญญา");
+    log(["slotA", "slotB", null].indexOf(คู่sf1b.winnerSlot) !== -1, "winnerSlot เป็น slotA/slotB/null");
+
+    // final ต้องถูกเติมอัตโนมัติแล้วถ้าทั้งคู่ semifinal มีผู้ชนะจริง (ไม่เสมอ)
+    var finalAfter = t1["final"] || {};
+    var ทั้งคู่มีผู้ชนะ = คู่sf1b.winnerSlot && (t1["semifinal2"] || {}).winnerSlot;
+    if (ทั้งคู่มีผู้ชนะ) {
+      log(!!(finalAfter.slotA && finalAfter.slotB), "final.slotA/slotB ถูกเติมอัตโนมัติหลัง semifinal ทั้งคู่มีผู้ชนะ");
+    } else {
+      log(true, "semifinal มีผลเสมออย่างน้อย 1 คู่ — ข้ามการตรวจ auto-fill final รอบนี้ (พฤติกรรมถูกต้องตามสเปก ไม่ใช่บั๊ก)");
+    }
+
+    // ── 4. จำลอง exact access pattern ของ tournament-match.js (โหลดแมตช์) หลังแก้ไข ──
+    var คู่ข้อมูล = t1["semifinal1"] || null;
+    var บันทึกจำลอง = คู่ข้อมูล ? คู่ข้อมูล.matchLog : null;
+    log(!!บันทึกจำลอง, "tournament-match.js pattern: ผลโหลด[slotKey].matchLog อ่านได้ตรงๆ สำเร็จ");
+    log(บันทึกจำลอง.sideA && บันทึกจำลอง.sideA.studentId === "เอ", "sideA.studentId ตรงกับชื่อนักเรียนที่กรอก (ใช้จับคู่ event ได้ถูกฝ่าย)");
+
+    // ── 5. deterministic: คำนวณซ้ำ slotKey เดิมต้องได้ seed/events/result เดิม ──
+    // (ยกเว้น computed_at ซึ่งเป็น wall-clock timestamp จริง ไม่ใช่ส่วนหนึ่งของ determinism ตามสเปก)
+    function ตัดcomputed_at(log) { var c = JSON.parse(JSON.stringify(log)); delete c.computed_at; return JSON.stringify(c); }
+    var matchLogBefore = ตัดcomputed_at(คู่sf1b.matchLog);
+    await window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId, "semifinal1");
+    var t2 = await window.โหลดทัวนาเมนต์(tournamentId);
+    var matchLogAfter = ตัดcomputed_at((t2["semifinal1"] || {}).matchLog);
+    log(matchLogBefore === matchLogAfter, "คำนวณ semifinal1 ซ้ำ ได้ seed/events/result เดิมทุก byte (deterministic, ไม่นับ computed_at)");
+
+    // ── 6. error path: เรียก final ก่อน semifinal ครบ (กรณีสมมติทัวนาเมนต์ใหม่) ──
+    var tournamentId2 = await window.สร้างทัวนาเมนต์({
+      semifinal1: { slotA: makeSlot("E", "pixie"), slotB: makeSlot("F", "behemoth") },
+      semifinal2: { slotA: makeSlot("G", "cannonTurtle"), slotB: makeSlot("H", "dragon") }
+    });
+    var errorCaught = false;
+    try {
+      await window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId2, "final");
+    } catch (e) {
+      errorCaught = true;
+      log(typeof e.message === "string" && e.message.length > 0, "error message เป็นภาษาไทยอ่านได้", e.message);
+    }
+    log(errorCaught, "เรียก final ก่อน semifinal เสร็จ ต้อง reject ด้วย error ไม่ใช่พัง/คืนค่าผิด");
+
+  } catch (e) {
+    log(false, "เกิด exception ที่ไม่คาดคิดระหว่างรันเทส", e.message);
+    console.error(e);
+  }
+
+  summaryEl.innerHTML = "<b>" + pass + " passed</b> / " + (pass + fail) + " total" + (fail > 0 ? '<span class="fail"> — ' + fail + " FAILED</span>" : "");
+  window.__TEST_SUMMARY__ = { pass: pass, fail: fail };
+})();
+</script>
+</body>
+</html>

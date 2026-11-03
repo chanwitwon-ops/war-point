@@ -9,7 +9,8 @@
   var เมนู = [
     { href: "quiz-attempts.html", ชื่อ: "รายการส่งงาน" },
     { href: "quiz-sets.html", ชื่อ: "รายการชุดข้อสอบ" },
-    { href: "quiz-set-new.html", ชื่อ: "สร้างชุดข้อสอบ (AI)", teacherOnly: true }
+    { href: "quiz-set-new.html", ชื่อ: "สร้างชุดข้อสอบ (AI)", teacherOnly: true },
+    { href: "tournament.html", ชื่อ: "ทัวนาเมนต์ (เดโม)", teacherOnly: true }
   ];
 
   // ชื่อไฟล์ของหน้าที่กำลังเปิดอยู่ เอาไว้ขีดเส้นใต้เมนูที่ตรงกัน

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ทัวนาเมนต์ (เดโม) · war-point</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/util.js" defer></script>
+  <script src="js/firebase-config.js"></script>
+  <script type="module" src="js/firebase.js"></script>
+  <script src="js/nav.js" defer></script>
+  <script src="js/auth-guard.js" defer></script>
+  <script src="js/tournament-demo-data.js" defer></script>
+  <script src="js/tournament.js" defer></script>
+</head>
+<body>
+  <div id="nav"></div>
+
+  <div class="container">
+    <h1>ทัวนาเมนต์แพ้คัดออก (เดโม)</h1>
+    <p class="subtitle">ผลทุกแมตช์คำนวณจากค่าสเตตัสจริง ไม่ได้กำหนดผลไว้ล่วงหน้า · 4 คน → รองชนะเลิศ 2 คู่ → ชิงชนะเลิศ 1 คู่</p>
+
+    <div id="กล่องกำลังโหลด" class="card">
+      <p>กำลังโหลด…</p>
+    </div>
+
+    <div id="กล่องไม่มีสิทธิ์" class="card hidden">
+      <p>หน้านี้สำหรับครูเท่านั้น</p>
+    </div>
+
+    <div id="กล่องไม่พบ" class="card hidden">
+      <p id="ข้อความไม่พบ"></p>
+      <div class="btn-row">
+        <a class="btn-ghost" href="tournament.html">← ไปหน้าตั้งค่าทัวนาเมนต์</a>
+      </div>
+    </div>
+
+    <!-- หน้าตั้งค่า: แสดงเมื่อไม่มี ?tournamentId ใน URL -->
+    <div id="กล่องตั้งค่า" class="hidden">
+      <div class="card">
+        <p class="section-title">ตั้งค่านักเรียน 4 คน</p>
+        <p class="hint">ใช้ชื่อเล่นหรือชื่อที่ใช้แสดงในระบบ ไม่ต้องใส่ชื่อ-นามสกุลจริง · ค่าสเตตัสของแต่ละสายพันธุ์เป็นค่าสมมติสำหรับเดโม ยังไม่ใช่ค่าทางการ</p>
+
+        <div id="กล่องฟอร์มนักเรียน"></div>
+
+        <div id="กล่องเตือนตั้งค่า" class="alert alert-error hidden"></div>
+
+        <div class="btn-row">
+          <button type="button" class="btn" id="ปุ่มเริ่มทัวนาเมนต์">เริ่มทัวนาเมนต์</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- หน้าผังภาพรวม: แสดงเมื่อมี ?tournamentId ใน URL -->
+    <div id="กล่องผัง" class="hidden">
+      <div id="กล่องเตือนผัง" class="alert alert-error hidden"></div>
+      <!-- ผัง bracket ถูกวาดโดย js/tournament.js -->
+      <div id="ที่วางผัง"></div>
+      <p class="hint">รอบรองชนะเลิศ 2 คู่ — ผู้ชนะทั้งสองคู่เลื่อนเข้ารอบชิงชนะเลิศโดยอัตโนมัติ · กด "ดูรายละเอียด" เพื่อดูบันทึกเหตุการณ์ทีละยก</p>
+    </div>
+  </div>
+</body>
+</html>
