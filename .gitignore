@@ -30,6 +30,10 @@ ui-debug.log
 # ใช้ js/ai-config.example.js เป็นต้นแบบแทน
 js/ai-config.js
 
+# ── คีย์ OpenRouter สำรองสำหรับ local AI proxy (เพิ่ม 2026-11-03) ──
+# ใช้ local-ai-proxy/key.local.example.js เป็นต้นแบบแทน
+local-ai-proxy/key.local.js
+
 # ── บัญชีทดสอบจริงของ Playwright (เพิ่มการบ้านที่ 4) ──
 # คัดลอกจาก tests/test-accounts.example.js แล้วใส่ค่าจริงของคุณเอง
 tests/test-accounts.local.js

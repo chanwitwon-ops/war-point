@@ -1,5 +1,8 @@
 // ─────────────────────────────────────────────────────────────
 // firestore.rules — การบ้านที่ 3: ปิดช่องข้อมูลรั่วของ quizAttempts
+// [แก้เพิ่ม 2026-11-03] ปิดช่องโหว่ที่ BACKLOG.md ระบุไว้ว่า "นักเรียนที่รู้วิธียิง
+// request ตรงผ่าน DevTools ยังแก้/ลบชุดข้อสอบหรือข้อมูลนักเรียนคนอื่นได้" — ล็อก
+// เขียน students/quizSets ให้เป็น teacher-only แล้ว (ดูหัวข้อ students/quizSets ด้านล่าง)
 //
 // เดิม (การบ้านที่ 2) เช็คแค่ "ต้องล็อกอินก่อน" (request.auth != null) กับทุก
 // เอกสาร — ทำให้นักเรียนคนหนึ่งเปิด/query การส่งงานของนักเรียนอีกคนได้ตรงๆ
@@ -9,8 +12,11 @@
 //                       แก้ไข (ให้คะแนน/เปลี่ยนสถานะ) ได้เฉพาะ teacher เท่านั้น
 //   - .../reviews    : เขียนได้เฉพาะ teacher (อ่านได้เฉพาะเจ้าของงานหรือ teacher)
 //   - students/quizSets: อ่านได้ทุกคนที่ล็อกอิน (ต้องใช้แสดงชื่อ/ตัวเลือกชุดข้อสอบ)
-//                       เขียนคงเดิม (auth != null) — ยังไม่ทำ rule แยกสิทธิ์
-//                       teacher-only แบบเต็มรูปแบบ (นอกขอบเขตรอบนี้ ดู spec.md หัวข้อ 5)
+//                       เขียนจำกัดเฉพาะ teacher แล้ว (เดิม auth != null เปิดให้นักเรียน
+//                       เขียนทับได้ด้วย — ตรวจโค้ดจริงแล้วว่าทุกจุดที่เขียน 2 collection
+//                       นี้ในแอป (quiz-set-new.js, quiz-attempt-detail.js's AI summary,
+//                       seed.js) เป็นการกระทำของ teacher อยู่แล้วทั้งหมด ไม่มีนักเรียนจุดไหน
+//                       ที่ต้องเขียน students/quizSets เลย การล็อกจึงไม่กระทบฟีเจอร์ใดๆ)
 //
 // role ของผู้ใช้อ่านจากเอกสาร users/{uid}.role ("student" | "teacher")
 //
@@ -51,24 +57,29 @@ service cloud.firestore {
     }
 
     // ── students: อ่านได้ทุกคนที่ล็อกอิน (แสดงชื่อเล่นในรายการ/AI สรุปภาพรวม) ──
-    // เขียนคงเดิมเหมือนก่อนแก้ (auth != null) — ยังไม่จำกัดเป็น teacher-only รอบนี้
+    // เขียนได้เฉพาะ teacher เท่านั้น [แก้ 2026-11-03] — กันนักเรียนแก้/ลบข้อมูล
+    // นักเรียนคนอื่นผ่าน DevTools/Firestore SDK ตรงๆ (ฟีเจอร์ AI สรุปภาพรวมที่เขียน
+    // ลง students.aiSummary เป็นปุ่มของ teacher อยู่แล้ว ไม่กระทบ)
     match /students/{studentId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow write: if isTeacher();
 
       match /aiLog/{logId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
       }
     }
 
     // ── quizSets: อ่านได้ทุกคนที่ล็อกอิน (ต้องใช้เลือกชุดข้อสอบ/แสดงรายการ) ──
-    // เขียนคงเดิมเหมือนก่อนแก้ (auth != null)
+    // เขียนได้เฉพาะ teacher เท่านั้น [แก้ 2026-11-03] — กันนักเรียนแก้/ลบชุดข้อสอบ
+    // ของครูผ่าน DevTools/Firestore SDK ตรงๆ (สร้าง/แก้ชุดข้อสอบเป็นหน้าของ teacher อยู่แล้ว)
     match /quizSets/{quizSetId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow write: if isTeacher();
 
       match /aiLog/{logId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if isTeacher();
       }
     }
 

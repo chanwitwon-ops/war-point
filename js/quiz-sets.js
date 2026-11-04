@@ -58,13 +58,14 @@
 
     // นักเรียนเท่านั้นที่ต้องทำแบบทดสอบ — ครูสร้างชุดข้อสอบ ไม่ต้องทำเอง
     var เป็นนักเรียน = window.CURRENT_USER && window.CURRENT_USER.role === "student";
-    var จำนวนคอลัมน์ = เป็นนักเรียน ? 6 : 5;
+    var เป็นครู = window.CURRENT_USER && window.CURRENT_USER.role === "teacher";
+    var จำนวนคอลัมน์ = เป็นนักเรียน || เป็นครู ? 6 : 5;
 
     var html =
       "<table><thead><tr>" +
       "<th>ชื่อชุด</th><th>ประเภท</th><th>คะแนนเต็ม</th>" +
       '<th class="hide-mobile">ที่มา</th><th class="hide-mobile">จำนวนข้อ</th>' +
-      (เป็นนักเรียน ? "<th></th>" : "") +
+      (เป็นนักเรียน || เป็นครู ? "<th></th>" : "") +
       "</tr></thead><tbody>";
 
     รายการทั้งหมด.forEach(function (q) {
@@ -79,6 +80,10 @@
         (เป็นนักเรียน
           ? '<td><a class="btn-ghost" href="quiz-attempt-new.html?quizSetId=' + esc(q.id) +
             '" onclick="event.stopPropagation()">ทำแบบทดสอบนี้</a></td>'
+          : "") +
+        (เป็นครู
+          ? '<td><a class="btn-ghost" href="quiz-set-edit.html?id=' + esc(q.id) +
+            '" onclick="event.stopPropagation()">แก้ไข/ลบ</a></td>'
           : "") +
         "</tr>" +
         '<tr id="แถวกาง-' + esc(q.id) + '" class="hidden"><td colspan="' + จำนวนคอลัมน์ + '">' + วาดคำถาม(q) + "</td></tr>";

@@ -8,6 +8,16 @@
 (function () {
   var กล่อง = document.getElementById("ผลลัพธ์");
 
+  // ── pagination สำหรับมุมมองครู (BACKLOG.md: หน้านี้เคยดึงมาทั้ง collection ครั้งเดียว
+  // ไม่แบ่งหน้า ซึ่งจะช้าลงเมื่อมีนักเรียน/การส่งงานเยอะขึ้น) — ใช้ cursor ของ Firestore
+  // (startAfter บน document snapshot ล่าสุด) ไม่ใช่ offset เพราะ offset ของ Firestore
+  // ยังคงอ่านเอกสารที่ข้ามไปทุกครั้งอยู่ดี ไม่ประหยัดจริง
+  var PAGE_SIZE = 20;
+  var เอกสารล่าสุดของหน้า = null; // document snapshot ตัวสุดท้ายของหน้าปัจจุบัน ไว้ทำ startAfter
+  var รายการสะสมของครู = [];
+  var อาจมีข้อมูลเพิ่ม = true;
+  var กำลังโหลดเพิ่ม = false;
+
   ถ้าพร้อมแล้วให้โหลด();
 
   // ต้องรอทั้ง Firebase เชื่อมต่อเสร็จ (window.db) และรู้ตัวตน/บทบาทผู้ใช้ก่อน
@@ -33,10 +43,20 @@
   async function โหลดข้อมูล() {
     try {
       var เป็นครู = window.CURRENT_USER.role === "teacher";
+      var สถานะที่กรองก่อนโหลด = ค่าจากURL("status");
       var รายการทั้งหมด;
 
+      if (เป็นครู && !สถานะที่กรองก่อนโหลด) {
+        // teacher มุมมองหลัก (ไม่ได้กรองสถานะ) — แบ่งหน้าแบบ cursor ทีละ PAGE_SIZE
+        // รายการ โชว์หน้าแรกก่อน แล้วมีปุ่ม "โหลดเพิ่ม" ให้กดต่อ (ดู โหลดหน้าเพิ่ม())
+        await โหลดหน้าแรกของครู();
+        return;
+      }
+
       if (เป็นครู) {
-        // teacher: เห็นของทุกคน (ยังเรียงตาม submittedAt ที่ Firestore ได้เพราะเป็น field เดียว)
+        // มีการกรองสถานะผ่าน URL (เส้นทางรองที่ใช้ไม่บ่อย) — ยังดึงมาทั้งหมดแล้วกรองฝั่ง JS
+        // เหมือนเดิม เพราะ Firestore ต้องมี composite index ถ้าจะ where(status)+orderBy(submittedAt)
+        // พร้อมกัน ซึ่งยังไม่ได้ตั้งไว้ในโปรเจกต์นี้ — ไม่ใช่เส้นทางที่ BACKLOG.md กังวลเรื่องสเกล
         var qครู = window.fsQuery(
           window.fsCollection(window.db, "quizAttempts"),
           window.fsOrderBy("submittedAt", "desc")
@@ -76,13 +96,66 @@
       }
 
       if (เป็นครู) {
-        แสดงกลุ่มตามนักเรียน(รายการทั้งหมด);
+        แสดงกลุ่มตามนักเรียน(รายการทั้งหมด, false);
       } else {
         แสดงตารางของตัวเอง(รายการทั้งหมด);
       }
     } catch (err) {
       กล่อง.innerHTML = "<p>โหลดข้อมูลไม่สำเร็จ: " + esc(err.message) + "</p>";
       console.error(err);
+    }
+  }
+
+  // ── teacher มุมมองหลัก: โหลดทีละหน้า (ดู comment หัวไฟล์) ──
+  async function โหลดหน้าแรกของครู() {
+    เอกสารล่าสุดของหน้า = null;
+    รายการสะสมของครู = [];
+    อาจมีข้อมูลเพิ่ม = true;
+
+    var qหน้าแรก = window.fsQuery(
+      window.fsCollection(window.db, "quizAttempts"),
+      window.fsOrderBy("submittedAt", "desc"),
+      window.fsLimit(PAGE_SIZE)
+    );
+    var สแนปช็อต = await window.fsGetDocs(qหน้าแรก);
+    เก็บผลหน้า(สแนปช็อต);
+    แสดงกลุ่มตามนักเรียน(รายการสะสมของครู, true);
+  }
+
+  function เก็บผลหน้า(สแนปช็อต) {
+    var เอกสารทั้งหมด = สแนปช็อต.docs;
+    เอกสารทั้งหมด.forEach(function (เอกสาร) {
+      var ข้อมูล = เอกสาร.data();
+      ข้อมูล.id = เอกสาร.id;
+      รายการสะสมของครู.push(ข้อมูล);
+    });
+    เอกสารล่าสุดของหน้า = เอกสารทั้งหมด.length > 0 ? เอกสารทั้งหมด[เอกสารทั้งหมด.length - 1] : null;
+    // ถ้าได้มาครบ PAGE_SIZE พอดี ให้สันนิษฐานว่าอาจมีหน้าถัดไปอีก (วิธีมาตรฐานของ Firestore
+    // cursor pagination — ไม่มี total count ให้เช็คตรงๆ)
+    อาจมีข้อมูลเพิ่ม = เอกสารทั้งหมด.length === PAGE_SIZE;
+  }
+
+  async function โหลดหน้าเพิ่ม() {
+    if (กำลังโหลดเพิ่ม || !อาจมีข้อมูลเพิ่ม || !เอกสารล่าสุดของหน้า) return;
+    กำลังโหลดเพิ่ม = true;
+    var ปุ่มโหลดเพิ่ม = document.getElementById("ปุ่มโหลดเพิ่ม");
+    if (ปุ่มโหลดเพิ่ม) { ปุ่มโหลดเพิ่ม.disabled = true; ปุ่มโหลดเพิ่ม.textContent = "กำลังโหลด..."; }
+
+    try {
+      var qหน้าเพิ่ม = window.fsQuery(
+        window.fsCollection(window.db, "quizAttempts"),
+        window.fsOrderBy("submittedAt", "desc"),
+        window.fsStartAfter(เอกสารล่าสุดของหน้า),
+        window.fsLimit(PAGE_SIZE)
+      );
+      var สแนปช็อต = await window.fsGetDocs(qหน้าเพิ่ม);
+      เก็บผลหน้า(สแนปช็อต);
+      แสดงกลุ่มตามนักเรียน(รายการสะสมของครู, true);
+    } catch (err) {
+      console.error(err);
+      กล่อง.insertAdjacentHTML("beforeend", "<p>โหลดเพิ่มไม่สำเร็จ: " + esc(err.message) + "</p>");
+    } finally {
+      กำลังโหลดเพิ่ม = false;
     }
   }
 
@@ -97,7 +170,8 @@
   }
 
   // ── teacher: จัดกลุ่ม/accordion แยกตามนักเรียน (หัวข้อกลุ่ม = studentNickname) ──
-  function แสดงกลุ่มตามนักเรียน(รายการ) {
+  // แสดงปุ่มโหลดเพิ่ม: true เฉพาะมุมมองหลักที่แบ่งหน้าจริง (ไม่ใช้กับเส้นทางกรองสถานะ)
+  function แสดงกลุ่มตามนักเรียน(รายการ, แสดงปุ่มโหลดเพิ่ม) {
     if (รายการ.length === 0) {
       กล่อง.innerHTML = "<p>ยังไม่มีการส่งงานในระบบ</p>";
       return;
@@ -128,8 +202,20 @@
         "</details>";
     });
 
+    if (แสดงปุ่มโหลดเพิ่ม && อาจมีข้อมูลเพิ่ม) {
+      html +=
+        '<div class="btn-row"><button type="button" class="btn-ghost" id="ปุ่มโหลดเพิ่ม">โหลดรายการเพิ่ม</button></div>';
+    } else if (แสดงปุ่มโหลดเพิ่ม) {
+      html += '<p class="hint">แสดงครบทุกรายการแล้ว (' + รายการ.length + ' รายการ)</p>';
+    }
+
     กล่อง.innerHTML = html;
     ผูกคลิกแถว(กล่อง);
+
+    if (แสดงปุ่มโหลดเพิ่ม) {
+      var ปุ่มโหลดเพิ่มEl = document.getElementById("ปุ่มโหลดเพิ่ม");
+      if (ปุ่มโหลดเพิ่มEl) ปุ่มโหลดเพิ่มEl.addEventListener("click", โหลดหน้าเพิ่ม);
+    }
   }
 
   function สร้างตาราง(รายการ) {

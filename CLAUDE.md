@@ -10,9 +10,22 @@ repository นี้มี `docs/` (requirement, feature list, user journey, pro
 
 **วิธีรัน:** ต้องมีไฟล์ `js/firebase-config.js` ก่อน (คัดลอกจาก `js/firebase-config.example.js` แล้วใส่ค่าจริงจาก Firebase Console — ไฟล์นี้ถูก gitignore ไว้ ไม่อยู่ใน repo) จากนั้นเปิด PowerShell ที่โฟลเดอร์นี้แล้วรัน `powershell -File static-server.ps1` (เปิดที่ port 3000) แล้วเข้า `http://localhost:3000/seed.html` เพื่อใส่ข้อมูลตัวอย่างก่อน จากนั้นเข้า `http://localhost:3000/register.html` เพื่อสมัครบัญชีทดสอบ (ทุกหน้ายกเว้น login/register/seed ต้องล็อกอินก่อนถึงจะเข้าได้ ดู `js/auth-guard.js`) — **ต้องเปิดผ่าน http:// เท่านั้น เปิดไฟล์ตรงๆ (`file://`) จะพังเพราะ ES module ของ Firebase ต้องการ origin ที่ไม่ใช่ file**
 
-**Deploy ขึ้นออนไลน์:** `firebase deploy --only hosting,firestore:rules` (ต้องมี `js/firebase-config.js` ในเครื่องก่อน เพราะ Hosting deploy จากไฟล์จริงบนดิสก์ ไม่ใช่จาก git) เว็บจริงอยู่ที่ `https://warpoint-191be.web.app`
+**Deploy ขึ้นออนไลน์:** `firebase deploy --only hosting,firestore:rules,functions` (ต้องมี `js/firebase-config.js` ในเครื่องก่อน เพราะ Hosting deploy จากไฟล์จริงบนดิสก์ ไม่ใช่จาก git) เว็บจริงอยู่ที่ `https://warpoint-191be.web.app`
 
 **อย่าคิดคำสั่ง build/lint/test ขึ้นมาเอง** ถ้ามีการเพิ่ม npm/bundler เข้ามาในอนาคต ให้อัปเดตไฟล์นี้ด้วยคำสั่งที่ใช้งานได้จริงในตอนนั้น
+
+**AI proxy แบบรันในเครื่อง (ไม่เสียเงิน) — ทางที่ใช้งานจริงตอนนี้ แก้ 2026-11-03 เพื่อปิดช่องโหว่คีย์ OpenRouter หลุด:**
+
+ปุ่ม AI ทั้ง 2 จุด (`quiz-set-new.html`, `quiz-attempt-detail.html`) เป็นฟีเจอร์ของ **ครูเท่านั้น** (ไม่มีนักเรียนคนไหนต้องใช้เลย) — `js/ai.js` จึงเรียกไปที่ `http://localhost:8787/callAI` ซึ่งเป็นสคริปต์เล็กๆ ที่**ครูรันบนเครื่องตัวเอง** (`local-ai-proxy/server.js`) แทนการเรียก OpenRouter ตรงจากเบราว์เซอร์แบบเดิม — คีย์จริงอยู่ในเครื่องของครูเท่านั้น ไม่เคยถูกส่งขึ้นเซิร์ฟเวอร์ไหนเลย เลือกทางนี้แทน Cloud Function เพราะไม่ต้องอัปเกรด Firebase เป็น Blaze plan/ผูกบัตร
+
+- **วิธีรัน (ทำทุกครั้งที่จะกดปุ่ม AI):**
+  1. ตั้งคีย์ครั้งแรก: คัดลอก `local-ai-proxy/key.local.example.js` เป็น `key.local.js` แล้วใส่คีย์จริง (หรือจะตั้งผ่าน environment variable `OPENROUTER_API_KEY` ก็ได้ ไม่ต้องสร้างไฟล์)
+  2. รัน `node local-ai-proxy/server.js` ทิ้งไว้ในเทอร์มินัลแยก (เห็นข้อความ "พร้อมใช้งานที่ http://localhost:8787/callAI" แปลว่าพร้อมแล้ว)
+  3. เปิดเว็บ war-point ตามปกติ (ทั้ง dev ในเครื่องหรือเว็บจริงที่ deploy แล้ว) แล้วกดปุ่ม AI ได้เลย — เบราว์เซอร์อนุญาตหน้า https:// เรียก http://localhost ได้ เป็นข้อยกเว้นมาตรฐานสำหรับเครื่องมือ dev
+- bind เฉพาะ `127.0.0.1` เท่านั้น — เครื่องอื่นในวง WiFi เดียวกันเรียกเข้ามาไม่ได้ ต้องเป็นเบราว์เซอร์บนเครื่องเดียวกับที่รัน server.js
+- `js/ai-config.js` (gitignored) เหลือไว้แค่เลือก `model` เท่านั้น ไม่มี `apiKey` อีกต่อไป — ดู `js/ai-config.example.js`
+
+**ทางเลือกสำรอง (ยังไม่ได้ใช้งาน) — Cloud Function:** เขียนโค้ดไว้แล้วที่ `functions/index.js` (ตรวจ Firebase ID token + role teacher ฝั่งเซิร์ฟเวอร์ด้วย) เผื่ออนาคตอยากให้ AI proxy รันอยู่ตลอดโดยไม่ต้องพึ่งเครื่องครู — ต้องอัปเกรด Firebase เป็น Blaze plan (ผูกบัตร) ก่อนถึงจะ deploy ได้ (`cd functions && npm install` → `firebase functions:secrets:set OPENROUTER_API_KEY` → `firebase deploy --only functions` → เพิ่ม hosting rewrite `{"source":"/api/callAI","function":"callAI"}` ใน `firebase.json` กลับเข้าไป และแก้ `js/ai.js` ให้เรียก `/api/callAI` แทน `localhost:8787`) — ยังไม่ทำตอนนี้เพราะผู้ใช้เลือกทางไม่เสียเงินก่อน
 
 **อัปเดต (การบ้านที่ 4) — มี `package.json` แล้ว** ใช้สำหรับรัน dev server + Playwright เท่านั้น (แอปหลักยังเป็น static HTML/JS ไม่มี build step เหมือนเดิม):
 - `npm install` — ติดตั้ง `@playwright/test` และ `serve` ครั้งแรก
