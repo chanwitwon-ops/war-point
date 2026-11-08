@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<title>pet-data.js contract + logic test (scratch tool)</title>
+<style>
+  body { font-family: monospace; padding: 20px; background: #111; color: #ddd; }
+  .pass { color: #7CFC00; }
+  .fail { color: #FF5C5C; font-weight: bold; }
+  #summary { font-size: 1.2em; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<h1>pet-data.js — logic + js/pet.js contract test</h1>
+<p>ตรวจระบบแต้ม+สัตว์เลี้ยงด้วย mock Firestore (ไม่ใช้ Firebase จริง) — ครอบคลุม: คะแนน→แต้ม 1:1,
+ซื้อไข่, วิวัฒนาการครบ 5 ขั้น (เทียบ PET_STAGE_STATS ทุกค่า), รีเซ็ต (แต้มคืน+ประวัติไม่หาย),
+เงื่อนไข error ทุกเส้นทาง, ความเป็นอิสระระหว่างนักเรียน</p>
+<div id="summary"></div>
+<pre id="log" style="white-space:pre-wrap;background:#000;padding:10px;"></pre>
+
+<script src="../../js/util.js"></script>
+<script src="../../js/pet-config.js"></script>
+<script src="../../js/tournament-demo-data.js"></script>
+<script src="../tournament-integration-test/mock-firestore.js"></script>
+<script src="../../js/pet-data.js"></script>
+<script>
+(async function () {
+  var logEl = document.getElementById("log");
+  var summaryEl = document.getElementById("summary");
+  var pass = 0, fail = 0;
+
+  function log(ok, label, extra) {
+    if (ok) pass++; else fail++;
+    var line = (ok ? "[PASS] " : "[FAIL] ") + label + (extra ? " — " + extra : "");
+    var div = document.createElement("div");
+    div.className = ok ? "pass" : "fail";
+    div.textContent = line;
+    logEl.appendChild(div);
+    (ok ? console.log : console.error)(line);
+  }
+
+  async function expectThrow(promiseFn, label) {
+    try {
+      await promiseFn();
+      log(false, label, "ไม่ throw ทั้งที่ควร throw");
+    } catch (e) {
+      log(true, label, e.message);
+    }
+  }
+
+  // เพิ่ม quizAttempt ที่ graded แล้วลง mock โดยตรง (จำลองว่าครูตรวจงานให้คะแนนแล้ว)
+  var attemptCounter = 0;
+  async function seedGradedAttempt(studentId, scoreAwarded, status) {
+    attemptCounter++;
+    var ref = window.fsDoc(window.db, "quizAttempts", "attempt-" + attemptCounter);
+    await window.fsSetDoc(ref, { studentId: studentId, status: status || "graded", scoreAwarded: scoreAwarded });
+  }
+
+  var STUDENT_A = "student-a-uid";
+  var STUDENT_B = "student-b-uid";
+
+  try {
+    // ── 1. totalPointsEarned: sum เฉพาะ graded ของ uid ที่ตรงเท่านั้น (1:1 กับ scoreAwarded) ──
+    await seedGradedAttempt(STUDENT_A, 10);
+    await seedGradedAttempt(STUDENT_A, 25);
+    await seedGradedAttempt(STUDENT_A, 5, "pending_review"); // ไม่นับ — ยังไม่ graded
+    await seedGradedAttempt(STUDENT_B, 999); // ของคนอื่น ไม่ควรปนกับ A
+
+    var สถานะA1 = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
+    log(สถานะA1.totalPointsEarned === 35, "totalPointsEarned sum เฉพาะ graded ของ A (10+25=35, ไม่นับ pending_review)", "ได้ " + สถานะA1.totalPointsEarned);
+    log(สถานะA1.pointsAvailable === 35, "pointsAvailable = totalPointsEarned เมื่อยังไม่มี pet (ไม่หัก)");
+    log(สถานะA1.pet === null, "pet เป็น null ตอนยังไม่เคยซื้อไข่");
+    log(Array.isArray(สถานะA1.growthHistory) && สถานะA1.growthHistory.length === 0, "growthHistory เป็น [] ว่างตอนเริ่ม");
+
+    // ── 2. ซื้อไข่ไม่พอแต้ม (นักเรียนใหม่ไม่มีคะแนนเลย) ──
+    var STUDENT_C = "student-c-uid-no-points";
+    await expectThrow(function () { return window.ซื้อไข่(STUDENT_C); }, "ซื้อไข่ไม่พอแต้ม (0 แต้ม) ต้อง throw");
+
+    // ── 3. ซื้อไข่สำเร็จ (A มี 35 แต้ม พอซื้อไข่ราคา 1 แต้ม) ──
+    await window.ซื้อไข่(STUDENT_A);
+    var สถานะA2 = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
+    log(สถานะA2.pet !== null, "ซื้อไข่สำเร็จแล้ว pet ไม่เป็น null");
+    log(สถานะA2.pet.stage === 0, "pet.stage = 0 (ไข่) หลังซื้อ");
+    log(JSON.stringify(สถานะA2.pet.stats) === JSON.stringify(window.PET_STAGE_STATS[0]), "pet.stats ตรงกับ PET_STAGE_STATS[0] เป๊ะ", JSON.stringify(สถานะA2.pet.stats));
+    log(สถานะA2.pet.pointsSpent === window.PET_STAGE_COST[0], "pointsSpent = ต้นทุนไข่ (1)");
+    log(สถานะA2.pointsAvailable === 35 - window.PET_STAGE_COST[0], "pointsAvailable หักต้นทุนไข่แล้ว", สถานะA2.pointsAvailable);
+    log(สถานะA2.growthHistory.length === 1 && สถานะA2.growthHistory[0].endedAt === null, "growthHistory มี 1 รายการ endedAt เป็น null (ยังเลี้ยงอยู่)");
+
+    // ── 4. ซื้อไข่ซ้ำตอนมี pet อยู่แล้ว ต้อง throw ──
+    await expectThrow(function () { return window.ซื้อไข่(STUDENT_A); }, "ซื้อไข่ซ้ำตอนมี pet อยู่แล้วต้อง throw");
+
+    // ── 5. วิวัฒนาการครบทุกขั้น 0→4 เทียบ PET_STAGE_STATS ทุกขั้นเป๊ะๆ ──
+    // เติมคะแนนให้ A พอสำหรับทุกขั้น (ต้องการสะสม 51 แต้ม รวมที่มีอยู่เดิม 34 ที่เหลือจากซื้อไข่)
+    await seedGradedAttempt(STUDENT_A, 100); // เติมให้พอเกินเหลือสำหรับทุกขั้น
+    var ผ่านครบทุกขั้น = true;
+    for (var stage = 1; stage <= 4; stage++) {
+      await window.วิวัฒนาการ(STUDENT_A);
+      var สถานะระหว่างทาง = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
+      var ตรงกับสเปก = สถานะระหว่างทาง.pet.stage === stage &&
+        JSON.stringify(สถานะระหว่างทาง.pet.stats) === JSON.stringify(window.PET_STAGE_STATS[stage]) &&
+        สถานะระหว่างทาง.pet.pointsSpent === window.PET_STAGE_CUMULATIVE_COST[stage];
+      if (!ตรงกับสเปก) {
+        ผ่านครบทุกขั้น = false;
+        log(false, "วิวัฒนาการขั้น " + stage + " ตรงสเปก", JSON.stringify(สถานะระหว่างทาง.pet));
+      }
+    }
+    log(ผ่านครบทุกขั้น, "วิวัฒนาการครบ 0→4 ทุกขั้น stats/pointsSpent ตรงกับ PET_STAGE_STATS/PET_STAGE_CUMULATIVE_COST เป๊ะ");
+
+    // ── 6. วิวัฒนาการเกินร่างสุดท้าย (stage 4) ต้อง throw ──
+    await expectThrow(function () { return window.วิวัฒนาการ(STUDENT_A); }, "วิวัฒนาการตอนถึงร่างสุดท้ายแล้วต้อง throw");
+
+    // ── 7. รีเซ็ต: แต้มคืนเต็ม, growthHistory เก่าไม่หายแค่ปิด endedAt ──
+    var ก่อนรีเซ็ต = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
+    await window.รีเซ็ตสัตว์เลี้ยง(STUDENT_A);
+    var หลังรีเซ็ต = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
+    log(หลังรีเซ็ต.pet === null, "รีเซ็ตแล้ว pet เป็น null");
+    log(หลังรีเซ็ต.pointsAvailable === หลังรีเซ็ต.totalPointsEarned, "รีเซ็ตแล้ว pointsAvailable กลับมาเท่า totalPointsEarned เป๊ะ (แต้มคืนเต็ม)");
+    log(หลังรีเซ็ต.totalPointsEarned === ก่อนรีเซ็ต.totalPointsEarned, "totalPointsEarned ไม่เปลี่ยนจากการรีเซ็ต (ยอดสะสมไม่มีวันลด)");
+    log(หลังรีเซ็ต.growthHistory.length === 1, "growthHistory ยังมี 1 รายการเดิม ไม่ถูกลบทิ้ง");
+    log(หลังรีเซ็ต.growthHistory[0].endedAt !== null, "รายการ growthHistory เดิมถูกปิด endedAt แล้ว (ไม่ใช่ null อีกต่อไป)");
+    log(หลังรีเซ็ต.growthHistory[0].reachedStage === 4, "รายการเดิมบันทึก reachedStage สูงสุดที่เคยไปถึง (4) ไว้ถูกต้อง");
+
+    // ── 8. ซื้อไข่รอบ 2 หลังรีเซ็ต — ต้องเพิ่มรายการใหม่ ไม่ทับของเก่า ──
+    await window.ซื้อไข่(STUDENT_A);
+    var รอบสอง = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
+    log(รอบสอง.growthHistory.length === 2, "ซื้อไข่รอบ 2 เพิ่ม growthHistory รายการใหม่ (รวมเป็น 2) ไม่ทับของเก่า");
+    log(รอบสอง.growthHistory[1].endedAt === null, "รายการใหม่ล่าสุด endedAt เป็น null (กำลังเลี้ยงอยู่)");
+    log(รอบสอง.pet.stage === 0, "ซื้อไข่รอบ 2 เริ่มจาก stage 0 ใหม่ถูกต้อง");
+
+    // ── 9. วิวัฒนาการตอนยังไม่มี pet (นักเรียน C ที่ยังไม่เคยซื้อ) ต้อง throw ──
+    await expectThrow(function () { return window.วิวัฒนาการ(STUDENT_C); }, "วิวัฒนาการตอนยังไม่มี pet ต้อง throw");
+    await expectThrow(function () { return window.รีเซ็ตสัตว์เลี้ยง(STUDENT_C); }, "รีเซ็ตตอนไม่มี pet ต้อง throw");
+
+    // ── 10. ความเป็นอิสระระหว่างนักเรียน — B ไม่ควรมี pet/ไม่ถูกกระทบจากสิ่งที่ A ทำ ──
+    var สถานะB = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_B);
+    log(สถานะB.totalPointsEarned === 999, "นักเรียน B มีแต้มของตัวเอง ไม่ปนกับ A", สถานะB.totalPointsEarned);
+    log(สถานะB.pet === null, "นักเรียน B ไม่มี pet (ไม่ได้รับผลจากที่ A ซื้อ/วิวัฒนาการ)");
+
+    // ── 11. window.ดึงสัตว์เลี้ยงของนักเรียน — ใช้สำหรับหน้าทัวนาเมนต์ ──
+    var ดึงมา = await window.ดึงสัตว์เลี้ยงของนักเรียน(STUDENT_A);
+    log(ดึงมา !== null && ดึงมา.speciesKey === "pixie" && ดึงมา.stage === 0, "ดึงสัตว์เลี้ยงของนักเรียน คืนข้อมูล pet ปัจจุบันถูกต้อง (หลังซื้อไข่รอบ 2)");
+    log(Object.keys(ดึงมา).sort().join(",") === "speciesKey,stage,stats,statusAbility", "คืนเฉพาะ 4 field ตามสัญญา ไม่หลุด pointsSpent ออกไป", Object.keys(ดึงมา).join(","));
+    var ดึงไม่มี = await window.ดึงสัตว์เลี้ยงของนักเรียน(STUDENT_C);
+    log(ดึงไม่มี === null, "ดึงสัตว์เลี้ยงของนักเรียนที่ไม่มี pet คืน null");
+
+  } catch (e) {
+    log(false, "เกิด exception ที่ไม่คาดคิดระหว่างรันเทส", e.message);
+    console.error(e);
+  }
+
+  summaryEl.innerHTML = "<b>" + pass + " passed</b> / " + (pass + fail) + " total" + (fail > 0 ? '<span class="fail"> — ' + fail + " FAILED</span>" : "");
+  window.__TEST_SUMMARY__ = { pass: pass, fail: fail };
+})();
+</script>
+</body>
+</html>

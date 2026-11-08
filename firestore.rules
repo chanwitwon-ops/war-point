@@ -103,5 +103,30 @@ service cloud.firestore {
         allow write: if isTeacher();
       }
     }
+
+    // ── pets: สัตว์เลี้ยง/แต้มของนักเรียนแต่ละคน (เพิ่ม 2026-11-08) ──
+    // ตาม docs/01-requirements/01-spec/20260821-02-pet-points-and-weekly-arena.md
+    // แยกออกจาก collection students เดิม (ซึ่งล็อกเป็น teacher-only ไปแล้วด้วยเหตุผล
+    // คนละเรื่อง — roster integrity) เพื่อไม่ให้กฎปนกัน — doc id ของ collection นี้คือ
+    // Firebase Auth uid ของนักเรียนเจ้าของโดยตรง (ไม่ใช่ id ปลอมแบบ students/{id} เดิม)
+    // เจ้าของแก้ pet/growthHistory ของตัวเองได้เท่านั้น (ไม่มีใครแก้ของคนอื่นได้แม้แต่ teacher
+    // เพราะเป็นแต้ม/สัตว์เลี้ยงที่ผูกกับความพยายามเรียนของนักเรียนคนนั้นโดยตรง)
+    // **หมายเหตุด้านความปลอดภัย:** กฎนี้ตรวจแค่ชนิด/ขอบเขตของข้อมูล (stage ต้องเป็นเลข
+    // 0-4) ไม่ได้ตรวจย้อนกลับว่าแต้มที่ใช้จริงพอหรือไม่ (ต้องรวมผลรวม quizAttempts ซึ่ง
+    // Firestore rules ทำ aggregate query แบบนั้นไม่ได้) เป็นโมเดลความน่าเชื่อถือเดียวกับ
+    // quizAttempts.scoreAwarded ที่มีอยู่แล้วในระบบ (เชื่อฝั่ง client เป็นหลัก ไม่ใช่ anti-cheat
+    // เต็มรูปแบบ) เหมาะกับสเกลการบ้าน/เดโมในห้องเรียน ไม่ใช่ระบบแข่งขันที่มีเดิมพันสูง
+    match /pets/{uid} {
+      allow read: if request.auth != null;
+      // [แก้ 2026-11-08] ต้องยอมรับกรณี pet == null ด้วย (ตอนรีเซ็ตสัตว์เลี้ยง) — เดิมเช็ค
+      // .stage ตรงๆ ทุกครั้งทำให้ CEL evaluation error เมื่อ pet เป็น null แล้วถูก deny
+      // ทั้งก้อนจริงในโปรดักชัน (พบระหว่างทดสอบ data layer ด้วย mock — mock เองไม่บังคับใช้
+      // security rules จึงไม่เจอตอนรันเทสต์ ต้องแก้ตรงนี้แทน)
+      allow create, update: if request.auth != null && request.auth.uid == uid &&
+        (request.resource.data.pet == null ||
+         (request.resource.data.pet.stage is int &&
+          request.resource.data.pet.stage >= 0 && request.resource.data.pet.stage <= 4));
+      allow delete: if false; // ไม่มีการลบสัตว์เลี้ยงทิ้ง — รีเซ็ตคือเขียน pet ใหม่ทับ ไม่ใช่ลบเอกสาร
+    }
   }
 }

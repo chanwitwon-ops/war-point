@@ -10,7 +10,8 @@
     { href: "quiz-attempts.html", ชื่อ: "รายการส่งงาน" },
     { href: "quiz-sets.html", ชื่อ: "รายการชุดข้อสอบ" },
     { href: "quiz-set-new.html", ชื่อ: "สร้างชุดข้อสอบ (AI)", teacherOnly: true },
-    { href: "tournament.html", ชื่อ: "ทัวนาเมนต์ (เดโม)", teacherOnly: true }
+    { href: "tournament.html", ชื่อ: "ทัวนาเมนต์ (เดโม)", teacherOnly: true },
+    { href: "pet.html", ชื่อ: "สัตว์เลี้ยงของฉัน", studentOnly: true }
   ];
 
   // ชื่อไฟล์ของหน้าที่กำลังเปิดอยู่ เอาไว้ขีดเส้นใต้เมนูที่ตรงกัน
@@ -19,7 +20,7 @@
   var html = '<div class="navbar"><span class="brand">🎮 war-point</span>';
   เมนู.forEach(function (m) {
     var active = m.href === หน้าปัจจุบัน ? " active" : "";
-    var class์ = (m.teacherOnly ? "nav-teacher-only" : "") + active;
+    var class์ = (m.teacherOnly ? "nav-teacher-only" : "") + (m.studentOnly ? "nav-student-only" : "") + active;
     html += '<a href="' + m.href + '"' + (class์ ? ' class="' + class์.trim() + '"' : "") + ">" + m.ชื่อ + "</a>";
   });
   // ช่องว่างสำหรับแสดงชื่อคนที่ล็อกอินอยู่ (เติมค่าโดย auth-guard.js)
@@ -35,6 +36,12 @@
   window.addEventListener("auth-ready", function () {
     if (window.CURRENT_USER && window.CURRENT_USER.role !== "teacher") {
       document.querySelectorAll(".nav-teacher-only").forEach(function (el) {
+        el.classList.add("hidden");
+      });
+    }
+    // เมนูเฉพาะนักเรียน (เช่น "สัตว์เลี้ยงของฉัน") ซ่อนจากครู
+    if (window.CURRENT_USER && window.CURRENT_USER.role !== "student") {
+      document.querySelectorAll(".nav-student-only").forEach(function (el) {
         el.classList.add("hidden");
       });
     }

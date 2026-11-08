@@ -46,6 +46,10 @@
 //    ห้ามกำหนดผู้ชนะไว้ล่วงหน้า แล้ว: บันทึก BattleLog ลง matches[slotKey] และเติม bracket.final
 //    ให้ครบเมื่อจบ semifinal ทั้งคู่ · ถ้าผลเสมอ (result.winner = null) ไม่ต้องเลื่อนผู้เข้ารอบ
 //    resolve เมื่อบันทึกเสร็จ (หน้านี้จะโหลดผังใหม่เอง) · reject ด้วย Error ที่ .message เป็นภาษาไทย
+//
+// 4) window.ดึงสัตว์เลี้ยงของนักเรียน(uid) → Promise<{speciesKey, stage, stats, statusAbility} | null>
+//    (มาจาก js/pet-data.js — เพิ่ม 2026-11-08 เพื่อเชื่อมสัตว์เลี้ยงจริงของนักเรียนเข้าทัวนาเมนต์
+//    แทนการพิมพ์ค่าสเตตัสสมมติเอง) คืน null ถ้านักเรียนยังไม่เคยซื้อไข่/ไม่มีสัตว์เลี้ยง
 // ─────────────────────────────────────────────────────────────
 
 (function () {
@@ -82,6 +86,14 @@
   window.คำนวณแมตช์ของทัวนาเมนต์ = window.คำนวณแมตช์ของทัวนาเมนต์ || async function (tournamentId, slotKey) {
     throw new Error("ยังไม่ได้เชื่อมระบบคำนวณแมตช์ — ยังต่อสู้จริงไม่ได้");
   };
+
+  window.ดึงสัตว์เลี้ยงของนักเรียน = window.ดึงสัตว์เลี้ยงของนักเรียน || async function (uid) {
+    throw new Error("ยังไม่ได้เชื่อมระบบสัตว์เลี้ยง (js/pet-data.js)");
+  };
+
+  // เก็บสัตว์เลี้ยงจริงที่ดึงมาได้แล้วต่อ slot (รหัสช่อง -> {speciesKey,stats,statusAbility,uid})
+  // ถ้า slot ไหนไม่มีใน object นี้ แปลว่ายังใช้ค่าสมมติจาก dropdown ตามเดิม
+  var สัตว์เลี้ยงจริงที่ดึงมา = {};
 
   function ถ้าพร้อมแล้วให้เริ่ม() {
     if (window.CURRENT_USER) {
@@ -134,13 +146,57 @@
         '<p class="slot-form-title">' + esc(ช่อง.ป้าย) + "</p>" +
         '<label for="ชื่อ-' + รหัสช่อง + '">ชื่อนักเรียน</label>' +
         '<input type="text" id="ชื่อ-' + รหัสช่อง + '" placeholder="พิมพ์ชื่อที่ใช้แสดงของนักเรียน" value="' + esc(ค่าเริ่ม ? ค่าเริ่ม.studentName : "") + '">' +
-        '<label for="สายพันธุ์-' + รหัสช่อง + '">สายพันธุ์</label>' +
+        '<label for="สายพันธุ์-' + รหัสช่อง + '">สายพันธุ์ (ค่าสมมติสำหรับเดโม)</label>' +
         '<select id="สายพันธุ์-' + รหัสช่อง + '">' + ตัวเลือกHtml + "</select>" +
+        '<label for="uid-' + รหัสช่อง + '">หรือ: Firebase UID ของนักเรียน (ใช้สัตว์เลี้ยงจริงแทนค่าสมมติด้านบน)</label>' +
+        '<div class="btn-row">' +
+        '<input type="text" id="uid-' + รหัสช่อง + '" placeholder="เว้นว่างถ้าจะใช้ค่าสมมติ">' +
+        '<button type="button" class="btn-ghost" data-fetch-pet-slot="' + esc(รหัสช่อง) + '">ดึงสัตว์เลี้ยงจริง</button>' +
+        "</div>" +
+        '<p class="hint" id="สถานะดึงสัตว์เลี้ยง-' + รหัสช่อง + '"></p>' +
         "</div>"
       );
     }).join("");
 
     ปุ่มเริ่มทัวนาเมนต์.addEventListener("click", เริ่มทัวนาเมนต์);
+    กล่องฟอร์มนักเรียน.querySelectorAll("[data-fetch-pet-slot]").forEach(function (ปุ่ม) {
+      ปุ่ม.addEventListener("click", function () { ดึงสัตว์เลี้ยงจริงของช่อง(ปุ่ม.getAttribute("data-fetch-pet-slot")); });
+    });
+  }
+
+  async function ดึงสัตว์เลี้ยงจริงของช่อง(รหัสช่อง) {
+    var ช่องUid = document.getElementById("uid-" + รหัสช่อง);
+    var ช่องสถานะ = document.getElementById("สถานะดึงสัตว์เลี้ยง-" + รหัสช่อง);
+    var uid = ช่องUid.value.trim();
+
+    if (!uid) {
+      delete สัตว์เลี้ยงจริงที่ดึงมา[รหัสช่อง];
+      ช่องสถานะ.textContent = "ไม่ได้ใส่ UID — จะใช้ค่าสมมติจาก dropdown ด้านบนแทน";
+      return;
+    }
+
+    ช่องสถานะ.textContent = "กำลังดึงข้อมูล...";
+    try {
+      var สัตว์ = await window.ดึงสัตว์เลี้ยงของนักเรียน(uid);
+      if (!สัตว์) {
+        delete สัตว์เลี้ยงจริงที่ดึงมา[รหัสช่อง];
+        ช่องสถานะ.textContent = "นักเรียนคนนี้ยังไม่มีสัตว์เลี้ยง (ยังไม่เคยซื้อไข่) — จะใช้ค่าสมมติแทน";
+        return;
+      }
+      สัตว์เลี้ยงจริงที่ดึงมา[รหัสช่อง] = {
+        uid: uid,
+        speciesKey: สัตว์.speciesKey,
+        stats: สัตว์.stats,
+        statusAbility: สัตว์.statusAbility
+      };
+      ช่องสถานะ.textContent =
+        "✅ ดึงสำเร็จ: " + ชื่อสายพันธุ์(สัตว์.speciesKey) +
+        " (" + (window.PET_STAGE_LABELS ? window.PET_STAGE_LABELS[สัตว์.stage] : "ขั้น " + สัตว์.stage) + ")";
+    } catch (err) {
+      delete สัตว์เลี้ยงจริงที่ดึงมา[รหัสช่อง];
+      ช่องสถานะ.textContent = "⚠️ ดึงไม่สำเร็จ: " + err.message;
+      console.error(err);
+    }
   }
 
   function อ่านฟอร์ม() {
@@ -166,13 +222,28 @@
       }
       ชื่อที่เห็นแล้ว[กุญแจชื่อ] = true;
 
-      var ข้อมูลสาย = window.TOURNAMENT_DEMO_SPECIES[สาย];
-      bracketData[ช่อง.key][ช่อง.side] = {
-        studentName: ชื่อ,
-        speciesKey: สาย,
-        stats: ข้อมูลสาย.stats,
-        statusAbility: ข้อมูลสาย.statusAbility
-      };
+      // ใช้สัตว์เลี้ยงจริงที่ดึงมาแล้วถ้ามี (และ UID ในช่องยังตรงกับตอนที่กดดึง — กันกรณีแก้ UID
+      // แล้วลืมกดดึงใหม่) ไม่งั้น fallback ไปใช้ค่าสมมติจาก dropdown สายพันธุ์ตามเดิม
+      var ช่องUidEl = document.getElementById("uid-" + รหัสช่อง);
+      var uidปัจจุบัน = ช่องUidEl ? ช่องUidEl.value.trim() : "";
+      var สัตว์จริง = สัตว์เลี้ยงจริงที่ดึงมา[รหัสช่อง];
+
+      if (สัตว์จริง && uidปัจจุบัน && สัตว์จริง.uid === uidปัจจุบัน) {
+        bracketData[ช่อง.key][ช่อง.side] = {
+          studentName: ชื่อ,
+          speciesKey: สัตว์จริง.speciesKey,
+          stats: สัตว์จริง.stats,
+          statusAbility: สัตว์จริง.statusAbility
+        };
+      } else {
+        var ข้อมูลสาย = window.TOURNAMENT_DEMO_SPECIES[สาย];
+        bracketData[ช่อง.key][ช่อง.side] = {
+          studentName: ชื่อ,
+          speciesKey: สาย,
+          stats: ข้อมูลสาย.stats,
+          statusAbility: ข้อมูลสาย.statusAbility
+        };
+      }
     }
 
     return { bracketData: bracketData };

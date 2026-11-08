@@ -1,10 +1,13 @@
-// ─────────────────────────────────────────────────────────────
+﻿// ─────────────────────────────────────────────────────────────
 // mock-firestore.js — จำลอง Firestore แบบ in-memory เพื่อทดสอบ js/tournament-data.js
-// ใน browser จริงโดยไม่ต้องมี Firebase project จริง (scratch tool ทดสอบเท่านั้น)
-// ให้ API surface ตรงกับที่ js/firebase.js ประกาศไว้จริง: fsDoc/fsCollection/fsSetDoc/fsGetDoc/fsUpdateDoc
+// และ js/pet-data.js ใน browser จริงโดยไม่ต้องมี Firebase project จริง (scratch tool
+// ทดสอบเท่านั้น) ให้ API surface ตรงกับที่ js/firebase.js ประกาศไว้จริง: fsDoc/fsCollection/
+// fsSetDoc/fsGetDoc/fsUpdateDoc/fsWhere/fsQuery/fsGetDocs (เพิ่ม 2026-11-08 สำหรับ pet-data.js
+// ที่ query quizAttempts ด้วย where 2 เงื่อนไข)
 // ─────────────────────────────────────────────────────────────
 (function () {
   var store = {};
+  var collections = {}; // collectionPath -> { docId: data } — ไว้ทำ query ข้ามเอกสาร
   var counter = 0;
 
   function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
@@ -18,17 +21,65 @@
   window.fsDoc = function (a, b) {
     if (a && a.__type === "collection" && b === undefined) {
       var newId = "auto_" + (++counter);
-      return { __type: "doc", path: a.path + "/" + newId, id: newId };
+      return { __type: "doc", path: a.path + "/" + newId, id: newId, collectionPath: a.path };
     }
     var segments = Array.prototype.slice.call(arguments, 1);
     var path = segments.join("/");
     var id = segments[segments.length - 1];
-    return { __type: "doc", path: path, id: id };
+    var collectionPath = segments.slice(0, -1).join("/");
+    return { __type: "doc", path: path, id: id, collectionPath: collectionPath };
   };
 
-  window.fsSetDoc = function (docRef, data) {
-    store[docRef.path] = clone(data);
+  function เก็บลงดัชนีคอลเลกชัน(docRef, data) {
+    if (!docRef.collectionPath) return;
+    if (!collections[docRef.collectionPath]) collections[docRef.collectionPath] = {};
+    collections[docRef.collectionPath][docRef.id] = data;
+  }
+
+  window.fsSetDoc = function (docRef, data, opts) {
+    var merge = opts && opts.merge;
+    var เดิม = store[docRef.path];
+    var ใหม่ = merge && เดิม ? Object.assign({}, เดิม, clone(data)) : clone(data);
+    store[docRef.path] = ใหม่;
+    เก็บลงดัชนีคอลเลกชัน(docRef, ใหม่);
     return Promise.resolve();
+  };
+
+  // ── query ง่ายๆ: รองรับ fsWhere(field, "==", value) หลายเงื่อนไข (AND) เท่านั้น ──
+  window.fsWhere = function (field, op, value) {
+    return { __type: "where", field: field, op: op, value: value };
+  };
+  window.fsOrderBy = function (field, dir) {
+    return { __type: "orderBy", field: field, dir: dir || "asc" };
+  };
+  window.fsQuery = function (collectionRef) {
+    var clauses = Array.prototype.slice.call(arguments, 1);
+    return { __type: "query", collectionPath: collectionRef.path, clauses: clauses };
+  };
+  window.fsGetDocs = function (collectionRefOrQuery) {
+    var collectionPath = collectionRefOrQuery.collectionPath || collectionRefOrQuery.path;
+    var wheres = (collectionRefOrQuery.clauses || []).filter(function (c) { return c.__type === "where"; });
+    var orderBys = (collectionRefOrQuery.clauses || []).filter(function (c) { return c.__type === "orderBy"; });
+
+    var ทั้งหมด = collections[collectionPath] || {};
+    var ผลลัพธ์ = Object.keys(ทั้งหมด).map(function (id) { return { id: id, data: ทั้งหมด[id] }; });
+
+    wheres.forEach(function (w) {
+      ผลลัพธ์ = ผลลัพธ์.filter(function (d) { return d.data[w.field] === w.value; });
+    });
+    orderBys.forEach(function (o) {
+      ผลลัพธ์.sort(function (a, b) {
+        var av = a.data[o.field], bv = b.data[o.field];
+        var cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        return o.dir === "desc" ? -cmp : cmp;
+      });
+    });
+
+    return Promise.resolve({
+      forEach: function (fn) { ผลลัพธ์.forEach(function (d) { fn({ id: d.id, data: function () { return clone(d.data); } }); }); },
+      docs: ผลลัพธ์.map(function (d) { return { id: d.id, data: function () { return clone(d.data); } }; }),
+      size: ผลลัพธ์.length
+    });
   };
 
   window.fsGetDoc = function (docRef) {
@@ -56,6 +107,7 @@
       }
       obj[parts[parts.length - 1]] = partial[key];
     });
+    เก็บลงดัชนีคอลเลกชัน(docRef, target);
     return Promise.resolve();
   };
 

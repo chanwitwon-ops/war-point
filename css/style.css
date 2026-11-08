@@ -496,3 +496,16 @@ select {
   .bracket-connector { display: none; }
   .bracket-col-sf .bracket-match::after { display: none; }
 }
+
+/* ── หน้าสัตว์เลี้ยงของฉัน (pet.html · js/pet.js) ──
+   ใช้เฉพาะ token ที่มีอยู่แล้วใน :root (ไม่เพิ่ม token ใหม่)
+   หมายเหตุ: DESIGN.md ข้อ 1.3 กำหนดให้หน้าสัตว์เลี้ยงเป็นโซนอารีน่า แต่ token โซนอารีน่ายังไม่มีในไฟล์นี้
+   จึงใช้โซนเรียนไปก่อน (เหมือน tournament.html) รอยืนยันก่อนเพิ่ม token */
+.pet-card .pet-species { margin: 0 0 4px; font-size: 14px; color: var(--ink-learn-muted); }
+.pet-card .pet-stage-name { margin: 0 0 10px; font-size: 17px; }
+.progress-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.progress-label { font-size: 14px; color: var(--ink-learn-muted); white-space: nowrap; }
+.progress-track { flex: 1 1 180px; height: 14px; border-radius: 999px; background: var(--surface-learn-alt); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--state-success-on-learn); border-radius: 999px; transition: width 0.3s ease; }
+.table-scroll { overflow-x: auto; max-width: 100%; }
+.table-scroll table { min-width: 320px; }
