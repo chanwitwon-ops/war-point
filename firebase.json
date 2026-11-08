@@ -4,6 +4,11 @@
     "ignore": [
       "firebase.json",
       "**/.*",
+      "**/.*/**",
+      "tests/**",
+      "playwright.config.js",
+      "test-results.md",
+      "serve.json",
       "**/node_modules/**",
       "package.json",
       "package-lock.json",
