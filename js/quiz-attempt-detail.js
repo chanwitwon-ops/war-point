@@ -57,6 +57,7 @@
       });
 
       วาดงาน();
+      วาดกล่องแต้มของนักเรียน();
       วาดรีวิว();
       กล่องรีวิว.classList.remove("hidden");
 
@@ -154,6 +155,12 @@
 
       งาน.status = "graded";
       งาน.scoreAwarded = คะแนน;
+
+      // อัปเดตกระดานเกียรติยศหลังตรวจงาน (สเปก 09) — ถ้าพลาดไม่ขวางการตรวจงาน
+      // กระดานจะคำนวณใหม่อีกครั้งเมื่อครูเปิดหน้าแรกทัวนาเมนต์
+      if (typeof window.คำนวณและบันทึกกระดานคะแนน === "function") {
+        window.คำนวณและบันทึกกระดานคะแนน().catch(function (e) { console.warn(e); });
+      }
       วาดงาน();
       await โหลดข้อมูล();
     } catch (err) {
@@ -253,6 +260,34 @@
   function เตือนสรุป(ข้อความ) {
     กล่องเตือนสรุป.textContent = "⚠️ " + ข้อความ;
     กล่องเตือนสรุป.classList.remove("hidden");
+  }
+
+  // ── แต้มที่ได้จากงานนี้ (เฉพาะนักเรียนเจ้าของงาน — ครูและนักเรียนคนอื่นไม่เห็นกล่องนี้) ──
+  // 1 คะแนน = 1 แต้ม · ใช้ scoreAwarded ที่โหลดมาในหน้านี้แล้ว ไม่ query เพิ่ม
+  function วาดกล่องแต้มของนักเรียน() {
+    var กล่องแต้ม = document.getElementById("กล่องแต้ม");
+    var เป็นเจ้าของ = window.CURRENT_USER.role === "student" && งาน.studentId === window.CURRENT_USER.uid;
+    if (!เป็นเจ้าของ) {
+      กล่องแต้ม.innerHTML = "";
+      return;
+    }
+
+    if (งาน.status === "graded") {
+      กล่องแต้ม.innerHTML =
+        '<div class="card">' +
+        '<p class="section-title">ได้ ' + (งาน.scoreAwarded == null ? "—" : esc(งาน.scoreAwarded)) + " แต้ม</p>" +
+        '<p class="hint">(1 คะแนน = 1 แต้ม)</p>' +
+        '<div class="btn-row"><a class="btn-ghost" href="pet.html">ไปเลี้ยงสัตว์เลี้ยง →</a></div>' +
+        "</div>";
+    } else if (งาน.status === "pending_review") {
+      กล่องแต้ม.innerHTML =
+        '<div class="card">' +
+        '<p class="section-title">รอครูตรวจ</p>' +
+        '<p class="hint">ครูตรวจแล้วจะได้แต้ม</p>' +
+        "</div>";
+    } else {
+      กล่องแต้ม.innerHTML = "";
+    }
   }
 
   function วาดรีวิว() {

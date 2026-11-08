@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบกฎกระดานเกียรติยศ (สเปก 09)</title>
+  <style>body{font-family:sans-serif;padding:16px} .ok{color:#0F7A3D} .ng{color:#B3231C}</style>
+</head>
+<body>
+  <h1>ทดสอบกฎกระดานเกียรติยศ</h1>
+  <p id="สรุป">กำลังรัน…</p>
+  <ul id="ผล"></ul>
+  <!-- ทดสอบ window.เลือกครึ่งบน (ฟังก์ชันบริสุทธิ์) + โหลดทำเนียบแชมป์ บน mock Firestore -->
+  <script src="../../js/util.js"></script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script src="../../js/leaderboard-data.js"></script>
+  <script>
+  (async function () {
+    var ผ่าน = 0, ทั้งหมด = 0, ul = document.getElementById("ผล");
+    function ตรวจ(ชื่อ, เงื่อนไข, รายละเอียด) {
+      ทั้งหมด++; if (เงื่อนไข) ผ่าน++;
+      var li = document.createElement("li");
+      li.className = เงื่อนไข ? "ok" : "ng";
+      li.textContent = (เงื่อนไข ? "✓ " : "✗ ") + ชื่อ + (รายละเอียด ? " — " + รายละเอียด : "");
+      ul.appendChild(li);
+    }
+    function ค(n, s) { return { uid: n, nickname: n, totalScore: s, attemptIds: [n + "-a"] }; }
+    function ชื่อของ(ผล) { return ผล.map(function (x) { return x.nickname; }).join(","); }
+    var ล = window.เลือกครึ่งบน;
+
+    // 1) เลขคี่ปัดขึ้น: 5 คน → ครึ่งบน 3 คน
+    var r1 = ล([ค("a", 50), ค("b", 40), ค("c", 30), ค("d", 20), ค("e", 10)]);
+    ตรวจ("5 คน (คี่) ปัดขึ้นเป็น 3 คน", r1.length === 3 && ชื่อของ(r1) === "a,b,c", ชื่อของ(r1));
+
+    // 2) เลขคู่: 4 คน → 2 คน
+    var r2 = ล([ค("a", 50), ค("b", 40), ค("c", 30), ค("d", 20)]);
+    ตรวจ("4 คน (คู่) โชว์ 2 คน", r2.length === 2, ชื่อของ(r2));
+
+    // 3) คะแนนเท่ากันตรงเส้นแบ่ง → ขึ้นโชว์ทุกคน
+    var r3 = ล([ค("a", 50), ค("b", 30), ค("c", 30), ค("d", 30), ค("e", 10), ค("f", 5)]);
+    ตรวจ("เท่ากันที่เส้นแบ่ง (6 คน ครึ่ง=3) ขึ้นโชว์ 4 คน", r3.length === 4, ชื่อของ(r3));
+    ตรวจ("คะแนนเท่ากันได้อันดับเดียวกัน (1,2,2,2)", r3.map(function (x) { return x.rank; }).join(",") === "1,2,2,2",
+      r3.map(function (x) { return x.rank; }).join(","));
+
+    // 4) คะแนน 0 นับเป็นคนในห้องตอนหาครึ่ง แต่ไม่ขึ้นโชว์
+    var r4 = ล([ค("a", 10), ค("b", 0), ค("c", 0), ค("d", 0)]);
+    ตรวจ("4 คน ได้คะแนนคนเดียว → ครึ่ง=2 แต่โชว์แค่ 1 (0 ไม่โชว์)", r4.length === 1 && r4[0].nickname === "a", ชื่อของ(r4));
+    var r5 = ล([ค("a", 0), ค("b", 0)]);
+    ตรวจ("ทุกคนได้ 0 → ไม่มีใครขึ้นโชว์", r5.length === 0);
+    var r6 = ล([ค("a", 9), ค("b", 8), ค("c", 7), ค("d", 0), ค("e", 0), ค("f", 0), ค("g", 0)]);
+    ตรวจ("7 คน (มี 0 สี่คน) ครึ่ง=4 → โชว์ 3 คนที่มีคะแนน", r6.length === 3, ชื่อของ(r6));
+
+    // 5) ห้องว่าง / 1 คน / 31 คน
+    ตรวจ("ห้องว่าง → []", ล([]).length === 0);
+    ตรวจ("1 คน มีคะแนน → โชว์ 1", ล([ค("a", 3)]).length === 1);
+    var ห้อง31 = []; for (var i = 0; i < 31; i++) ห้อง31.push(ค("s" + i, 100 - i));
+    ตรวจ("31 คน คะแนนไม่ซ้ำ → โชว์ 16 คน", ล(ห้อง31).length === 16, String(ล(ห้อง31).length));
+
+    // 6) ไม่เปลี่ยนลำดับ input และพก attemptIds ไปด้วย
+    ตรวจ("ผลมี attemptIds ให้ตรวจย้อน", r1[0].attemptIds && r1[0].attemptIds[0] === "a-a");
+
+    // 7) ทำเนียบแชมป์: แบ่งตามสัปดาห์ (จันทร์–อาทิตย์), หลายรายการในสัปดาห์เดียว, ครูตัดสิน, ยังไม่จบไม่นับ
+    function slot(n) { return { studentUid: n, studentName: n, speciesKey: "pixie", stage: 2, stats: {} }; }
+    async function ทัวร์(id, เวลา, ชนะ, ครูตัดสิน) {
+      var f = { slotA: slot("A-" + id), slotB: slot("B-" + id), matchId: id + "-final", winnerSlot: ชนะ };
+      if (ครูตัดสิน) f.decidedByTeacher = true;
+      await window.fsSetDoc(window.fsDoc(window.db, "tournaments", id), { createdAt: เวลา, final: f });
+    }
+    await ทัวร์("t1", "2026-11-03 10:00", "slotA", false); // อังคาร สัปดาห์ 2–8 พ.ย.
+    await ทัวร์("t2", "2026-11-08 09:00", "slotB", true);  // อาทิตย์ สัปดาห์เดียวกัน
+    await ทัวร์("t3", "2026-11-09 09:00", "slotA", false); // จันทร์ สัปดาห์ใหม่
+    await ทัวร์("t4", "2026-11-10 09:00", null, false);    // ยังไม่มีแชมป์
+    var สัปดาห์ = await window.โหลดทำเนียบแชมป์();
+    ตรวจ("มี 2 สัปดาห์ (ทัวนาเมนต์ที่ยังไม่จบไม่นับ)", สัปดาห์.length === 2, String(สัปดาห์.length));
+    ตรวจ("สัปดาห์ใหม่สุดก่อน: 9 พ.ย. – 15 พ.ย. 2569", สัปดาห์[0].weekLabel === "9 พ.ย. – 15 พ.ย. 2569", สัปดาห์[0].weekLabel);
+    ตรวจ("สัปดาห์ 2–8 พ.ย. มีแชมป์ 2 รายการ", สัปดาห์[1].champions.length === 2 && สัปดาห์[1].weekLabel === "2 พ.ย. – 8 พ.ย. 2569", สัปดาห์[1].weekLabel);
+    var t2 = สัปดาห์[1].champions.filter(function (c) { return c.tournamentId === "t2"; })[0];
+    ตรวจ("แชมป์ t2 = ฝั่ง B และมีป้ายครูตัดสิน", t2 && t2.championName === "B-t2" && t2.decidedByTeacher === true);
+
+    document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ทั้งหมด;
+    window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ทั้งหมด };
+  })().catch(function (e) { document.getElementById("สรุป").textContent = "พัง: " + e.message; console.error(e); });
+  </script>
+</body>
+</html>

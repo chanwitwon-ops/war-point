@@ -45,7 +45,7 @@
         email: email,
         role: "student"
       });
-      location.href = "quiz-attempts.html";
+      location.href = "home.html";
     } catch (err) {
       เตือน("สมัครไม่สำเร็จ: " + แปลข้อผิดพลาด(err));
       ปุ่มสมัคร.disabled = false;

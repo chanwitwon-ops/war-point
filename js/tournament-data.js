@@ -13,7 +13,8 @@
 //     semifinal2: { slotA, slotB, matchId, winnerSlot },
 //     final:      { slotA, slotB, matchId, winnerSlot }   // slotA/slotB เริ่มเป็น null
 //   }
-//   โดย slotA/slotB (เมื่อมีผู้เข้าแข่งขัน) = { studentName, speciesKey, stats, statusAbility }
+//   โดย slotA/slotB (เมื่อมีผู้เข้าแข่งขัน) = { studentUid, studentName, speciesKey, stage, stats:{SPD,ATK,ACC,EVA,DEF,HP} }
+//   decidedByTeacher: true จะมีในคู่ที่ครูเลือกผู้ชนะเอง (window.ครูเลือกผู้ชนะ)
 //   matchId ชี้ไปที่ tournaments/{id}/matches/{matchId} (ถ้ายังไม่คำนวณ = null)
 //   winnerSlot = "slotA" | "slotB" | null (null = ยังไม่คำนวณ หรือเสมอจริง รอครูชี้ขาด)
 //
@@ -25,19 +26,18 @@
 (function () {
   var SLOT_KEYS = ["semifinal1", "semifinal2", "final"];
 
+  var STAT_KEYS = ["SPD", "ATK", "ACC", "EVA", "DEF", "HP"];
+
   // ── helper: ตัดสำเนาข้อมูลผู้เข้าแข่งขัน 1 ช่อง ให้เหลือเฉพาะ field ที่สเปกกำหนด ──
   function ตัดสำเนาช่อง(ช่อง) {
+    var stats = {};
+    STAT_KEYS.forEach(function (k) { stats[k] = ช่อง.stats[k]; });
     return {
+      studentUid: ช่อง.studentUid,
       studentName: ช่อง.studentName,
       speciesKey: ช่อง.speciesKey,
-      stats: {
-        SPD: ช่อง.stats.SPD,
-        ATK: ช่อง.stats.ATK,
-        ACC: ช่อง.stats.ACC,
-        DEF: ช่อง.stats.DEF,
-        HP: ช่อง.stats.HP
-      },
-      statusAbility: ช่อง.statusAbility != null ? ช่อง.statusAbility : null
+      stage: ช่อง.stage,
+      stats: stats
     };
   }
 
@@ -48,21 +48,28 @@
     }
     ["slotA", "slotB"].forEach(function (ฝั่ง) {
       var ช่อง = คู่[ฝั่ง];
-      if (!ช่อง || !ช่อง.studentName || !ช่อง.speciesKey || !ช่อง.stats) {
-        throw new Error(key + "." + ฝั่ง + " ข้อมูลไม่ครบ (ต้องมี studentName, speciesKey, stats)");
+      var ชื่อช่อง = key + "." + ฝั่ง;
+      if (!ช่อง || !ช่อง.studentUid || !ช่อง.studentName || !ช่อง.speciesKey || !ช่อง.stats) {
+        throw new Error(ชื่อช่อง + " ข้อมูลไม่ครบ (ต้องมี studentUid, studentName, speciesKey, stage, stats)");
       }
+      if (typeof ช่อง.stage !== "number" || ช่อง.stage % 1 !== 0 || ช่อง.stage < 0 || ช่อง.stage > 4) {
+        throw new Error(ชื่อช่อง + " stage ต้องเป็นจำนวนเต็ม 0-4");
+      }
+      STAT_KEYS.forEach(function (k) {
+        if (typeof ช่อง.stats[k] !== "number" || isNaN(ช่อง.stats[k])) {
+          throw new Error(ชื่อช่อง + " stats ไม่ครบ — ขาดค่า " + k);
+        }
+      });
     });
   }
 
   // ── helper: แปลงช่อง bracket ให้เป็นรูปแบบ "ฝ่ายต่อสู้" ที่ window.คำนวณผลการต่อสู้ ต้องการ ──
   function แปลงช่องเป็นฝ่ายต่อสู้(ช่อง) {
     return {
-      studentId: ช่อง.studentName, // เดโมนี้ตั้งชื่อนักเรียนด้วยมือ ไม่ได้ผูกกับ uid ล็อกอิน
+      studentId: ช่อง.studentUid,
       petName: ช่อง.studentName,
       species: ช่อง.speciesKey,
-      stats: ช่อง.stats,
-      statusAbility: ช่อง.statusAbility || null,
-      item: null // เดโมนี้ไม่ใช้ไอเทมสนับสนุน
+      stats: ช่อง.stats
     };
   }
 
@@ -73,6 +80,16 @@
   window.สร้างทัวนาเมนต์ = async function (bracketData) {
     ตรวจสอบคู่(bracketData, "semifinal1");
     ตรวจสอบคู่(bracketData, "semifinal2");
+
+    var uidทั้งหมด = [
+      bracketData.semifinal1.slotA.studentUid, bracketData.semifinal1.slotB.studentUid,
+      bracketData.semifinal2.slotA.studentUid, bracketData.semifinal2.slotB.studentUid
+    ];
+    uidทั้งหมด.forEach(function (u, i) {
+      if (uidทั้งหมด.indexOf(u) !== i) {
+        throw new Error("ผู้เข้าแข่งขันซ้ำกัน — studentUid ทั้ง 4 คนต้องไม่ซ้ำกัน");
+      }
+    });
 
     var ข้อมูลใหม่ = {
       createdByTeacherId: window.CURRENT_USER ? window.CURRENT_USER.uid : null,
@@ -135,7 +152,6 @@
     try {
       var inputข้อมูล = {
         matchId: matchId,
-        mode: "knockout",
         sideA: แปลงช่องเป็นฝ่ายต่อสู้(คู่แข่งขัน.slotA),
         sideB: แปลงช่องเป็นฝ่ายต่อสู้(คู่แข่งขัน.slotB)
       };
@@ -151,7 +167,7 @@
       var winnerSlotKey = null;
       if (บันทึกผล.result.winner === "A") winnerSlotKey = "slotA";
       else if (บันทึกผล.result.winner === "B") winnerSlotKey = "slotB";
-      // ผลเสมอจริง (result.reason === "teacher_decides") -> winnerSlotKey เป็น null
+      // ผลเสมอจริง (result.winner === null, reason "teacher_decides") -> winnerSlotKey เป็น null
       // ตามสเปกหัวข้อ จ. ให้ครูเป็นผู้ชี้ขาดเอง ไม่สุ่มผู้ชนะ — ฟังก์ชันนี้ไม่ตัดสินแทน
 
       var ค่าที่จะอัปเดต = {};
@@ -202,6 +218,115 @@
     } catch (err) {
       console.error(err);
       throw new Error("โหลดทัวนาเมนต์ไม่สำเร็จ: " + err.message);
+    }
+  };
+
+  // ── window.ครูเลือกผู้ชนะ(tournamentId, slotKey, winnerSlot) ──
+  // ใช้เมื่อแมตช์คำนวณแล้วแต่ result.winner === null (%เลือดเท่ากันเป๊ะ) เท่านั้น
+  window.ครูเลือกผู้ชนะ = async function (tournamentId, slotKey, winnerSlot) {
+    if (SLOT_KEYS.indexOf(slotKey) === -1) {
+      throw new Error('slotKey ไม่ถูกต้อง — ต้องเป็น "semifinal1", "semifinal2" หรือ "final" เท่านั้น');
+    }
+    if (winnerSlot !== "slotA" && winnerSlot !== "slotB") {
+      throw new Error('winnerSlot ไม่ถูกต้อง — ต้องเป็น "slotA" หรือ "slotB" เท่านั้น');
+    }
+
+    var เอกสารอ้างอิง = window.fsDoc(window.db, "tournaments", tournamentId);
+    var สแนปช็อต = await window.fsGetDoc(เอกสารอ้างอิง);
+    if (!สแนปช็อต.exists()) {
+      throw new Error("ไม่พบทัวนาเมนต์นี้ — รหัส: " + tournamentId);
+    }
+    var คู่ = สแนปช็อต.data()[slotKey];
+    if (!คู่ || !คู่.matchId) {
+      throw new Error("แมตช์นี้ยังไม่ได้คำนวณผล — ครูเลือกผู้ชนะได้เฉพาะแมตช์ที่เสมอจริงหลังคำนวณแล้ว");
+    }
+
+    var สแนปช็อตแมตช์ = await window.fsGetDoc(
+      window.fsDoc(window.db, "tournaments", tournamentId, "matches", คู่.matchId)
+    );
+    if (!สแนปช็อตแมตช์.exists()) {
+      throw new Error("ไม่พบบันทึกผลแมตช์ — รหัส: " + คู่.matchId);
+    }
+    var ผล = สแนปช็อตแมตช์.data().result;
+    if (!ผล || ผล.winner !== null) {
+      throw new Error("แมตช์นี้มีผู้ชนะจากการคำนวณแล้ว ครูเลือกผู้ชนะเองไม่ได้");
+    }
+    if (คู่.winnerSlot) {
+      throw new Error("แมตช์นี้ครูเลือกผู้ชนะไปแล้ว แก้ซ้ำไม่ได้");
+    }
+
+    try {
+      var ค่าที่จะอัปเดต = {};
+      ค่าที่จะอัปเดต[slotKey + ".winnerSlot"] = winnerSlot;
+      ค่าที่จะอัปเดต[slotKey + ".decidedByTeacher"] = true;
+      if (slotKey === "semifinal1" || slotKey === "semifinal2") {
+        var ปลายทาง = slotKey === "semifinal1" ? "final.slotA" : "final.slotB";
+        ค่าที่จะอัปเดต[ปลายทาง] = ตัดสำเนาช่อง(คู่[winnerSlot]);
+      }
+      await window.fsUpdateDoc(เอกสารอ้างอิง, ค่าที่จะอัปเดต);
+    } catch (err) {
+      console.error(err);
+      throw new Error("บันทึกผู้ชนะไม่สำเร็จ: " + err.message);
+    }
+  };
+
+  function ชื่อแชมป์ของ(ข้อมูล) {
+    var f = ข้อมูล.final;
+    if (f && f.winnerSlot && f[f.winnerSlot]) return f[f.winnerSlot].studentName;
+    return null;
+  }
+
+  // ── window.โหลดรายการทัวนาเมนต์() ──
+  // คืน Promise<[{ id, createdAt, createdByTeacherName, championName }]> ใหม่สุดก่อน
+  window.โหลดรายการทัวนาเมนต์ = async function () {
+    try {
+      var ผล = await window.fsGetDocs(
+        window.fsQuery(window.fsCollection(window.db, "tournaments"), window.fsOrderBy("createdAt", "desc"))
+      );
+      var รายการ = [];
+      ผล.forEach(function (d) {
+        var ข้อมูล = d.data();
+        รายการ.push({
+          id: d.id,
+          createdAt: ข้อมูล.createdAt,
+          createdByTeacherName: ข้อมูล.createdByTeacherName != null ? ข้อมูล.createdByTeacherName : null,
+          championName: ชื่อแชมป์ของ(ข้อมูล)
+        });
+      });
+      return รายการ;
+    } catch (err) {
+      console.error(err);
+      throw new Error("โหลดรายการทัวนาเมนต์ไม่สำเร็จ: " + err.message);
+    }
+  };
+
+  // ── window.โหลดรายชื่อนักเรียนสำหรับทัวนาเมนต์() ──
+  // คืน Promise<[{ uid, name, pet: {speciesKey, stage, stats} | null }]> เรียงชื่อภาษาไทย
+  window.โหลดรายชื่อนักเรียนสำหรับทัวนาเมนต์ = async function () {
+    try {
+      var ผล = await window.fsGetDocs(
+        window.fsQuery(window.fsCollection(window.db, "users"), window.fsWhere("role", "==", "student"))
+      );
+      var นักเรียน = [];
+      ผล.forEach(function (d) {
+        นักเรียน.push({ uid: d.id, name: d.data().name });
+      });
+
+      var รายการ = await Promise.all(นักเรียน.map(async function (n) {
+        var ส = await window.fsGetDoc(window.fsDoc(window.db, "pets", n.uid));
+        var pet = null;
+        if (ส.exists() && ส.data().pet) {
+          var p = ส.data().pet;
+          pet = { speciesKey: p.speciesKey, stage: p.stage, stats: p.stats };
+        }
+        return { uid: n.uid, name: n.name, pet: pet };
+      }));
+
+      รายการ.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), "th"); });
+      return รายการ;
+    } catch (err) {
+      console.error(err);
+      throw new Error("โหลดรายชื่อนักเรียนไม่สำเร็จ: " + err.message);
     }
   };
 })();

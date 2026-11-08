@@ -9,7 +9,7 @@ async function login(page, account) {
   await page.locator("#email").fill(account.email);
   await page.locator("#password").fill(account.password);
   await page.locator("#ปุ่มล็อกอิน").click();
-  await page.waitForURL(/quiz-attempts(\.html)?$/);
+  await page.waitForURL(/home(\.html)?$/); // หลังล็อกอินไปหน้าหลักแยกบทบาท (2026-11-08)
 }
 
 async function logout(page) {

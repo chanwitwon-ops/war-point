@@ -58,13 +58,15 @@
 <div id="log"></div>
 
 <script>
+// [ย้ายไฟล์ 2026-11-08] คลิปย้ายไปอยู่ assets/pets/pixie/ เพื่อให้ขึ้น Firebase Hosting ได้
+// (experiments/** ไม่ถูก deploy) — หน้าดูผลแมตช์จริงใช้ไฟล์ชุดเดียวกันผ่าน js/pet-animation.js
 const CLIPS = {
-  idle: "clips/idle.mp4",
-  cast: "clips/cast.mp4",
-  hit:  "clips/hit.mp4",
-  dodge:"clips/dodge.mp4"
+  idle: "../../assets/pets/pixie/idle.mp4",
+  cast: "../../assets/pets/pixie/cast.mp4",
+  hit:  "../../assets/pets/pixie/hit.mp4",
+  dodge:"../../assets/pets/pixie/dodge.mp4"
 };
-const PROJECTILE_SRC = "clips/projectile.mp4";
+const PROJECTILE_SRC = "../../assets/pets/pixie/projectile.mp4";
 
 // Seconds to skip into each clip before its real reaction motion starts (measured by eye from
 // extracted frames). The dodge clip in particular has ~1.7s of dead idle-looking footage before

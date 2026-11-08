@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>harness: tournament.html (mock)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness รัน js/tournament.js ของจริงบน mock Firestore — ?role=teacher|student, ?reset=1 -->
+  <div class="container">
+    <h1>ทัวนาเมนต์แพ้คัดออก <small>(harness)</small></h1>
+    <div id="กล่องกำลังโหลด" class="card"><p>กำลังโหลด…</p></div>
+    <div id="ที่วางหลัก"></div>
+  </div>
+  <script src="../../js/util.js"></script>
+  <script src="../../js/pet-config.js"></script>
+  <script src="../../js/combat-engine.js"></script>
+  <script>window.__MOCK_PERSIST = true;</script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script>delete window.CURRENT_USER;</script>
+  <script src="../../js/pet-data.js"></script>
+  <script src="../../js/tournament-data.js"></script>
+  <script src="../../js/leaderboard-data.js"></script>
+  <script src="../../js/tournament.js"></script>
+  <script src="seed.js"></script>
+</body>
+</html>

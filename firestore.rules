@@ -104,6 +104,16 @@ service cloud.firestore {
       }
     }
 
+    // ── leaderboard: ผลสรุปกระดานคะแนน (เพิ่ม 2026-11-08) ──
+    // ตาม docs/01-requirements/01-spec/20261108-09-leaderboard.md (Gap G-LB-01)
+    // นักเรียนอ่าน quizAttempts ของคนอื่นไม่ได้ จึงให้ครูคำนวณแล้วบันทึกผลสรุปไว้ที่นี่ —
+    // เก็บเฉพาะคนครึ่งบนที่ขึ้นโชว์ (คนครึ่งล่างไม่มีข้อมูลในเอกสารนี้เลย) พร้อม attemptIds ให้ตรวจย้อนได้
+    // อ่านได้ทุกคนที่ล็อกอิน (ต้องล็อกอินก่อนถึงจะเห็น) · เขียนได้เฉพาะครู — นักเรียนแก้คะแนนตัวเองไม่ได้
+    match /leaderboard/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isTeacher();
+    }
+
     // ── pets: สัตว์เลี้ยง/แต้มของนักเรียนแต่ละคน (เพิ่ม 2026-11-08) ──
     // ตาม docs/01-requirements/01-spec/20260821-02-pet-points-and-weekly-arena.md
     // แยกออกจาก collection students เดิม (ซึ่งล็อกเป็น teacher-only ไปแล้วด้วยเหตุผล

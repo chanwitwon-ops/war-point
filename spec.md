@@ -12,7 +12,12 @@
 |---|---|---|
 | `login.html` | เข้าสู่ระบบ (Firebase Auth อีเมล/รหัสผ่าน) | ไม่ต้องล็อกอิน |
 | `register.html` | สมัครสมาชิก — ทุกบัญชีเริ่มต้น `role: "student"` เสมอ (ยกระดับเป็น teacher ต้องแก้ผ่าน Firebase Console) | ไม่ต้องล็อกอิน |
-| `index.html` | redirect ไป `quiz-attempts.html` | ไม่ต้องล็อกอิน |
+| `index.html` | redirect ไป `home.html` (เดิมไป `quiz-attempts.html` — เปลี่ยน 2026-11-08) | ไม่ต้องล็อกอิน |
+| `home.html` **(เพิ่ม 2026-11-08)** | หน้าหลักแยกบทบาท — **student**: แต้ม, สัตว์เลี้ยง, ชุดข้อสอบที่ยังไม่ทำ, ทัวนาเมนต์ล่าสุด · **teacher**: จำนวนงานรอตรวจ, ชุดข้อสอบ, ทัวนาเมนต์ | ต้องล็อกอิน |
+| `pet.html` **(เพิ่ม 2026-11-08)** | สัตว์เลี้ยงของนักเรียน — ซื้อไข่/วิวัฒนาการ/รีเซ็ตด้วยแต้ม (คะแนนที่ตรวจแล้ว 1 คะแนน = 1 แต้ม) | ต้องล็อกอิน (เฉพาะ student) |
+| `tournament.html` **(เพิ่ม 2026-11-08)** | กระดานเกียรติยศบนสุด (คะแนนสูงสุดครึ่งบนของห้อง + แชมป์รายสัปดาห์ ตามสเปก 09) · ทัวนาเมนต์แพ้คัดออก 4 คน — teacher สร้าง (เลือกนักเรียนจากรายชื่อ)/กดต่อสู้/เลือกผู้ชนะเมื่อเสมอ · student ดูผังอย่างเดียว | ต้องล็อกอิน |
+| `tournament-match.html` **(เพิ่ม 2026-11-08)** | ดูรีเพลย์ 1 แมตช์พร้อมแอนิเมชัน Pixie (ทุกบทบาทดูได้) | ต้องล็อกอิน |
+| `quiz-set-edit.html` **(เพิ่ม 2026-11-04)** | แก้ไข/ลบชุดข้อสอบ (เฉพาะ `mcq`) | ต้องล็อกอิน (เฉพาะ teacher) |
 | `quiz-attempts.html` | รายการส่งงาน/ทำแบบทดสอบ — **student**: เห็นเฉพาะของตัวเอง (query กรองด้วย `studentId == uid`) · **teacher**: เห็นของทุกคน จัดเป็น**กลุ่ม/accordion แยกตามนักเรียน** (หัวข้อกลุ่ม = `studentNickname`, กดขยายดูรายการงานของนักเรียนคนนั้น) กันงานของหลายคนปนกันมั่วเมื่อรายการเยอะ | ต้องล็อกอิน |
 | `quiz-attempt-detail.html` | รายละเอียดการส่งงาน 1 รายการ + ปุ่มครูให้คะแนน/เขียนรีวิว (เปลี่ยนสถานะ) + ปุ่ม **🤖 AI สรุปภาพรวมนักเรียน** (ระดับ 2) | ต้องล็อกอิน |
 | `quiz-sets.html` | รายการชุดข้อสอบ/ใบงานที่มี — เพิ่มลิงก์ **"ทำแบบทดสอบนี้"** ต่อแถว (เห็นเฉพาะ student) ไปหน้า `quiz-attempt-new.html?quizSetId=...` | ต้องล็อกอิน |
@@ -31,6 +36,9 @@
 | `quizAttempts` | `leaveRequests` | `studentId`, `studentNickname` (จดซ้ำ), `quizSetId`, `quizSetTitle` (จดซ้ำ), `status`, `scoreAwarded`, `submittedAt`, `submittedText` (เฉพาะ `worksheet`/`attachment` — ข้อความที่นักเรียนพิมพ์ส่ง ให้ครูอ่านตอนตรวจ) |
 | `quizAttempts/{id}/reviews` | `approvals` | `teacherName`, `feedback`, `scoreGiven`, `reviewedAt` — มีเฉพาะงานที่ครูตรวจมือ (`worksheet`/`attachment`), งาน `mcq` ตรวจอัตโนมัติไม่มี review |
 | `users/{uid}` | — (auth-linked) | `role` (`"student"` \| `"teacher"`) ผูกกับ Firebase Auth uid |
+| `pets/{uid}` **(เพิ่ม 2026-11-08)** | — | `pet` (`speciesKey`, `stage` 0-4, `stats` 6 ค่า SPD/ATK/ACC/EVA/DEF/HP, `pointsSpent`) \| null, `growthHistory[]` — แต้มไม่เก็บ คำนวณสดจาก quizAttempts ที่ graded |
+| `tournaments/{id}` + `/matches/{matchId}` **(เพิ่ม 2026-11-08)** | — | `semifinal1`/`semifinal2`/`final` แต่ละคู่ = `slotA`, `slotB` (`studentUid`, `studentName`, `speciesKey`, `stage`, `stats`), `matchId`, `winnerSlot`, `decidedByTeacher` · matches = battle log เต็มจาก `js/combat-engine.js` |
+| `leaderboard/scores` **(เพิ่ม 2026-11-08)** | — | `entries[]` (`rank`, `uid`, `nickname`, `totalScore`, `attemptIds[]`) เฉพาะคนครึ่งบนที่ขึ้นโชว์, `classSize`, `computedAt`, `computedByTeacherName` — ครูคำนวณจาก quizAttempts ที่ graded แล้วบันทึก (นักเรียนอ่านอย่างเดียว) |
 
 **สถานะของ `quizAttempts.status`:** `submitted` (นักเรียนเพิ่งส่ง, เฉพาะ `mcq` ที่ตรวจอัตโนมัติได้ทันทีจะข้ามไป `graded` เลย) → `pending_review` (รอครูตรวจ, ใช้กับ `worksheet`/`attachment`) → `graded` (ครูให้คะแนนแล้ว, **สถานะปลายทาง เปลี่ยนกลับไม่ได้**)
 

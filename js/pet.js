@@ -14,7 +14,7 @@
 //
 // window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(uid) → Promise<{
 //   totalPointsEarned, pointsAvailable,
-//   pet: { speciesKey, stage, stats: {SPD,ATK,ACC,DEF,HP}, statusAbility, pointsSpent } | null,
+//   pet: { speciesKey, stage, stats: {SPD,ATK,ACC,EVA,DEF,HP}, pointsSpent } | null,
 //   growthHistory: [{ speciesKey, reachedStage, startedAt, endedAt }]
 // }>
 // window.ซื้อไข่(uid) → Promise<void>  — reject ด้วย Error ภาษาไทยถ้าแต้มไม่พอหรือมีสัตว์เลี้ยงอยู่แล้ว
@@ -37,9 +37,9 @@
   var กล่องเตือน = document.getElementById("กล่องเตือนสัตว์เลี้ยง");
   var ที่วาง = document.getElementById("ที่วางสัตว์เลี้ยง");
 
-  // ชื่อสเตตัสภาษาไทย — แพทเทิร์นเดียวกับ js/tournament-match.js
-  var ชื่อสเตตัสไทย = { SPD: "ความเร็ว", ATK: "พละกำลัง", ACC: "ความแม่นยำ", DEF: "ค่าพลังป้องกัน", HP: "พลังชีวิต" };
-  var ลำดับสเตตัส = ["SPD", "ATK", "ACC", "DEF", "HP"];
+  // ชื่อและลำดับสเตตัสอ่านจาก js/pet-config.js เท่านั้น (6 ค่า รวมค่าหลบหลีก)
+  var ชื่อสเตตัสไทย = window.PET_STAT_LABELS_TH;
+  var ลำดับสเตตัส = window.PET_STAT_KEYS;
 
   // ดัชนีขั้นสุดท้าย (ร่างที่ 4) อ่านจากจำนวนป้ายขั้นใน pet-config.js ไม่ hardcode
   var ขั้นสุดท้าย = window.PET_STAGE_LABELS.length - 1;
@@ -115,9 +115,7 @@
   function สร้างการ์ดสัตว์เลี้ยง(ข้อมูล) {
     var สัตว์ = ข้อมูล.pet;
     var ขั้น = สัตว์.stage;
-    var ชื่อสาย = (window.TOURNAMENT_DEMO_SPECIES && window.TOURNAMENT_DEMO_SPECIES[สัตว์.speciesKey])
-      ? window.TOURNAMENT_DEMO_SPECIES[สัตว์.speciesKey].label
-      : สัตว์.speciesKey;
+    var ชื่อสาย = (window.PET_SPECIES_LABELS || {})[สัตว์.speciesKey] || สัตว์.speciesKey;
     var สเตตัส = สัตว์.stats || {};
     var สัดส่วนความคืบหน้า = Math.round(((ขั้น + 1) / window.PET_STAGE_LABELS.length) * 100);
 

@@ -509,3 +509,70 @@ select {
 .progress-fill { height: 100%; background: var(--state-success-on-learn); border-radius: 999px; transition: width 0.3s ease; }
 .table-scroll { overflow-x: auto; max-width: 100%; }
 .table-scroll table { min-width: 320px; }
+
+/* ── หน้าหลักแยกบทบาท (home.html) · แบรนด์ในแถบเมนู · รายการลิงก์ (ใช้ซ้ำได้) ──
+   ใช้เฉพาะ token ที่มีอยู่แล้วใน :root (ไม่เพิ่ม token ใหม่) */
+.navbar a.brand { color: var(--ink-learn); font-weight: 600; }
+.home-card { margin-bottom: 16px; }
+.link-list { list-style: none; margin: 0; padding: 0; }
+.link-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-learn);
+}
+.link-list li:last-child { border-bottom: none; }
+.link-list a { color: var(--deep-teal); }
+.sub-note { font-size: 13px; color: var(--ink-learn-muted); }
+
+/* ── กระดานเกียรติยศบนหน้าแรกทัวนาเมนต์ (สเปก 09-leaderboard) ──
+   ใช้เฉพาะ token ที่มีอยู่แล้วใน :root (ไม่เพิ่ม token ใหม่) */
+.honor-board { margin-bottom: 16px; }
+.honor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.honor-col { min-width: 0; }
+.honor-title { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--ink-learn); }
+.honor-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.honor-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-learn);
+}
+.honor-row:last-child { border-bottom: none; }
+.honor-row.is-me { background: var(--surface-learn-alt); border-radius: 8px; }
+.honor-rank {
+  flex: 0 0 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bright-orange);
+  color: var(--ink-on-bright);
+  font-weight: 700;
+  font-size: 14px;
+}
+.honor-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.honor-score { font-weight: 600; white-space: nowrap; }
+.honor-weeks { list-style: none; margin: 0; padding: 0; }
+.honor-week { padding: 8px 0; border-bottom: 1px solid var(--border-learn); }
+.honor-week:last-child { border-bottom: none; }
+.honor-week-label { margin: 0 0 4px; font-size: 13px; color: var(--ink-learn-muted); }
+.honor-champ { margin: 0 0 2px; }
+.honor-champ a { color: var(--deep-teal); font-weight: 600; }
+.honor-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--state-info-on-learn);
+  border-radius: 999px;
+  color: var(--state-info-on-learn);
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .honor-grid { grid-template-columns: 1fr; }
+}

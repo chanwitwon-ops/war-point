@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8" />
-<title>combat-engine self-test (scratch tool — ไม่ใช่ prototype ตาม DESIGN.md)</title>
+<title>combat-engine v2 self-test (scratch tool)</title>
 <style>
   body { font-family: monospace; padding: 20px; background: #111; color: #ddd; }
   .pass { color: #7CFC00; }
@@ -12,131 +12,106 @@
 </style>
 </head>
 <body>
-<h1>combat-engine.js — self test</h1>
-<p>เครื่องมือทดลองตรวจ acceptance criteria ของ <code>docs/01-requirements/01-spec/20260821-02-pet-points-and-weekly-arena.md</code> หัวข้อ ง.๒ และ <code>20261103-08-tournament-bracket-demo.md</code> — ไม่ใช่ prototype ตาม DESIGN.md ตั้งใจแยกไว้นอก docs/02-design/01-prototypes/ เหมือน experiments/battle-animation-test</p>
+<h1>combat-engine.js v2 — self test</h1>
+<p>ตรวจสูตรที่ user ตั้งเองเมื่อ 2026-11-08 (สเปก 02 หัวข้อ ง.๓) — ไม่ใช่ prototype ตาม DESIGN.md</p>
 <div id="summary"></div>
 <pre id="log"></pre>
 
+<script src="../../js/pet-config.js"></script>
 <script src="../../js/combat-engine.js"></script>
-<script src="../../js/tournament-demo-data.js"></script>
 <script>
 (function () {
   var logEl = document.getElementById("log");
-  var summaryEl = document.getElementById("summary");
   var pass = 0, fail = 0;
-
   function log(ok, label, extra) {
     if (ok) pass++; else fail++;
-    var line = (ok ? "[PASS] " : "[FAIL] ") + label + (extra ? " — " + extra : "");
     var div = document.createElement("div");
     div.className = ok ? "pass" : "fail";
-    div.textContent = line;
+    div.textContent = (ok ? "[PASS] " : "[FAIL] ") + label + (extra ? " — " + extra : "");
     logEl.appendChild(div);
-    (ok ? console.log : console.error)(line);
+    (ok ? console.log : console.error)(div.textContent);
   }
 
-  function makeSide(speciesKey, studentId, petName) {
-    var sp = window.TOURNAMENT_DEMO_SPECIES[speciesKey];
-    return {
-      studentId: studentId, petName: petName, species: speciesKey,
-      stats: sp.stats, statusAbility: sp.statusAbility, item: null
-    };
+  function pixie(id, stage) {
+    return { studentId: id, petName: id, species: "pixie", stats: window.PET_STAGE_STATS[stage] };
   }
+  function custom(id, stats) { return { studentId: id, petName: id, species: "test", stats: stats }; }
 
-  var KNOWN_EVENT_TYPES = [
-    "match_start", "round_start", "turn_start", "action_declared", "attack_missed",
-    "attack_blocked", "damage_dealt", "status_applied", "status_refreshed", "status_replaced",
-    "status_tick", "status_expired", "status_blocked_turn", "extra_attack", "item_triggered",
-    "ko", "round_end", "match_end"
-  ];
+  var KNOWN = ["match_start", "turn_start", "attack", "attack_missed", "attack_blocked", "damage_dealt", "ko", "turn_limit", "match_end"];
 
-  // ── 1. Determinism: seed เดิม + สเตตัสเดิม ต้องได้ผลเหมือนกันทุกครั้ง ──
-  (function testDeterminism() {
-    var input = { matchId: "demo-match-001", mode: "knockout", sideA: makeSide("pixie", "stuA", "พิกซี่"), sideB: makeSide("behemoth", "stuB", "เบฮีม็อธ") };
-    var r1 = window.คำนวณผลการต่อสู้(input);
-    var r2 = window.คำนวณผลการต่อสู้(input);
-    var same = JSON.stringify(r1) === JSON.stringify(r2);
-    log(same, "determinism: matchId เดิมต้องได้ events/ผลลัพธ์เหมือนกันทุก byte", same ? ("seed=" + r1.seed) : "ผลไม่ตรงกัน!");
-    log(r1.seed === r2.seed, "seed ต้องคำนวณจาก matchId เดิมได้ค่าเดิม", "seed=" + r1.seed);
-  })();
+  // 1. determinism
+  var r1 = window.คำนวณผลการต่อสู้({ matchId: "m-1", sideA: pixie("a", 4), sideB: pixie("b", 4) });
+  var r2 = window.คำนวณผลการต่อสู้({ matchId: "m-1", sideA: pixie("a", 4), sideB: pixie("b", 4) });
+  function ตัดเวลา(r) { var c = JSON.parse(JSON.stringify(r)); delete c.computed_at; return JSON.stringify(c); }
+  log(ตัดเวลา(r1) === ตัดเวลา(r2), "matchId เดิมได้ผลเดิมทุก byte (ไม่นับ computed_at)");
+  log(r1.engine_version === "2.0.0", "engine_version = 2.0.0");
 
-  // ── 2. โครงสร้าง battle log ต้องครบตามสัญญา ──
-  (function testStructure() {
-    var input = { matchId: "demo-match-structure", mode: "practice", sideA: makeSide("cannonTurtle", "stuC", "เต่า"), sideB: makeSide("dragon", "stuD", "มังกร") };
-    var r = window.คำนวณผลการต่อสู้(input);
+  // 2. structure
+  log(r1.events[0].type === "match_start" && r1.events[r1.events.length - 1].type === "match_end", "เริ่มด้วย match_start จบด้วย match_end");
+  log(r1.events.every(function (e, i) { return e.seq === i; }), "seq ต่อเนื่องไม่ข้าม");
+  var แปลก = r1.events.filter(function (e) { return KNOWN.indexOf(e.type) === -1; });
+  log(แปลก.length === 0, "มีแต่ event ชนิดที่รู้จัก", แปลก.map(function (e) { return e.type; }).join(","));
+  log(r1.sideA.hpPool === window.PET_STAGE_STATS[4].HP * 6, "HP pool = HP × 6", r1.sideA.hpPool);
 
-    log(r.events[0].type === "match_start", "event แรกต้องเป็น match_start");
-    log(r.events[r.events.length - 1].type === "match_end", "event สุดท้ายต้องเป็น match_end");
+  // 3. formula checks across many matches
+  var ทุกแมตช์ = [];
+  for (var i = 0; i < 200; i++) {
+    ทุกแมตช์.push(window.คำนวณผลการต่อสู้({ matchId: "stress-" + i, sideA: pixie("a", i % 5), sideB: pixie("b", (i * 3) % 5) }));
+  }
+  var events = [].concat.apply([], ทุกแมตช์.map(function (m) { return m.events; }));
+  var miss = events.filter(function (e) { return e.type === "attack_missed"; });
+  var hitOk = miss.every(function (e) { return e.payload.hitChance >= 50 && e.payload.hitChance <= 95 && e.payload.roll > e.payload.hitChance; });
+  log(miss.length > 0 && hitOk, "โอกาสโดนอยู่ใน 50–95% และพลาดเมื่อทอยเกิน", miss.length + " ครั้งที่พลาด");
+  var block = events.filter(function (e) { return e.type === "attack_blocked"; });
+  log(block.length > 0 && block.every(function (e) { return e.payload.blockChance <= 15 && e.payload.roll <= e.payload.blockChance; }), "บล็อก% ≤ 15 และบล็อกเมื่อทอยไม่เกิน", block.length + " ครั้ง");
+  var dmg = events.filter(function (e) { return e.type === "damage_dealt"; });
+  log(dmg.every(function (e) { return e.payload.amount >= 1 && e.payload.hpAfter >= 0 && (e.payload.hpBefore - e.payload.amount === e.payload.hpAfter || e.payload.hpAfter === 0); }),"ดาเมจ ≥ 1, HP ไม่ติดลบ, hpBefore − amount = hpAfter", dmg.length + " ครั้ง");
+  log(ทุกแมตช์.every(function (m) { return m.result.turns <= 30; }), "ทุกแมตช์จบภายใน 30 เทิร์น");
 
-    var seqOk = r.events.every(function (e, i) { return e.seq === i; });
-    log(seqOk, "seq ต้องเรียงต่อเนื่องตั้งแต่ 0 ไม่ข้าม");
+  // 4. hit chance exact formula: ACC 40 vs EVA 60 → 60%
+  var m4 = window.คำนวณผลการต่อสู้({ matchId: "acc", sideA: pixie("a", 4), sideB: pixie("b", 4) });
+  var anyAttack = m4.events.filter(function (e) { return e.type === "attack_missed"; })[0];
+  log(!anyAttack || anyAttack.payload.hitChance === 60, "Pixie ร่าง 4 ปะทะกัน: โอกาสโดน = 80 + (40 − 60) = 60%", anyAttack ? anyAttack.payload.hitChance : "ไม่มีพลาดในแมตช์นี้");
 
-    var unknownTypes = r.events.filter(function (e) { return KNOWN_EVENT_TYPES.indexOf(e.type) === -1; });
-    log(unknownTypes.length === 0, "ทุก event ต้องเป็น 1 ใน 18 ชนิดที่สเปกกำหนด", unknownTypes.map(function (e) { return e.type; }).join(","));
+  // 5. damage formula range: ATK 35 vs DEF 20 → 35×100/120 = 29.17 ±10% → 26..32
+  var d4 = m4.events.filter(function (e) { return e.type === "damage_dealt"; });
+  log(d4.length > 0 && d4.every(function (e) { return e.payload.amount >= 26 && e.payload.amount <= 32; }), "ดาเมจ ATK35 vs DEF20 อยู่ในช่วง 26–32", d4.map(function (e) { return e.payload.amount; }).join(","));
 
-    var hpEvents = r.events.filter(function (e) { return e.type === "damage_dealt" || e.type === "status_tick"; });
-    var hpFieldsOk = hpEvents.every(function (e) { return typeof e.payload.hpBefore === "number" && typeof e.payload.hpAfter === "number"; });
-    log(hpFieldsOk, "ทุก event ที่ทำให้ HP เปลี่ยน ต้องมี hpBefore/hpAfter", hpEvents.length + " events ตรวจ");
+  // 6. faster side always acts first
+  var fast = custom("fast", { SPD: 90, ATK: 20, ACC: 50, EVA: 10, DEF: 10, HP: 50 });
+  var slow = custom("slow", { SPD: 10, ATK: 20, ACC: 50, EVA: 10, DEF: 10, HP: 50 });
+  var m6 = window.คำนวณผลการต่อสู้({ matchId: "spd", sideA: slow, sideB: fast });
+  var starts = m6.events.filter(function (e) { return e.type === "turn_start"; });
+  log(starts.every(function (e) { return e.payload.order[0] === "fast"; }), "ฝ่ายเร็วกว่ายิงก่อนทุกเทิร์น", starts.length + " เทิร์น");
+  log(m6.events.filter(function (e) { return e.type === "attack"; }).every(function (e, i, arr) {
+    return i === 0 || arr[i - 1].payload.actor !== e.payload.actor;
+  }), "ผลัดกันยิงทีละฝ่าย ไม่มียิงซ้อน (ไม่มีกฎเร็ว 2 เท่าตี 2 ที)");
 
-    var rollEvents = r.events.filter(function (e) { return e.type === "attack_missed" || e.type === "attack_blocked" || e.type === "status_applied"; });
-    var rollFieldsOk = rollEvents.every(function (e) {
-      var p = e.payload;
-      return typeof p.roll === "number" && (p.hitChance != null || p.blockChance != null || p.chance != null);
-    });
-    log(rollFieldsOk, "ทุกจุดที่ทอย ต้องมี chance/roll ติดไปด้วย", rollEvents.length + " events ตรวจ");
+  // 7. turn cap + %HP decision: tanky + high EVA both sides
+  var tank = custom("t1", { SPD: 50, ATK: 1, ACC: 1, EVA: 100, DEF: 100, HP: 100 });
+  var tank2 = custom("t2", { SPD: 49, ATK: 1, ACC: 1, EVA: 100, DEF: 100, HP: 100 });
+  var m7 = window.คำนวณผลการต่อสู้({ matchId: "cap", sideA: tank, sideB: tank2 });
+  log(m7.result.turns === 30 && (m7.result.reason === "turn_limit" || m7.result.reason === "teacher_decides"), "ครบ 30 เทิร์นตัดสินด้วย %เลือด", m7.result.reason);
+  log(m7.events.some(function (e) { return e.type === "turn_limit"; }), "มี event turn_limit");
 
-    log(["A", "B", null].indexOf(r.result.winner) !== -1, "ผู้ชนะต้องเป็น A, B หรือ null (เสมอ) เท่านั้น", "winner=" + r.result.winner);
-  })();
+  // 8. stage advantage: stage 4 beats egg in nearly every seed
+  var ชนะ = 0;
+  for (var j = 0; j < 50; j++) {
+    var r = window.คำนวณผลการต่อสู้({ matchId: "adv-" + j, sideA: pixie("big", 4), sideB: pixie("egg", 0) });
+    if (r.result.winner === "A") ชนะ++;
+  }
+  log(ชนะ >= 48, "ร่างสุดท้ายชนะไข่เกือบทุกครั้ง", ชนะ + "/50");
 
-  // ── 3. ดาเมจขั้นต่ำ 1 เสมอ + HP ไม่ติดลบ ──
-  (function testDamageAndHp() {
-    var input = { matchId: "demo-match-damage-floor", mode: "practice", sideA: makeSide("pixie", "x", "x"), sideB: makeSide("behemoth", "y", "y") };
-    var r = window.คำนวณผลการต่อสู้(input);
-    var dmgEvents = r.events.filter(function (e) { return e.type === "damage_dealt"; });
-    var minDamageOk = dmgEvents.every(function (e) { return e.payload.amount >= 1; });
-    log(minDamageOk, "ดาเมจทุกครั้งต้องอย่างน้อย 1 หน่วยเสมอ", dmgEvents.length + " ครั้งตรวจ");
-    var hpNeverNegative = dmgEvents.every(function (e) { return e.payload.hpAfter >= 0; });
-    log(hpNeverNegative, "HP ห้ามติดลบ (เช็คจาก hpAfter ทุก damage_dealt)");
-  })();
+  // 9. fight length same stage ~12 turns
+  var ยาว = [];
+  for (var k = 0; k < 50; k++) ยาว.push(window.คำนวณผลการต่อสู้({ matchId: "len-" + k, sideA: pixie("a", 4), sideB: pixie("b", 4) }).result.turns);
+  var เฉลี่ย = ยาว.reduce(function (s, x) { return s + x; }, 0) / ยาว.length;
+  log(เฉลี่ย >= 8 && เฉลี่ย <= 18, "ร่างเดียวกันสู้กันเฉลี่ยราว 12 เทิร์น", เฉลี่ย.toFixed(1));
 
-  // ── 4. โจมตีซ้ำจากความเร็ว (double strike) ต้องเกิดจริงเมื่อ SPD ต่างกัน >= 2 เท่า ──
-  (function testDoubleStrike() {
-    var fast = { studentId: "fast", petName: "f", species: "test", stats: { SPD: 90, ATK: 50, ACC: 50, DEF: 50, HP: 50 }, statusAbility: null, item: null };
-    var slow = { studentId: "slow", petName: "s", species: "test", stats: { SPD: 30, ATK: 50, ACC: 50, DEF: 50, HP: 50 }, statusAbility: null, item: null };
-    var found = false;
-    for (var i = 0; i < 10 && !found; i++) {
-      var r = window.คำนวณผลการต่อสู้({ matchId: "double-strike-test-" + i, mode: "practice", sideA: fast, sideB: slow });
-      found = r.events.some(function (e) { return e.type === "extra_attack" && e.payload.reason === "speed_double"; });
-    }
-    log(found, "SPD ต่างกัน >= 2 เท่า ต้องเกิด extra_attack(speed_double) อย่างน้อย 1 ครั้งใน 10 แมตช์ทดลอง");
-  })();
+  // 10. no Math.random in engine source
+  log(String(window.คำนวณผลการต่อสู้).indexOf("Math.random") === -1, "engine ไม่ใช้ Math.random()");
 
-  // ── 5. Stress test ทุกคู่ของ 4 สายพันธุ์เดโม ต้องจบได้โดยไม่พัง ──
-  (function testStress() {
-    var keys = Object.keys(window.TOURNAMENT_DEMO_SPECIES);
-    var total = 0, ok = 0, errors = [];
-    for (var i = 0; i < keys.length; i++) {
-      for (var j = 0; j < keys.length; j++) {
-        if (i === j) continue;
-        for (var n = 0; n < 5; n++) {
-          total++;
-          try {
-            var r = window.คำนวณผลการต่อสู้({
-              matchId: "stress-" + keys[i] + "-vs-" + keys[j] + "-" + n, mode: "league",
-              sideA: makeSide(keys[i], "A", keys[i]), sideB: makeSide(keys[j], "B", keys[j])
-            });
-            if (r.events[r.events.length - 1].type === "match_end" && r.result.score.A <= 2 && r.result.score.B <= 2) ok++;
-            else errors.push(keys[i] + " vs " + keys[j] + " #" + n + ": จบไม่ถูกต้อง");
-          } catch (e) {
-            errors.push(keys[i] + " vs " + keys[j] + " #" + n + ": " + e.message);
-          }
-        }
-      }
-    }
-    log(ok === total, "stress test " + total + " แมตช์ (ทุกคู่สายพันธุ์เดโม x5 seed) ต้องจบได้ครบไม่มี error", errors.slice(0, 5).join(" | "));
-  })();
-
-  summaryEl.innerHTML = "<b>" + pass + " passed</b> / " + (pass + fail) + " total" + (fail > 0 ? '<span class="fail"> — ' + fail + " FAILED</span>" : "");
+  document.getElementById("summary").innerHTML = "<b>" + pass + " passed</b> / " + (pass + fail) + " total" + (fail ? '<span class="fail"> — ' + fail + " FAILED</span>" : "");
   window.__TEST_SUMMARY__ = { pass: pass, fail: fail };
 })();
 </script>

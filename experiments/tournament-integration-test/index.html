@@ -18,8 +18,8 @@
 <pre id="log" style="white-space:pre-wrap;background:#000;padding:10px;"></pre>
 
 <script src="../../js/util.js"></script>
+<script src="../../js/pet-config.js"></script>
 <script src="../../js/combat-engine.js"></script>
-<script src="../../js/tournament-demo-data.js"></script>
 <script src="mock-firestore.js"></script>
 <script src="../../js/tournament-data.js"></script>
 <script>
@@ -38,16 +38,16 @@
     (ok ? console.log : console.error)(line);
   }
 
-  function makeSlot(name, speciesKey) {
-    var sp = window.TOURNAMENT_DEMO_SPECIES[speciesKey];
-    return { studentName: name, speciesKey: speciesKey, stats: sp.stats, statusAbility: sp.statusAbility };
+  // slot แบบสัตว์เลี้ยงจริง (2026-11-08): uid + ชื่อ + Pixie ขั้นต่างๆ + สเตตัส 6 ค่าจาก pet-config
+  function makeSlot(uid, name, stage) {
+    return { studentUid: uid, studentName: name, speciesKey: "pixie", stage: stage, stats: window.PET_STAGE_STATS[stage] };
   }
 
   try {
-    // ── 1. สร้างทัวนาเมนต์ (ใช้ payload แบบที่ tournament.js แก้แล้วส่งจริง — มี stats/statusAbility ครบ) ──
+    // ── 1. สร้างทัวนาเมนต์ด้วย Pixie 4 ตัวคนละขั้น ──
     var tournamentId = await window.สร้างทัวนาเมนต์({
-      semifinal1: { slotA: makeSlot("เอ", "pixie"), slotB: makeSlot("บี", "behemoth") },
-      semifinal2: { slotA: makeSlot("ซี", "cannonTurtle"), slotB: makeSlot("ดี", "dragon") }
+      semifinal1: { slotA: makeSlot("uid-a", "เอ", 4), slotB: makeSlot("uid-b", "บี", 2) },
+      semifinal2: { slotA: makeSlot("uid-c", "ซี", 3), slotB: makeSlot("uid-d", "ดี", 1) }
     });
     log(typeof tournamentId === "string" && tournamentId.length > 0, "สร้างทัวนาเมนต์ คืน tournamentId ที่เป็น string");
 
@@ -86,7 +86,18 @@
     var คู่ข้อมูล = t1["semifinal1"] || null;
     var บันทึกจำลอง = คู่ข้อมูล ? คู่ข้อมูล.matchLog : null;
     log(!!บันทึกจำลอง, "tournament-match.js pattern: ผลโหลด[slotKey].matchLog อ่านได้ตรงๆ สำเร็จ");
-    log(บันทึกจำลอง.sideA && บันทึกจำลอง.sideA.studentId === "เอ", "sideA.studentId ตรงกับชื่อนักเรียนที่กรอก (ใช้จับคู่ event ได้ถูกฝ่าย)");
+    log(บันทึกจำลอง.sideA && บันทึกจำลอง.sideA.studentId === "uid-a", "sideA.studentId = studentUid ของนักเรียน (ใช้จับคู่ event ได้ถูกฝ่าย)");
+    log(บันทึกจำลอง.engine_version === "2.0.0" && Object.keys(บันทึกจำลอง.sideA.stats).length === 6, "ใช้ engine v2 และสเตตัส 6 ค่า");
+
+    // ── 4b. นักเรียนที่ uid ซ้ำต้องสร้างทัวนาเมนต์ไม่ได้ ──
+    var ซ้ำโดนกัน = false;
+    try {
+      await window.สร้างทัวนาเมนต์({
+        semifinal1: { slotA: makeSlot("uid-x", "X", 1), slotB: makeSlot("uid-x", "X2", 1) },
+        semifinal2: { slotA: makeSlot("uid-y", "Y", 1), slotB: makeSlot("uid-z", "Z", 1) }
+      });
+    } catch (e) { ซ้ำโดนกัน = true; }
+    log(ซ้ำโดนกัน, "studentUid ซ้ำกันถูกปฏิเสธ");
 
     // ── 5. deterministic: คำนวณซ้ำ slotKey เดิมต้องได้ seed/events/result เดิม ──
     // (ยกเว้น computed_at ซึ่งเป็น wall-clock timestamp จริง ไม่ใช่ส่วนหนึ่งของ determinism ตามสเปก)
@@ -99,8 +110,8 @@
 
     // ── 6. error path: เรียก final ก่อน semifinal ครบ (กรณีสมมติทัวนาเมนต์ใหม่) ──
     var tournamentId2 = await window.สร้างทัวนาเมนต์({
-      semifinal1: { slotA: makeSlot("E", "pixie"), slotB: makeSlot("F", "behemoth") },
-      semifinal2: { slotA: makeSlot("G", "cannonTurtle"), slotB: makeSlot("H", "dragon") }
+      semifinal1: { slotA: makeSlot("uid-e", "E", 0), slotB: makeSlot("uid-f", "F", 1) },
+      semifinal2: { slotA: makeSlot("uid-g", "G", 2), slotB: makeSlot("uid-h", "H", 3) }
     });
     var errorCaught = false;
     try {

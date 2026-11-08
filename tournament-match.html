@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>รายละเอียดแมตช์ · war-point</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pet-animation.css">
   <script src="js/util.js" defer></script>
   <script src="js/firebase-config.js"></script>
   <script type="module" src="js/firebase.js"></script>
   <script src="js/nav.js" defer></script>
   <script src="js/auth-guard.js" defer></script>
-  <script src="js/tournament-demo-data.js" defer></script>
+  <script src="js/pet-config.js" defer></script>
+  <script src="js/combat-engine.js" defer></script>
+  <script src="js/tournament-data.js" defer></script>
+  <script src="js/pet-animation.js" defer></script>
   <script src="js/tournament-match.js" defer></script>
 </head>
 <body>
@@ -22,14 +26,10 @@
     </div>
 
     <h1 id="หัวข้อแมตช์">รายละเอียดแมตช์</h1>
-    <p class="subtitle" id="คำอธิบายแมตช์">Best of 3 ยก · ดูทีละเหตุการณ์จากบันทึกการต่อสู้</p>
+    <p class="subtitle" id="คำอธิบายแมตช์">ดูการต่อสู้จากบันทึกที่คำนวณไว้แล้ว</p>
 
     <div id="กล่องกำลังโหลด" class="card">
       <p>กำลังโหลด…</p>
-    </div>
-
-    <div id="กล่องไม่มีสิทธิ์" class="card hidden">
-      <p>หน้านี้สำหรับครูเท่านั้น</p>
     </div>
 
     <div id="กล่องไม่พบ" class="card hidden">
@@ -37,24 +37,10 @@
     </div>
 
     <div id="กล่องหลัก" class="hidden">
-      <!-- ฝั่งทั้ง 2 + ค่าสเตตัส + HP (ค่า HP จะอัปเดตตามเหตุการณ์ที่เล่นถึง) -->
+      <!-- ภาพเคลื่อนไหว: js/pet-animation.js วาดเวทีลงกล่องนี้ (คลิปอยู่ที่ assets/pets/<สายพันธุ์>/) -->
       <div class="card">
-        <div id="กล่องฝ่าย" class="versus"></div>
-        <p class="hint">ค่าสเตตัสและค่า HP เป็นค่าสมมติสำหรับเดโม ยังไม่ใช่ค่าทางการของสายพันธุ์</p>
-      </div>
-
-      <!-- ผลสรุปของแมตช์ (อ่านจาก battle log) -->
-      <div class="card">
-        <p class="section-title">ผลสรุป</p>
-        <div id="กล่องผลสรุป"></div>
-      </div>
-
-      <!-- ภาพเคลื่อนไหว: ตอนนี้ js/tournament-match.js เติมข้อความแทนลงในกล่องนี้
-           ในอนาคตให้ใส่ <video> ของสายพันธุ์แทนที่ (แก้เฉพาะฟังก์ชันวาดภาพเคลื่อนไหวใน JS)
-           โดยโครงหน้าและปุ่มควบคุมด้านล่างไม่ต้องเปลี่ยน -->
-      <div class="card">
-        <p class="section-title">ภาพเคลื่อนไหว</p>
         <div id="ที่วางภาพเคลื่อนไหว" class="stage"></div>
+        <p class="stage-headline" id="ข้อความใต้ภาพ"></p>
         <p class="counter" id="ตัวนับเหตุการณ์"></p>
         <div class="btn-row playback">
           <button type="button" class="btn-ok" id="ปุ่มเล่น">▶ เล่น</button>
@@ -63,7 +49,17 @@
         </div>
       </div>
 
-      <!-- บันทึกเหตุการณ์แบบข้อความ (ตามลำดับ seq) -->
+      <!-- ฝั่งทั้ง 2 + ค่าสเตตัส + HP (HP อัปเดตตามเหตุการณ์ที่เล่นถึง) -->
+      <div class="card">
+        <div id="กล่องฝ่าย" class="versus"></div>
+        <p class="hint">ค่าสเตตัสคือของสัตว์เลี้ยงจริงของนักเรียน ณ ตอนที่ครูสร้างทัวนาเมนต์</p>
+      </div>
+
+      <div class="card">
+        <p class="section-title">ผลสรุป</p>
+        <div id="กล่องผลสรุป"></div>
+      </div>
+
       <div class="card">
         <p class="section-title">บันทึกเหตุการณ์</p>
         <ol class="event-log" id="บันทึกเหตุการณ์"></ol>

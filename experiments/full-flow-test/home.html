@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>harness: home.html (mock)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness รัน js/home.js ของจริงบน mock Firestore — ?role=teacher|student, ?reset=1 -->
+  <div class="container">
+    <h1>หน้าหลัก <small>(harness)</small></h1>
+    <p class="subtitle" id="คำทักทาย">กำลังโหลด…</p>
+    <div id="กล่องเตือนหน้าหลัก" class="alert alert-error hidden"></div>
+    <div id="เนื้อหาหน้าหลัก"></div>
+  </div>
+  <script src="../../js/util.js"></script>
+  <script src="../../js/pet-config.js"></script>
+  <script>window.__MOCK_PERSIST = true;</script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script>delete window.CURRENT_USER;</script>
+  <script src="../../js/pet-data.js"></script>
+  <script src="../../js/home-data.js"></script>
+  <script src="../../js/home.js"></script>
+  <script src="seed.js"></script>
+</body>
+</html>

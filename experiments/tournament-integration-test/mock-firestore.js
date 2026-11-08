@@ -10,6 +10,22 @@
   var collections = {}; // collectionPath -> { docId: data } — ไว้ทำ query ข้ามเอกสาร
   var counter = 0;
 
+  // เปิดได้ด้วย window.__MOCK_PERSIST = true ก่อนโหลดไฟล์นี้: เก็บข้อมูลลง sessionStorage ให้
+  // อยู่รอดข้ามการเปลี่ยนหน้า (หน้าจริงบางหน้า redirect หลังบันทึก) — เทสต์เดิมไม่เปิด จึงเหมือนเดิมทุกอย่าง
+  var คีย์เก็บ = "__mockFirestore";
+  if (window.__MOCK_PERSIST) {
+    try {
+      var เก่า = JSON.parse(sessionStorage.getItem(คีย์เก็บ) || "null");
+      if (เก่า) { store = เก่า.store; collections = เก่า.collections; counter = เก่า.counter; }
+    } catch (e) { /* ไม่มีของเก่า เริ่มว่าง */ }
+  }
+  function บันทึกถาวร() {
+    if (!window.__MOCK_PERSIST) return;
+    try {
+      sessionStorage.setItem(คีย์เก็บ, JSON.stringify({ store: store, collections: collections, counter: counter }));
+    } catch (e) { /* sessionStorage ใช้ไม่ได้ — ทดสอบแบบในหน่วยความจำต่อไป */ }
+  }
+
   function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
 
   window.db = {};
@@ -34,6 +50,7 @@
     if (!docRef.collectionPath) return;
     if (!collections[docRef.collectionPath]) collections[docRef.collectionPath] = {};
     collections[docRef.collectionPath][docRef.id] = data;
+    บันทึกถาวร();
   }
 
   window.fsSetDoc = function (docRef, data, opts) {

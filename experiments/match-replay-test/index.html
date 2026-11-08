@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- base = รากเว็บ เพื่อให้ js/pet-animation.js หา assets/pets/... ได้ถูกที่เหมือนหน้าจริง -->
+  <base href="/">
+  <title>match replay harness (scratch tool)</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/pet-animation.css">
+</head>
+<body>
+  <!-- เครื่องมือทดสอบ: รัน js/tournament-match.js ของจริงบน mock Firestore (ไม่ต้องล็อกอิน)
+       เปิดด้วย ?tournamentId=auto_1&slotKey=semifinal1 — ทัวนาเมนต์ใน mock จะได้ id auto_1 เสมอ -->
+  <div class="container">
+    <div class="top-links"><a id="ลิงก์กลับผัง" href="#">← (harness)</a></div>
+    <h1 id="หัวข้อแมตช์">รายละเอียดแมตช์</h1>
+    <p class="subtitle" id="คำอธิบายแมตช์"></p>
+    <div id="กล่องกำลังโหลด" class="card"><p>กำลังเตรียม mock…</p></div>
+    <div id="กล่องไม่พบ" class="card hidden"><p id="ข้อความไม่พบ"></p></div>
+    <div id="กล่องหลัก" class="hidden">
+      <div class="card">
+        <div id="ที่วางภาพเคลื่อนไหว" class="stage"></div>
+        <p class="stage-headline" id="ข้อความใต้ภาพ"></p>
+        <p class="counter" id="ตัวนับเหตุการณ์"></p>
+        <div class="btn-row playback">
+          <button type="button" class="btn-ok" id="ปุ่มเล่น">▶ เล่น</button>
+          <button type="button" class="btn-ghost" id="ปุ่มก้าวถัดไป">ก้าวถัดไป</button>
+          <button type="button" class="btn-ghost" id="ปุ่มกลับไปต้น">กลับไปต้น</button>
+        </div>
+      </div>
+      <div class="card"><div id="กล่องฝ่าย" class="versus"></div></div>
+      <div class="card"><div id="กล่องผลสรุป"></div></div>
+      <div class="card"><ol class="event-log" id="บันทึกเหตุการณ์"></ol></div>
+    </div>
+  </div>
+
+  <script src="js/util.js"></script>
+  <script src="js/pet-config.js"></script>
+  <script src="js/combat-engine.js"></script>
+  <script src="experiments/tournament-integration-test/mock-firestore.js"></script>
+  <script>
+    // ให้ tournament-match.js รอ auth-ready จนกว่า mock จะสร้างข้อมูลเสร็จ
+    window.__ผู้ใช้ทดสอบ = window.CURRENT_USER;
+    delete window.CURRENT_USER;
+  </script>
+  <script src="js/tournament-data.js"></script>
+  <script src="js/pet-animation.js"></script>
+  <script src="js/tournament-match.js"></script>
+  <script>
+    (async function () {
+      function slot(uid, name, stage) {
+        return { studentUid: uid, studentName: name, speciesKey: "pixie", stage: stage, stats: window.PET_STAGE_STATS[stage] };
+      }
+      window.CURRENT_USER = window.__ผู้ใช้ทดสอบ; // ครูในการสร้าง (data layer อ่าน CURRENT_USER)
+      var id = await window.สร้างทัวนาเมนต์({
+        semifinal1: { slotA: slot("uid-a", "น้องเอ", 4), slotB: slot("uid-b", "น้องบี", 3) },
+        semifinal2: { slotA: slot("uid-c", "น้องซี", 2), slotB: slot("uid-d", "น้องดี", 1) }
+      });
+      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "semifinal1");
+      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "semifinal2");
+      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "final");
+      window.CURRENT_USER = { uid: "uid-a", name: "น้องเอ", role: "student" }; // ดูในฐานะนักเรียน
+      window.dispatchEvent(new Event("auth-ready"));
+    })();
+  </script>
+</body>
+</html>

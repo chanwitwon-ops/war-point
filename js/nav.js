@@ -7,17 +7,19 @@
 
 (function () {
   var เมนู = [
+    { href: "home.html", ชื่อ: "หน้าหลัก" },
     { href: "quiz-attempts.html", ชื่อ: "รายการส่งงาน" },
     { href: "quiz-sets.html", ชื่อ: "รายการชุดข้อสอบ" },
     { href: "quiz-set-new.html", ชื่อ: "สร้างชุดข้อสอบ (AI)", teacherOnly: true },
-    { href: "tournament.html", ชื่อ: "ทัวนาเมนต์ (เดโม)", teacherOnly: true },
+    { href: "tournament.html", ชื่อ: "ทัวนาเมนต์" },
     { href: "pet.html", ชื่อ: "สัตว์เลี้ยงของฉัน", studentOnly: true }
   ];
 
   // ชื่อไฟล์ของหน้าที่กำลังเปิดอยู่ เอาไว้ขีดเส้นใต้เมนูที่ตรงกัน
-  var หน้าปัจจุบัน = location.pathname.split("/").pop() || "quiz-attempts.html";
+  var หน้าปัจจุบัน = location.pathname.split("/").pop() || "home.html";
 
-  var html = '<div class="navbar"><span class="brand">🎮 war-point</span>';
+  // แบรนด์เป็นลิงก์กลับหน้าหลักด้วย
+  var html = '<div class="navbar"><a class="brand" href="home.html">🎮 war-point</a>';
   เมนู.forEach(function (m) {
     var active = m.href === หน้าปัจจุบัน ? " active" : "";
     var class์ = (m.teacherOnly ? "nav-teacher-only" : "") + (m.studentOnly ? "nav-student-only" : "") + active;

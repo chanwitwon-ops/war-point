@@ -33,7 +33,7 @@
     ปุ่มล็อกอิน.disabled = true;
     try {
       await window.fbSignIn(window.auth, email, password);
-      location.href = "quiz-attempts.html";
+      location.href = "home.html";
     } catch (err) {
       เตือน("เข้าสู่ระบบไม่สำเร็จ: " + แปลข้อผิดพลาด(err));
       ปุ่มล็อกอิน.disabled = false;

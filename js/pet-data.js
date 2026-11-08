@@ -15,9 +15,8 @@
 //     pet: {                      // null ถ้ายังไม่เคยซื้อไข่ (หรือรีเซ็ตไปแล้ว)
 //       speciesKey: "pixie",
 //       stage: 0-4,               // ดัชนีตรงกับ PET_STAGE_STATS / PET_STAGE_COST
-//       stats: { SPD, ATK, ACC, DEF, HP },  // ค่าสะสม ณ stage ปัจจุบัน (คัดลอกจาก
+//       stats: { SPD, ATK, ACC, EVA, DEF, HP },  // ค่าสะสม ณ stage ปัจจุบัน (คัดลอกจาก
 //                                           // PET_STAGE_STATS[stage] ตอนซื้อ/วิวัฒนาการ)
-//       statusAbility: "charm",
 //       pointsSpent: number       // แต้มที่จ่ายไปแล้วสะสมทั้งหมดของตัวนี้ (ซื้อไข่ + วิวัฒนาการทุกขั้น)
 //     } | null,
 //     growthHistory: [            // ประวัติ "ชีวิต" ของสัตว์เลี้ยงแต่ละตัว (ซื้อไข่ใหม่ = เพิ่มรายการใหม่)
@@ -120,7 +119,6 @@
       speciesKey: window.PET_PURCHASABLE_SPECIES_KEY,
       stage: 0,
       stats: copyOf(window.PET_STAGE_STATS[0]),
-      statusAbility: window.PET_SPECIES_STATUS_ABILITY,
       pointsSpent: ต้นทุนไข่
     };
 
@@ -166,7 +164,6 @@
       speciesKey: สถานะปัจจุบัน.pet.speciesKey,
       stage: ขั้นถัดไป,
       stats: copyOf(window.PET_STAGE_STATS[ขั้นถัดไป]),
-      statusAbility: สถานะปัจจุบัน.pet.statusAbility,
       pointsSpent: สถานะปัจจุบัน.pet.pointsSpent + ต้นทุนขั้นถัดไป
     };
 
@@ -211,7 +208,7 @@
 
   // ── window.ดึงสัตว์เลี้ยงของนักเรียน(uid) ──
   // ใช้สำหรับหน้าทัวนาเมนต์ — ดึงแค่ pet ของ uid ที่ระบุ ไม่คำนวณแต้ม
-  // คืน Promise<{speciesKey, stage, stats, statusAbility} | null>
+  // คืน Promise<{speciesKey, stage, stats} | null>
   window.ดึงสัตว์เลี้ยงของนักเรียน = async function (uid) {
     try {
       var สแนปช็อต = await window.fsGetDoc(เอกสารอ้างอิงของ(uid));
@@ -223,8 +220,7 @@
       return {
         speciesKey: ข้อมูล.pet.speciesKey,
         stage: ข้อมูล.pet.stage,
-        stats: ข้อมูล.pet.stats,
-        statusAbility: ข้อมูล.pet.statusAbility
+        stats: ข้อมูล.pet.stats
       };
     } catch (err) {
       console.error(err);

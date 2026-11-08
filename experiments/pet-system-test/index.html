@@ -20,7 +20,6 @@
 
 <script src="../../js/util.js"></script>
 <script src="../../js/pet-config.js"></script>
-<script src="../../js/tournament-demo-data.js"></script>
 <script src="../tournament-integration-test/mock-firestore.js"></script>
 <script src="../../js/pet-data.js"></script>
 <script>
@@ -139,7 +138,8 @@
     // ── 11. window.ดึงสัตว์เลี้ยงของนักเรียน — ใช้สำหรับหน้าทัวนาเมนต์ ──
     var ดึงมา = await window.ดึงสัตว์เลี้ยงของนักเรียน(STUDENT_A);
     log(ดึงมา !== null && ดึงมา.speciesKey === "pixie" && ดึงมา.stage === 0, "ดึงสัตว์เลี้ยงของนักเรียน คืนข้อมูล pet ปัจจุบันถูกต้อง (หลังซื้อไข่รอบ 2)");
-    log(Object.keys(ดึงมา).sort().join(",") === "speciesKey,stage,stats,statusAbility", "คืนเฉพาะ 4 field ตามสัญญา ไม่หลุด pointsSpent ออกไป", Object.keys(ดึงมา).join(","));
+    log(Object.keys(ดึงมา).sort().join(",") === "speciesKey,stage,stats", "คืนเฉพาะ 3 field ตามสัญญา (ไม่มี statusAbility/pointsSpent)", Object.keys(ดึงมา).join(","));
+    log(Object.keys(ดึงมา.stats).sort().join(",") === window.PET_STAT_KEYS.slice().sort().join(","), "stats มีครบ 6 ค่า รวมค่าหลบหลีก (EVA)", Object.keys(ดึงมา.stats).join(","));
     var ดึงไม่มี = await window.ดึงสัตว์เลี้ยงของนักเรียน(STUDENT_C);
     log(ดึงไม่มี === null, "ดึงสัตว์เลี้ยงของนักเรียนที่ไม่มี pet คืน null");
 
