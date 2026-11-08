@@ -198,7 +198,7 @@
         return "เทิร์น " + ev.turn + " — " + ชื่อของ(p.order && p.order[0]) + " ได้ยิงก่อน" +
           (ความเร็วเท่ากัน ? " (ความเร็วเท่ากัน สุ่มได้)" : " (เร็วกว่า)");
       case "attack":
-        return ชื่อของ(p.actor) + " ยิงพลังขึ้นฟ้าใส่ " + ชื่อของ(p.target);
+        return ชื่อของ(p.actor) + " ยิงพลังใส่ " + ชื่อของ(p.target);
       case "attack_missed":
         return ชื่อของ(p.target) + " หลบได้! (โอกาสโดน " + p.hitChance + "% ทอยได้ " + p.roll + ")";
       case "attack_blocked":

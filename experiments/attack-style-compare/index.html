@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เทียบรูปแบบการยิง (scratch tool)</title>
+<style>
+  /* scratch tool นอกสายเอกสาร (เหมือน experiments/battle-animation-test) — ไม่ใช่ prototype ตาม DESIGN.md */
+  body { font-family: sans-serif; margin: 16px; background: #FFFDF7; color: #171B2A; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+  button { min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid #E6DAC4; background: #fff; cursor: pointer; }
+  button.on { background: #FF6A13; color: #171B2A; font-weight: 700; }
+  .arena { position: relative; display: flex; justify-content: space-between; align-items: flex-end;
+           height: 300px; padding: 0 20px 10px; overflow: hidden; border-radius: 12px; background: #FFF1DC; }
+  .side { position: relative; width: 300px; }
+  .side canvas { width: 100%; display: block; aspect-ratio: 864/496; }
+  #ลูก { position: absolute; width: 70px; height: 70px; left: 0; top: 0; opacity: 0; pointer-events: none; }
+  #เลเซอร์ { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+  #สถานะ { min-height: 22px; color: #4B5568; }
+</style>
+</head>
+<body>
+<h1>เทียบรูปแบบการยิง — คลิป Pixie ชุดเดิม ต่างกันแค่เส้นทางที่โค้ดคุม</h1>
+<div class="bar" id="โหมด">
+  <button data-mode="sky" class="on">1 · ยิงขึ้นฟ้าแล้วร่วง (ระบบปัจจุบัน)</button>
+  <button data-mode="straight">2 · ยิงตรงแนวนอน</button>
+  <button data-mode="arc">3 · ยิงโค้ง (ลอยข้ามหัว)</button>
+  <button data-mode="beam">4 · เลเซอร์ (วาดด้วยโค้ด)</button>
+</div>
+<div class="bar">
+  <button id="ยิงโดน">A ยิง → โดน</button>
+  <button id="ยิงพลาด">A ยิง → หลบได้</button>
+  <button id="Bยิง">B ยิง → โดน</button>
+</div>
+<p id="สถานะ">กำลังโหลดคลิป…</p>
+<div class="arena" id="สนาม">
+  <div class="side" data-side="A"><canvas width="864" height="496"></canvas></div>
+  <div class="side" data-side="B"><canvas width="864" height="496"></canvas></div>
+  <canvas id="ลูก" width="140" height="140"></canvas>
+  <canvas id="เลเซอร์"></canvas>
+</div>
+<script>
+var BASE = "../../assets/pets/pixie/";
+var RECT = { x: 259, y: 74, w: 346, h: 346 };   // ค่าเดียวกับ PET_CLIP_CONFIG.pixie.projectileRect
+var OFFSET = { idle: 0, cast: 0, hit: 0, dodge: 1.6 };
+var โหมด = "sky";
+
+function alphaOf(r, g, b) { return (b > 150 && b - r > 60 && b - g > 40) ? 0 : 255; }
+function keyDraw(ctx, v, w, h, rect) {
+  if (rect) ctx.drawImage(v, rect.x, rect.y, rect.w, rect.h, 0, 0, w, h); else ctx.drawImage(v, 0, 0, w, h);
+  var f = ctx.getImageData(0, 0, w, h), d = f.data;
+  for (var i = 0; i < d.length; i += 4) { var a = alphaOf(d[i], d[i + 1], d[i + 2]); if (a < d[i + 3]) d[i + 3] = a; }
+  ctx.putImageData(f, 0, 0);
+}
+var cache = {};
+function blob(u) { return cache[u] || (cache[u] = fetch(u).then(function (r) { return r.blob(); }).then(URL.createObjectURL)); }
+function vid() { var v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto"; return v; }
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+function fighter(sideEl, faceLeft) {
+  var c = sideEl.querySelector("canvas"), ctx = c.getContext("2d", { willReadFrequently: true }), vids = {};
+  ["idle", "cast", "hit", "dodge"].forEach(function (k) {
+    var v = vid(); blob(BASE + k + ".mp4").then(function (u) { v.src = u; });
+    if (OFFSET[k]) v.addEventListener("loadedmetadata", function () { v.currentTime = OFFSET[k]; }, { once: true });
+    vids[k] = v;
+  });
+  var cur = vids.idle;
+  (function loop() { if (cur.readyState >= 2) keyDraw(ctx, cur, c.width, c.height); requestAnimationFrame(loop); })();
+  function play(k, loop) {
+    return new Promise(function (res) {
+      Object.keys(vids).forEach(function (x) { if (x !== k) vids[x].pause(); });
+      cur = vids[k]; cur.loop = !!loop; cur.currentTime = OFFSET[k] || 0;
+      var flip = k === "dodge" ? !faceLeft : faceLeft;
+      c.style.transform = flip ? "scaleX(-1)" : "none";
+      cur.play().catch(function () {});
+      if (loop) return res();
+      var t = setTimeout(res, 4000);
+      cur.onended = function () { clearTimeout(t); res(); };
+    });
+  }
+  play("idle", true);
+  return { play: play, el: sideEl };
+}
+
+var สนาม = document.getElementById("สนาม");
+var F = { A: fighter(สนาม.querySelector('[data-side="A"]'), false), B: fighter(สนาม.querySelector('[data-side="B"]'), true) };
+var ลูก = document.getElementById("ลูก"), ctxลูก = ลูก.getContext("2d", { willReadFrequently: true });
+var วิดีโอลูก = vid(); blob(BASE + "projectile.mp4").then(function (u) { วิดีโอลูก.src = u; });
+// เหมือน js/pet-animation.js: ปักไว้ที่วินาทีที่ 1.0 (เฟรมแรกของคลิปยังไม่มีลูกพลัง) แล้วเล่นช้ามาก
+วิดีโอลูก.addEventListener("loadedmetadata", function () {
+  วิดีโอลูก.currentTime = 1.0; วิดีโอลูก.playbackRate = 0.0625; วิดีโอลูก.loop = true; วิดีโอลูก.play().catch(function () {});
+}, { once: true });
+(function loop() { if (วิดีโอลูก.readyState >= 2) keyDraw(ctxลูก, วิดีโอลูก, ลูก.width, ลูก.height, RECT); requestAnimationFrame(loop); })();
+var เลเซอร์ = document.getElementById("เลเซอร์");
+
+// จุดในสนาม: "มือ" ของผู้ยิง (ค่อนไปทางคู่ต่อสู้ ระดับอก) และ "ลำตัว" ของเป้า
+function จุด(side, ส่วน) {
+  var a = สนาม.getBoundingClientRect(), r = F[side].el.getBoundingClientRect();
+  var cx = r.left - a.left + r.width / 2, top = r.top - a.top;
+  if (ส่วน === "มือ") return { x: cx + (side === "A" ? 1 : -1) * r.width * 0.18, y: top + r.height * 0.45 };
+  return { x: cx, y: top + r.height * 0.55 };
+}
+function วางลูก(x, y) {
+  ลูก.style.left = (x - ลูก.offsetWidth / 2) + "px";
+  ลูก.style.top = (y - ลูก.offsetHeight / 2) + "px";
+}
+function เคลื่อน(นาน, fn) {
+  return new Promise(function (res) {
+    var t0 = performance.now();
+    (function step(now) {
+      var t = Math.min(1, (now - t0) / นาน);
+      fn(t);
+      if (t < 1) requestAnimationFrame(step); else res();
+    })(t0);
+  });
+}
+
+// เส้นทางของแต่ละโหมด — คืน Promise ที่จบเมื่อของถึงเป้า (โดน) หรือออกนอกจอ (พลาด)
+var เส้นทาง = {
+  sky: function (ผู้ยิง, เป้า, โดน) {
+    var s = จุด(ผู้ยิง, "มือ"), e = จุด(เป้า, "ลำตัว");
+    ลูก.style.opacity = 1;
+    return เคลื่อน(260, function (t) { วางลูก(s.x, s.y - t * (s.y + 80)); })           // พุ่งขึ้นฟ้า
+      .then(function () { return เคลื่อน(500, function (t) { วางลูก(e.x, -80 + t * t * (e.y + 80)); }); }); // ร่วงใส่เป้า
+  },
+  straight: function (ผู้ยิง, เป้า, โดน) {
+    var s = จุด(ผู้ยิง, "มือ"), e = จุด(เป้า, "ลำตัว");
+    var ex = โดน ? e.x : e.x + (e.x - s.x) * 0.6;                                        // พลาด = เลยผ่านไป
+    ลูก.style.opacity = 1;
+    return เคลื่อน(โดน ? 450 : 700, function (t) { วางลูก(s.x + (ex - s.x) * t, s.y + (e.y - s.y) * Math.min(1, t)); });
+  },
+  arc: function (ผู้ยิง, เป้า, โดน) {
+    var s = จุด(ผู้ยิง, "มือ"), e = จุด(เป้า, "ลำตัว");
+    var ex = โดน ? e.x : e.x + (e.x - s.x) * 0.35, ey = โดน ? e.y : สนาม.clientHeight - 20;
+    ลูก.style.opacity = 1;
+    return เคลื่อน(750, function (t) {
+      var x = s.x + (ex - s.x) * t, y = s.y + (ey - s.y) * t - Math.sin(Math.PI * t) * 150; // โค้งพาราโบลาสูง 150px
+      วางลูก(x, y);
+    });
+  },
+  beam: function (ผู้ยิง, เป้า, โดน) {
+    var s = จุด(ผู้ยิง, "มือ"), e = จุด(เป้า, "ลำตัว");
+    เลเซอร์.width = สนาม.clientWidth; เลเซอร์.height = สนาม.clientHeight;
+    var c = เลเซอร์.getContext("2d");
+    var ex = โดน ? e.x : (ผู้ยิง === "A" ? เลเซอร์.width : 0), ey = โดน ? e.y : e.y - 60; // พลาด = ลำแสงเฉียดหัวออกไป
+    return เคลื่อน(420, function (t) {
+      c.clearRect(0, 0, เลเซอร์.width, เลเซอร์.height);
+      var ยาว = Math.min(1, t * 2.5), จาง = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+      var x = s.x + (ex - s.x) * ยาว, y = s.y + (ey - s.y) * ยาว;
+      c.globalAlpha = จาง; c.lineCap = "round";
+      c.strokeStyle = "rgba(120,255,160,0.45)"; c.lineWidth = 18; c.beginPath(); c.moveTo(s.x, s.y); c.lineTo(x, y); c.stroke();
+      c.strokeStyle = "#ffffff"; c.lineWidth = 5; c.beginPath(); c.moveTo(s.x, s.y); c.lineTo(x, y); c.stroke();
+    }).then(function () { c.clearRect(0, 0, เลเซอร์.width, เลเซอร์.height); });
+  }
+};
+
+// เวลาที่ของใช้เดินทางก่อนถึงเป้า — ให้ท่ารับเริ่มพอดีตอนถึง (ไม่ใช่เริ่มตั้งแต่ยิง)
+var ถึงเป้าหลัง = { sky: 260 + 380, straight: 380, arc: 600, beam: 160 };
+
+var กำลังเล่น = false;
+async function ยิง(ผู้ยิง, โดน) {
+  if (กำลังเล่น) return; กำลังเล่น = true;
+  var เป้า = ผู้ยิง === "A" ? "B" : "A";
+  document.getElementById("สถานะ").textContent = "โหมด " + โหมด + " · " + ผู้ยิง + " ยิง · " + (โดน ? "โดน" : "พลาด");
+  await F[ผู้ยิง].play("cast", false);
+  วิดีโอลูก.currentTime = 1.0;                                       // รีเซ็ตเฟรมลูกพลังทุกครั้ง (เหมือนระบบจริง)
+  ลูก.style.transform = ผู้ยิง === "B" ? "scaleX(-1)" : "none";       // ฝั่งขวายิงกลับทาง หางลูกพลังต้องกลับด้าน
+  var ไป = เส้นทาง[โหมด](ผู้ยิง, เป้า, โดน);
+  // ท่าหลบต้องเริ่มก่อนของถึง (คลิปหลบมีช่วงออกตัว) ท่าโดนเริ่มตอนถึงพอดี
+  await wait(Math.max(0, ถึงเป้าหลัง[โหมด] - (โดน ? 0 : 250)));
+  var รับ = F[เป้า].play(โดน ? "hit" : "dodge", false);
+  await ไป; ลูก.style.opacity = 0;
+  await รับ;
+  F.A.play("idle", true); F.B.play("idle", true);
+  กำลังเล่น = false;
+  window.__ยิงเสร็จ = (window.__ยิงเสร็จ || 0) + 1;
+}
+
+document.getElementById("โหมด").addEventListener("click", function (e) {
+  var b = e.target.closest("button"); if (!b) return;
+  โหมด = b.getAttribute("data-mode");
+  document.querySelectorAll("#โหมด button").forEach(function (x) { x.classList.toggle("on", x === b); });
+});
+document.getElementById("ยิงโดน").onclick = function () { ยิง("A", true); };
+document.getElementById("ยิงพลาด").onclick = function () { ยิง("A", false); };
+document.getElementById("Bยิง").onclick = function () { ยิง("B", true); };
+window.__ตั้งโหมด = function (m) { โหมด = m; };
+window.__ยิง = ยิง;
+setTimeout(function () { document.getElementById("สถานะ").textContent = "พร้อม — เลือกโหมดแล้วกดยิง"; }, 1500);
+</script>
+</body>
+</html>

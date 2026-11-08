@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>harness: pet.html (mock)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness รัน js/pet.js ของจริงบน mock Firestore (ไม่เก็บข้าม reload) — นักเรียนใหม่ที่ยังไม่มีสัตว์เลี้ยง
+       ?points=N กำหนดคะแนนข้อสอบที่ตรวจแล้ว (ค่าเริ่ม 60) ใช้ลองปุ่ม "ซื้อร่างสุดท้ายทันที" -->
+  <div class="container">
+    <h1>สัตว์เลี้ยงของฉัน <small>(harness)</small></h1>
+    <div id="กล่องกำลังโหลด" class="card"><p>กำลังโหลด…</p></div>
+    <div id="กล่องไม่มีสิทธิ์" class="card hidden"><p>หน้านี้สำหรับนักเรียนเท่านั้น</p></div>
+    <div id="กล่องเตือนสัตว์เลี้ยง" class="alert alert-error hidden"></div>
+    <div id="ที่วางสัตว์เลี้ยง" class="hidden"></div>
+  </div>
+  <script src="../../js/util.js"></script>
+  <script src="../../js/pet-config.js"></script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script>delete window.CURRENT_USER;</script>
+  <script src="../../js/pet-data.js"></script>
+  <script src="../../js/pet.js"></script>
+  <script>
+  (async function () {
+    var คะแนน = Number(new URLSearchParams(location.search).get("points") || 60);
+    await window.fsSetDoc(window.fsDoc(window.db, "quizAttempts", "h1"), {
+      studentId: "p1", status: "graded", scoreAwarded: คะแนน
+    });
+    window.CURRENT_USER = { uid: "p1", name: "น้องพี", role: "student" };
+    window.dispatchEvent(new Event("auth-ready"));
+  })();
+  </script>
+</body>
+</html>

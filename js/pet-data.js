@@ -141,6 +141,52 @@
     }
   };
 
+  // ── window.ซื้อร่างสุดท้าย(uid) ── (สเปก 02 ซ.13 เพิ่ม 2026-11-08)
+  // ซื้อร่างสุดท้ายรวดเดียวเมื่อยังไม่มีสัตว์เลี้ยง — ราคา = แต้มสะสมทั้งเส้น (PET_STAGE_CUMULATIVE_COST
+  // ของร่างสุดท้าย) ไม่ลด/ไม่เพิ่มราคา, สเตตัส = PET_STAGE_STATS ของร่างสุดท้าย, pointsSpent เท่ากับเดินทีละขั้นครบ
+  // ผลลัพธ์จึงเหมือนซื้อไข่แล้ววิวัฒนาการครบทุกขั้นทุกประการ (รีเซ็ตแล้วได้แต้มคืนเต็มตามกฎเดิม)
+  window.ซื้อร่างสุดท้าย = async function (uid) {
+    var สถานะปัจจุบัน = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(uid);
+
+    if (สถานะปัจจุบัน.pet !== null) {
+      throw new Error("มีสัตว์เลี้ยงอยู่แล้ว — ใช้ปุ่มวิวัฒนาการต่อ หรือรีเซ็ตก่อนถึงจะซื้อร่างสุดท้ายรวดเดียวได้");
+    }
+
+    var ขั้นสุดท้าย = window.PET_STAGE_COST.length - 1;
+    var ราคารวม = window.PET_STAGE_CUMULATIVE_COST[ขั้นสุดท้าย];
+    if (สถานะปัจจุบัน.pointsAvailable < ราคารวม) {
+      throw new Error(
+        "แต้มไม่พอซื้อร่างสุดท้าย — ต้องการ " + ราคารวม + " แต้ม มีแต้มที่ใช้ได้อยู่ " +
+        สถานะปัจจุบัน.pointsAvailable + " แต้ม (ขาดอีก " + (ราคารวม - สถานะปัจจุบัน.pointsAvailable) + " แต้ม)"
+      );
+    }
+
+    var petใหม่ = {
+      speciesKey: window.PET_PURCHASABLE_SPECIES_KEY,
+      stage: ขั้นสุดท้าย,
+      stats: copyOf(window.PET_STAGE_STATS[ขั้นสุดท้าย]),
+      pointsSpent: ราคารวม
+    };
+
+    var growthHistoryใหม่ = สถานะปัจจุบัน.growthHistory.concat([{
+      speciesKey: window.PET_PURCHASABLE_SPECIES_KEY,
+      reachedStage: ขั้นสุดท้าย,
+      startedAt: เวลาตอนนี้(),
+      endedAt: null
+    }]);
+
+    try {
+      await window.fsSetDoc(
+        เอกสารอ้างอิงของ(uid),
+        { pet: petใหม่, growthHistory: growthHistoryใหม่ },
+        { merge: true }
+      );
+    } catch (err) {
+      console.error(err);
+      throw new Error("ซื้อร่างสุดท้ายไม่สำเร็จ: " + err.message);
+    }
+  };
+
   // ── window.วิวัฒนาการ(uid) ──
   window.วิวัฒนาการ = async function (uid) {
     var สถานะปัจจุบัน = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(uid);

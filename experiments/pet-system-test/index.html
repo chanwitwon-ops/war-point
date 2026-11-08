@@ -143,6 +143,29 @@
     var ดึงไม่มี = await window.ดึงสัตว์เลี้ยงของนักเรียน(STUDENT_C);
     log(ดึงไม่มี === null, "ดึงสัตว์เลี้ยงของนักเรียนที่ไม่มี pet คืน null");
 
+    // ── 12. ซื้อร่างสุดท้ายรวดเดียว (สเปก 02 ซ.13) — ราคา = แต้มสะสมทั้งเส้น ──
+    var D = "student-d-uid";
+    var ร่างสุดท้าย = window.PET_STAGE_COST.length - 1;
+    var ราคารวม = window.PET_STAGE_CUMULATIVE_COST[ร่างสุดท้าย];
+    log(ราคารวม === 51, "ราคาร่างสุดท้ายรวดเดียว = 51 แต้ม (ผลรวม 1+5+10+15+20)", ราคารวม);
+    await seedGradedAttempt(D, ราคารวม - 1);
+    await expectThrow(function () { return window.ซื้อร่างสุดท้าย(D); }, "ซื้อร่างสุดท้ายตอนมี 50 แต้ม (ขาด 1) ต้อง throw");
+    var ยังไม่มี = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
+    log(ยังไม่มี.pet === null && ยังไม่มี.pointsAvailable === 50, "ซื้อไม่สำเร็จแล้วไม่มี pet และแต้มไม่ถูกหัก", ยังไม่มี.pointsAvailable);
+    await seedGradedAttempt(D, 1); // ขอบพอดี 51
+    await window.ซื้อร่างสุดท้าย(D);
+    var หลังซื้อ = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
+    log(หลังซื้อ.pet && หลังซื้อ.pet.stage === ร่างสุดท้าย, "มี 51 แต้มพอดี ซื้อร่างสุดท้ายได้ stage = 4", หลังซื้อ.pet && หลังซื้อ.pet.stage);
+    log(หลังซื้อ.pointsAvailable === 0 && หลังซื้อ.pet.pointsSpent === 51, "แต้มคงเหลือ 0 และ pointsSpent = 51", หลังซื้อ.pointsAvailable + "/" + หลังซื้อ.pet.pointsSpent);
+    log(window.PET_STAT_KEYS.every(function (k) { return หลังซื้อ.pet.stats[k] === window.PET_STAGE_STATS[ร่างสุดท้าย][k]; }),
+      "สเตตัสเท่ากับ PET_STAGE_STATS ร่างสุดท้ายทุกค่า", JSON.stringify(หลังซื้อ.pet.stats));
+    log(หลังซื้อ.growthHistory.length === 1 && หลังซื้อ.growthHistory[0].reachedStage === ร่างสุดท้าย && หลังซื้อ.growthHistory[0].endedAt === null,
+      "growthHistory เพิ่ม 1 ชีวิตที่ถึงร่างสุดท้าย");
+    await expectThrow(function () { return window.ซื้อร่างสุดท้าย(D); }, "ซื้อร่างสุดท้ายซ้ำตอนมี pet อยู่แล้วต้อง throw");
+    await window.รีเซ็ตสัตว์เลี้ยง(D);
+    var หลังรีเซ็ต = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
+    log(หลังรีเซ็ต.pet === null && หลังรีเซ็ต.pointsAvailable === 51, "รีเซ็ตหลังซื้อร่างสุดท้ายได้แต้มคืนเต็ม 51", หลังรีเซ็ต.pointsAvailable);
+
   } catch (e) {
     log(false, "เกิด exception ที่ไม่คาดคิดระหว่างรันเทส", e.message);
     console.error(e);

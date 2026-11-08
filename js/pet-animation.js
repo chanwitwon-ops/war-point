@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────
 // js/pet-animation.js — เวทีแอนิเมชันการต่อสู้ (ชั้นแสดงผลล้วน ไม่คำนวณผลใดๆ)
 // ยกเทคนิคมาจากเครื่องมือทดลอง experiments/battle-animation-test/battle-test.html
-// (chroma-key คีย์สีน้ำเงินออกผ่าน canvas, โหลดคลิปเป็น blob ล่วงหน้า, ยิงขึ้นฟ้าแล้วพลังงานร่วง
-// ลงมาใส่เป้าหมาย) — ผู้เรียกบอกว่าจะเล่นท่าอะไรตาม battle log เท่านั้น
+// (chroma-key คีย์สีน้ำเงินออกผ่าน canvas, โหลดคลิปเป็น blob ล่วงหน้า) · ลูกพลังยิงตรงแนวนอนจากคทา
+// ไปหาเป้า โดยโค้ดเป็นคนพาลูกไป (เปลี่ยนจากยิงขึ้นฟ้าเมื่อ 2026-11-08) — ผู้เรียกบอกว่าจะเล่นท่าอะไรตาม battle log เท่านั้น
 //
 // สลับคลิปใหม่: วางไฟล์ทับใน assets/pets/<speciesKey>/ ชื่อเดิม ไม่ต้องแก้โค้ด (ถ้าจังหวะ
 // เริ่มของคลิปใหม่ต่างจากเดิม ให้แก้ startOffset ใน PET_CLIP_CONFIG ด้านล่างเท่านั้น)
@@ -10,7 +10,7 @@
 // ── สัญญา ──
 // window.สร้างเวทีต่อสู้(ที่วาง: HTMLElement, speciesA: string, speciesB: string)
 //   → เวที | null (null ถ้าสายพันธุ์ใดไม่มีคลิป — ผู้เรียกใช้ข้อความแทน)
-// เวที.ยิง(ฝั่งผู้ยิง: "A"|"B", ผลลัพธ์: "hit"|"miss"|"block") → Promise  เล่นท่ายิง + ของตก + ท่ารับ
+// เวที.ยิง(ฝั่งผู้ยิง: "A"|"B", ผลลัพธ์: "hit"|"miss"|"block") → Promise  เล่นท่ายิง + ลูกพลังบินตรงไปหาเป้า + ท่ารับ
 // เวที.ข้อความลอย(ฝั่ง, ข้อความ)                  แสดงตัวเลข/คำเหนือหัวชั่วครู่
 // เวที.หมดแรง(ฝั่ง)  /  เวที.รีเซ็ต()               ทำให้ตัวที่แพ้จางลง / กลับสภาพเริ่มต้น
 // ─────────────────────────────────────────────────────────────
@@ -21,7 +21,19 @@
       base: "assets/pets/pixie/",
       startOffset: { idle: 0, cast: 0, hit: 0, dodge: 1.6 },
       // ตำแหน่ง crop ลูกพลังงานในเฟรมคลิป projectile (วัดจากคลิปปัจจุบัน — คลิปใหม่อาจต้องวัดใหม่)
-      projectileRect: { x: 259, y: 74, w: 346, h: 346 }
+      // ใช้เฉพาะสายพันธุ์ที่ไม่มี castRelease (Pixie ใช้ก้อนพลังจากท่าร่ายแทน ดูด้านล่าง)
+      projectileRect: { x: 259, y: 74, w: 346, h: 346 },
+      // [เพิ่ม 2026-11-08] คลิปท่าร่ายของ Pixie ปล่อยก้อนพลังสีขาวเหลืองก้อนใหญ่ออกจากคทาเองในคลิป
+      // (วัดจากเฟรมจริงด้วย ffmpeg): หลุดจากคทาที่ 3.3 วินาที จุดศูนย์กลาง (665, 260) ในเฟรม 864×496
+      // ขนาดราว 100px — ตั้งแต่วินาทีนั้นจะลบพิกเซลสว่าง (ก้อนพลัง/ประกาย) ทางขวาของ x 645 ทิ้ง แล้วให้โค้ดวาดก้อนพลัง
+      // ขนาด/สีเดียวกันบินต่อไปหาเป้า ก้อนที่เห็นตอนร่ายกับก้อนที่ยิงออกไปจึงเป็นก้อนเดียวกัน
+      castRelease: {
+        at: 3.3,
+        x: 665, y: 260, size: 100,
+        eraseRightOf: 645,
+        // สีแสงเก็บจากเฟรมคลิป (เป็นสีของเอฟเฟกต์ในคลิป ไม่ใช่สี UI จึงไม่ได้มาจาก token)
+        glow: ["rgba(255,255,250,1)", "rgba(255,248,200,0.95)", "rgba(255,236,150,0.45)", "rgba(255,230,140,0)"]
+      }
     }
   };
 
@@ -29,7 +41,12 @@
 
   // พื้นหลังคลิปเป็นสีน้ำเงิน (ดู comment ใน battle-test.html เรื่องไล่เฉด) — ค่าเดียวกับที่ทดสอบผ่านแล้ว
   function ความโปร่งใส(r, g, b) {
-    return (b > 150 && b - r > 60 && b - g > 40) ? 0 : 255;
+    if (b > 150 && b - r > 60 && b - g > 40) return 0;
+    // [เพิ่ม 2026-11-08] ขอบแสงฟุ้งรอบคทา (ฟ้าอ่อนอมเขียว เช่น 190,235,255) ไม่ผ่านเกณฑ์ข้างบน
+    // จึงค้างเป็นวงแสงสีฟ้า — ให้จางตามความ "ฟ้า" แทน · ปลอดภัยกับตัวละคร เพราะสีเขียว/น้ำตาล/ขาว
+    // ของตัวละครมี b ไม่เกิน g หรือ b แทบเท่า r เสมอ
+    if (b > g && b - r > 25) return Math.max(0, Math.min(255, 255 - (b - r - 25) * 7));
+    return 255;
   }
 
   function วาดแบบคีย์สี(ctx, video, w, h, srcRect) {
@@ -88,12 +105,54 @@
       return ท่า === "dodge" ? !หันซ้าย : หันซ้าย;
     }
 
+    // จังหวะปล่อยก้อนพลังของท่าร่าย (ถ้าสายพันธุ์นี้มี castRelease) — resolve เมื่อคลิปเดินถึงวินาทีที่กำหนด
+    var รอปล่อย = null;   // { resolve } ระหว่างเล่นท่าร่าย
+    var ลบขวา = false;     // หลังปล่อยแล้ว ลบส่วนขวาของเฟรมท่าร่าย (ก้อนพลังของคลิป) ทิ้ง
+
     function วนวาด() {
       if (หยุดวาด) return;
-      if (ปัจจุบัน.readyState >= 2) วาดแบบคีย์สี(ctx, ปัจจุบัน, canvas.width, canvas.height);
+      if (ปัจจุบัน.readyState >= 2) {
+        วาดแบบคีย์สี(ctx, ปัจจุบัน, canvas.width, canvas.height);
+        var ปล่อย = config.castRelease;
+        if (ปล่อย && ปัจจุบัน === วิดีโอ.cast) {
+          if (รอปล่อย && ปัจจุบัน.currentTime >= ปล่อย.at) {
+            ลบขวา = true;
+            var r = รอปล่อย.resolve;
+            รอปล่อย = null;
+            r();
+          }
+          if (ลบขวา) {
+            // ลบเฉพาะพิกเซลสว่างขาวเหลือง (ก้อนพลัง + ประกาย) ทางขวาของคทา — ไม่ลบทั้งแถบ
+            // เพราะท่าตามหลังการยิงมีปลายปีกยื่นเข้ามาในแถบนั้น (ลบทั้งแถบแล้วปีกขาดเป็นเส้นตรง)
+            var x0 = Math.round(ปล่อย.eraseRightOf * canvas.width / 864);
+            var ส่วนขวา = ctx.getImageData(x0, 0, canvas.width - x0, canvas.height);
+            var px = ส่วนขวา.data;
+            for (var i = 0; i < px.length; i += 4) {
+              // สว่างขาวเหลือง = แกนก้อนพลัง/ประกาย · อมฟ้า (b > r) = วงแสงฟุ้งรอบก้อน
+              // ปีก/ตัว/คทาเป็นเขียว-น้ำตาล (b < r เสมอ) จึงไม่โดนลบ
+              if ((px[i] > 200 && px[i + 1] > 190) || px[i + 2] > px[i]) px[i + 3] = 0;
+            }
+            ctx.putImageData(ส่วนขวา, x0, 0);
+          }
+        }
+      }
       requestAnimationFrame(วนวาด);
     }
     วนวาด();
+
+    // เริ่มท่าร่ายแล้วคืน { ปล่อย: Promise (ตอนก้อนพลังหลุดจากคทา), จบ: Promise (คลิปจบ) }
+    // สายพันธุ์ที่ไม่มี castRelease: ปล่อยตอนคลิปจบ (พฤติกรรมเดิม)
+    function เล่นท่าร่าย() {
+      ลบขวา = false;
+      var จบ = เล่น("cast", false);
+      if (!config.castRelease) return { ปล่อย: จบ, จบ: จบ };
+      var ปล่อย = new Promise(function (resolve) { รอปล่อย = { resolve: resolve }; });
+      // กันค้าง: ถ้าคลิปจบก่อนถึงจังหวะปล่อย (เช่นโหลดไม่ได้) ให้ปล่อยตอนจบ
+      จบ.then(function () {
+        if (รอปล่อย) { var r = รอปล่อย.resolve; รอปล่อย = null; r(); }
+      });
+      return { ปล่อย: ปล่อย, จบ: จบ };
+    }
 
     function เล่น(ท่า, วนซ้ำ) {
       return new Promise(function (resolve) {
@@ -120,7 +179,7 @@
     }
 
     เล่น("idle", true);
-    return { canvas: canvas, เล่น: เล่น, ทำลาย: function () { หยุดวาด = true; } };
+    return { canvas: canvas, เล่น: เล่น, เล่นท่าร่าย: เล่นท่าร่าย, ทำลาย: function () { หยุดวาด = true; } };
   }
 
   window.สร้างเวทีต่อสู้ = function (ที่วาง, speciesA, speciesB) {
@@ -147,7 +206,11 @@
       B: สร้างตัวละคร(ฝั่ง.B.querySelector("canvas"), configB, true)
     };
 
-    // ลูกพลังงานที่ร่วงจากฟ้า — ใช้คลิป projectile ของฝ่ายผู้ยิง
+    // ลูกพลังงานที่ยิงตรงแนวนอนจากคทาไปหาเป้า — ใช้คลิป projectile ของฝ่ายผู้ยิง (ปักไว้เฟรมเดียว)
+    // [เปลี่ยน 2026-11-08] จาก "ยิงขึ้นฟ้าแล้วร่วง" เป็น "ยิงตรงแนวนอน" หลังทดลองเทียบ 4 แบบใน
+    // experiments/attack-style-compare/ — คลิปท่าร่าย (ยื่นคทาไปข้างหน้า) และคลิปลูกพลัง (บินแนวนอน)
+    // ที่มีอยู่เข้ากับแนวนอนพอดี ไม่ต้องทำคลิปใหม่ · ปัญหาเดิมของแนวนอน (ก.ย.) คือให้คลิปพาลูกข้ามจอเอง
+    // รอบนี้โค้ดเป็นคนพาลูกไป จึงเล็งตรงเป้าทุกครั้ง
     var canvasลูก = ที่วาง.querySelector(".battle-projectile");
     var ctxลูก = canvasลูก.getContext("2d", { willReadFrequently: true });
     var วิดีโอลูก = { A: วิดีโอเงียบ(), B: วิดีโอเงียบ() };
@@ -155,46 +218,120 @@
     blobของ(configB.base + "projectile.mp4").then(function (u) { วิดีโอลูก.B.src = u; }).catch(function (e) { console.error(e); });
     var ลูกที่ใช้ = null;
     var rectลูกที่ใช้ = null;
+    var แสงที่ใช้ = null;   // สีแสงของ castRelease — ถ้ามี วาดก้อนพลังด้วยโค้ดแทนคลิป projectile
     var หยุดวาดลูก = false;
-    (function วนวาดลูก() {
+    (function วนวาดลูก(ตอนนี้) {
       if (หยุดวาดลูก) return;
-      if (ลูกที่ใช้ && ลูกที่ใช้.readyState >= 2) {
+      if (แสงที่ใช้) {
+        วาดก้อนแสง(ตอนนี้ || 0);
+      } else if (ลูกที่ใช้ && ลูกที่ใช้.readyState >= 2) {
         วาดแบบคีย์สี(ctxลูก, ลูกที่ใช้, canvasลูก.width, canvasลูก.height, rectลูกที่ใช้);
       }
       requestAnimationFrame(วนวาดลูก);
     })();
 
-    function ร่วงใส่(ฝั่งเป้าหมาย, ฝั่งผู้ยิง) {
+    // ก้อนแสงแบบเดียวกับในคลิปท่าร่าย: แกนขาว → เหลืองอ่อน → แสงฟุ้งจางออก (กระพริบเบาๆ)
+    function วาดก้อนแสง(ตอนนี้) {
+      var w = canvasลูก.width, h = canvasลูก.height;
+      var กระพริบ = 1 + 0.06 * Math.sin(ตอนนี้ / 70);
+      ctxลูก.clearRect(0, 0, w, h);
+      var g = ctxลูก.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, (w / 2) * กระพริบ);
+      // แกนทึบขาวราว 1 ใน 3 ของรัศมี (ตรงกับก้อนในคลิปที่แกนสว่างจัด) แล้วค่อยฟุ้งจางออก
+      g.addColorStop(0, แสงที่ใช้[0]);
+      g.addColorStop(0.32, แสงที่ใช้[0]);
+      g.addColorStop(0.5, แสงที่ใช้[1]);
+      g.addColorStop(0.72, แสงที่ใช้[2]);
+      g.addColorStop(1, แสงที่ใช้[3]);
+      ctxลูก.fillStyle = g;
+      ctxลูก.fillRect(0, 0, w, h);
+    }
+
+    // เวลาบินของลูกพลัง (ms) — โดน/บล็อก: หยุดที่เป้า · พลาด: เฉียดเหนือหัวแล้วเลยออกไป
+    var เวลาบินถึงเป้า = 450;
+    var เวลาบินพลาด = 700;
+
+    // จุดในสนาม (พิกัดเทียบกับ .battle-arena): ปลายคทาของผู้ยิง (ค่อนไปทางคู่ต่อสู้ ระดับอก) / ลำตัวของเป้า
+    function จุดของ(ฝั่งไหน, ส่วน) {
+      var a = สนาม.getBoundingClientRect();
+      var r = ฝั่ง[ฝั่งไหน].getBoundingClientRect();
+      var กลางX = r.left - a.left + r.width / 2;
+      var บน = r.top - a.top;
+      if (ส่วน === "คทา") {
+        return { x: กลางX + (ฝั่งไหน === "A" ? 1 : -1) * r.width * 0.18, y: บน + r.height * 0.45 };
+      }
+      return { x: กลางX, y: บน + r.height * 0.55, สูง: r.height };
+    }
+
+    // แปลงพิกัดในเฟรมคลิป (864×496) เป็นพิกัดในสนาม — ฝั่ง B กลับด้านภาพ จึงกลับแกน x ด้วย
+    function จุดจากเฟรม(ฝั่งไหน, fx, fy) {
+      var a = สนาม.getBoundingClientRect();
+      var r = ฝั่ง[ฝั่งไหน].getBoundingClientRect();
+      var สัดส่วนX = ฝั่งไหน === "B" ? 1 - fx / 864 : fx / 864;
+      return { x: r.left - a.left + r.width * สัดส่วนX, y: r.top - a.top + r.height * (fy / 496), กว้าง: r.width };
+    }
+
+    function วางลูก(x, y) {
+      canvasลูก.style.left = (x - canvasลูก.offsetWidth / 2) + "px";
+      canvasลูก.style.top = (y - canvasลูก.offsetHeight / 2) + "px";
+    }
+
+    function ยิงตรงไปหา(ฝั่งเป้าหมาย, ฝั่งผู้ยิง, โดน) {
       return new Promise(function (resolve) {
         var config = ฝั่งผู้ยิง === "A" ? configA : configB;
-        ลูกที่ใช้ = วิดีโอลูก[ฝั่งผู้ยิง];
-        rectลูกที่ใช้ = config.projectileRect;
-        var กรอบสนาม = สนาม.getBoundingClientRect();
-        var กรอบเป้า = ฝั่ง[ฝั่งเป้าหมาย].getBoundingClientRect();
-        var กรอบลูก = canvasลูก.getBoundingClientRect();
-        var x = (กรอบเป้า.left - กรอบสนาม.left) + กรอบเป้า.width / 2 - กรอบลูก.width / 2;
-        var yเริ่ม = -กรอบลูก.height * 1.5;
-        var yจบ = (กรอบเป้า.top - กรอบสนาม.top) + กรอบเป้า.height * 0.75 - กรอบลูก.height / 2;
-        var นาน = 500;
+        var ปล่อย = config.castRelease;
+        var ต้น;
+        if (ปล่อย) {
+          // ก้อนพลังจากท่าร่าย: เริ่มที่ตำแหน่งเดียวกับก้อนในคลิป ขนาดเท่ากัน (ตามสัดส่วนตัวละครบนจอ)
+          ต้น = จุดจากเฟรม(ฝั่งผู้ยิง, ปล่อย.x, ปล่อย.y);
+          var ขนาด = Math.round(ต้น.กว้าง * (ปล่อย.size / 864) * 1.6); // ×1.6 เผื่อแสงฟุ้งรอบแกน
+          canvasลูก.width = 128;            // ต้องเป็นจัตุรัส ไม่งั้นก้อนแสงถูกยืดเป็นวงรี
+          canvasลูก.height = 128;
+          canvasลูก.style.width = ขนาด + "px";
+          canvasลูก.style.height = ขนาด + "px";
+          แสงที่ใช้ = ปล่อย.glow;
+          ลูกที่ใช้ = null;
+        } else {
+          canvasลูก.width = 200;            // ขนาดเดิมของ canvas ลูกพลังจากคลิป
+          canvasลูก.height = 120;
+          canvasลูก.style.width = "";
+          canvasลูก.style.height = "";
+          แสงที่ใช้ = null;
+          ลูกที่ใช้ = วิดีโอลูก[ฝั่งผู้ยิง];
+          rectลูกที่ใช้ = config.projectileRect;
+          ลูกที่ใช้.currentTime = 1.0;     // เฟรมแรกของคลิปยังไม่มีลูกพลัง — ปักไว้ช่วงที่เห็นลูกชัด
+          ลูกที่ใช้.playbackRate = 0.0625;
+          var p = ลูกที่ใช้.play();
+          if (p && p.catch) p.catch(function () {});
+          ต้น = จุดของ(ฝั่งผู้ยิง, "คทา");
+        }
 
-        ลูกที่ใช้.currentTime = 1.0;
-        ลูกที่ใช้.playbackRate = 0.0625;
-        var p = ลูกที่ใช้.play();
-        if (p && p.catch) p.catch(function () {});
+        var เป้า = จุดของ(ฝั่งเป้าหมาย, "ลำตัว");
+        // พลาด = เฉียดเหนือหัวแล้วบินเลยต่อไปจนพ้นขอบสนาม
+        var ปลายX = โดน ? เป้า.x : เป้า.x + (เป้า.x - ต้น.x) * 0.7;
+        var ปลายY = โดน ? เป้า.y : เป้า.y - เป้า.สูง * 0.3;
+        var นาน = โดน ? เวลาบินถึงเป้า : เวลาบินพลาด;
 
-        canvasลูก.style.transition = "none";
-        canvasลูก.style.left = x + "px";
-        canvasลูก.style.top = yเริ่ม + "px";
+        // คลิปลูกพลังบินไปทางขวา — ฝั่ง B ยิงกลับทาง ต้องกลับด้านให้หางลูกพลังชี้ถูก
+        canvasลูก.style.transform = ฝั่งผู้ยิง === "B" ? "scaleX(-1)" : "none";
+        วางลูก(ต้น.x, ต้น.y);
         canvasลูก.style.opacity = "1";
-        requestAnimationFrame(function () {
-          canvasลูก.style.transition = "top " + นาน + "ms ease-in";
-          canvasลูก.style.top = yจบ + "px";
-        });
-        setTimeout(function () {
-          canvasลูก.style.opacity = "0";
-          resolve();
-        }, นาน + 50);
+
+        var เริ่ม = performance.now();
+        (function ก้าว(ตอนนี้) {
+          var t = Math.min(1, (ตอนนี้ - เริ่ม) / นาน);
+          วางลูก(ต้น.x + (ปลายX - ต้น.x) * t, ต้น.y + (ปลายY - ต้น.y) * t);
+          if (t < 1) {
+            requestAnimationFrame(ก้าว);
+          } else {
+            canvasลูก.style.opacity = "0";
+            resolve();
+          }
+        })(เริ่ม);
       });
+    }
+
+    function รอ(ms) {
+      return new Promise(function (r) { setTimeout(r, ms); });
     }
 
     function ข้อความลอย(ฝั่งไหน, ข้อความ) {
@@ -208,20 +345,24 @@
     return {
       ยิง: function (ผู้ยิง, ผลลัพธ์) {
         var เป้า = ผู้ยิง === "A" ? "B" : "A";
-        return ตัวละคร[ผู้ยิง].เล่น("cast", false).then(function () {
-          var ท่ารับ;
-          if (ผลลัพธ์ === "miss") {
-            ท่ารับ = ตัวละคร[เป้า].เล่น("dodge", false);
-          } else if (ผลลัพธ์ === "block") {
-            // ยังไม่มีคลิปท่าบล็อก — ยืนรับ + เอฟเฟกต์โล่ (CSS) แทน
-            ฝั่ง[เป้า].classList.remove("is-blocking");
-            void ฝั่ง[เป้า].offsetWidth;
-            ฝั่ง[เป้า].classList.add("is-blocking");
-            ท่ารับ = Promise.resolve();
-          } else {
-            ท่ารับ = ตัวละคร[เป้า].เล่น("hit", false);
-          }
-          return Promise.all([ร่วงใส่(เป้า, ผู้ยิง), ท่ารับ]);
+        var ร่าย = ตัวละคร[ผู้ยิง].เล่นท่าร่าย();
+        // ยิงตอนก้อนพลังหลุดจากคทา (ไม่ต้องรอท่าร่ายจบ) — ท่าตามหลังการยิงของผู้ยิงเล่นต่อจนจบคลิป
+        return ร่าย.ปล่อย.then(function () {
+          var พลาด = ผลลัพธ์ === "miss";
+          var การบิน = ยิงตรงไปหา(เป้า, ผู้ยิง, !พลาด);
+          // ท่ารับเริ่มตอนลูกถึงเป้าพอดี — ท่าหลบเริ่มก่อน 250ms เพราะคลิปหลบมีช่วงออกตัว
+          var ท่ารับ = รอ(พลาด ? Math.max(0, เวลาบินถึงเป้า - 250) : เวลาบินถึงเป้า).then(function () {
+            if (พลาด) return ตัวละคร[เป้า].เล่น("dodge", false);
+            if (ผลลัพธ์ === "block") {
+              // ยังไม่มีคลิปท่าบล็อก — ยืนรับ + เอฟเฟกต์โล่ (CSS) แทน
+              ฝั่ง[เป้า].classList.remove("is-blocking");
+              void ฝั่ง[เป้า].offsetWidth;
+              ฝั่ง[เป้า].classList.add("is-blocking");
+              return null;
+            }
+            return ตัวละคร[เป้า].เล่น("hit", false);
+          });
+          return Promise.all([การบิน, ท่ารับ, ร่าย.จบ]);
         }).then(function () {
           ตัวละคร.A.เล่น("idle", true);
           ตัวละคร.B.เล่น("idle", true);
