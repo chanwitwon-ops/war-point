@@ -220,6 +220,59 @@
     return { canvas: canvas, เล่น: เล่น, เล่นท่าร่าย: เล่นท่าร่าย, ทำลาย: function () { หยุดวาด = true; } };
   }
 
+  // ── ฉากโคลอสเซียมยามค่ำคืน (inline SVG วาดด้วยโค้ด ไม่มีไฟล์ภาพ) [เพิ่ม 2026-11-08 — ทดลอง] ──
+  // อัฒจันทร์ + กองเชียร์ 3 แถว + กำแพงสนามมีซุ้มโค้ง + คบเพลิง + ธงสีประจำสาย
+  // สีทั้งหมดกำหนดใน css/pet-animation.css ผ่าน class (ใช้ token อารีน่าจาก DESIGN.md เท่านั้น)
+  // ตำแหน่งคนดูใช้ตัวเลขสุ่มเทียมจากลำดับ (ไม่ใช้ Math.random) ฉากจึงหน้าตาเดิมทุกครั้งที่เปิด
+  function สร้างฉากโคลอสเซียม() {
+    function เทียม(i) { var x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); }
+    var svg = '<svg class="battle-backdrop" viewBox="0 0 800 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">';
+    // แสงฟุ้งรอบคบเพลิง: ไล่จากเหลืองตรงกลางจางออกหมดที่ขอบ (สีใส่ผ่าน style เพราะ attribute ใช้ var() ไม่ได้)
+    svg += '<defs><radialGradient id="bd-glow-grad">' +
+      '<stop offset="0" style="stop-color:var(--bright-yellow);stop-opacity:0.55"></stop>' +
+      '<stop offset="1" style="stop-color:var(--bright-yellow);stop-opacity:0"></stop>' +
+      "</radialGradient></defs>";
+    svg += '<circle class="bd-moon" cx="690" cy="34" r="15"></circle>';
+    // อัฒจันทร์
+    svg += '<rect class="bd-stands" x="0" y="22" width="800" height="120"></rect>';
+    // กองเชียร์ 3 แถว (แถวหลังเล็กและจางกว่า) แยกเป็น 4 กลุ่มให้ขยับไม่พร้อมกัน
+    var แถว = [{ y: 58, r: 4.5, ระยะ: 13 }, { y: 88, r: 5.5, ระยะ: 15 }, { y: 120, r: 6.5, ระยะ: 17 }];
+    แถว.forEach(function (ถ, iแถว) {
+      var กลุ่ม = ["", "", "", ""];
+      var n = 0;
+      for (var x = 4; x < 800; x += ถ.ระยะ) {
+        var i = iแถว * 1000 + n;
+        var cx = x + (เทียม(i) - 0.5) * 5;
+        var cy = ถ.y + (เทียม(i + 7) - 0.5) * 4;
+        กลุ่ม[n % 4] +=
+          '<ellipse cx="' + cx.toFixed(1) + '" cy="' + (cy + ถ.r * 1.9).toFixed(1) + '" rx="' + (ถ.r * 1.5).toFixed(1) + '" ry="' + (ถ.r * 1.2).toFixed(1) + '"></ellipse>' +
+          '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + ถ.r + '"></circle>';
+        n++;
+      }
+      กลุ่ม.forEach(function (เนื้อ, g) {
+        svg += '<g class="bd-crowd bd-row' + iแถว + ' bd-g' + g + '">' + เนื้อ + "</g>";
+      });
+    });
+    // กำแพงสนาม + ซุ้มโค้ง
+    svg += '<rect class="bd-wall" x="0" y="140" width="800" height="58"></rect>';
+    for (var ax = 18; ax < 800; ax += 52) {
+      svg += '<path class="bd-arch" d="M' + ax + " 198 V170 a14 14 0 0 1 28 0 V198 Z\"></path>";
+    }
+    svg += '<rect class="bd-wall-cap" x="0" y="138" width="800" height="5"></rect>';
+    // ธงเชียร์สีประจำสาย ห้อยจากขอบกำแพง
+    var สีธง = ["bd-flag-wing", "bd-flag-leg", "bd-flag-tail"];
+    [60, 170, 260, 370, 430, 540, 630, 740].forEach(function (fx, k) {
+      svg += '<path class="bd-flag ' + สีธง[k % 3] + '" style="animation-delay:' + (k * 0.23).toFixed(2) + 's" d="M' + fx + " 143 h16 v22 l-8 -6 l-8 6 Z\"></path>";
+    });
+    // คบเพลิง
+    [110, 320, 480, 690].forEach(function (tx, k) {
+      svg += '<circle class="bd-torch-glow" cx="' + tx + '" cy="126" r="22"></circle>' +
+        '<rect class="bd-torch-pole" x="' + (tx - 2) + '" y="128" width="4" height="14"></rect>' +
+        '<ellipse class="bd-flame" style="animation-delay:' + (k * 0.17).toFixed(2) + 's" cx="' + tx + '" cy="123" rx="4.5" ry="7"></ellipse>';
+    });
+    return svg + "</svg>";
+  }
+
   window.สร้างเวทีต่อสู้ = function (ที่วาง, speciesA, speciesB) {
     var configA = PET_CLIP_CONFIG[speciesA];
     var configB = PET_CLIP_CONFIG[speciesB];
@@ -227,6 +280,7 @@
 
     ที่วาง.innerHTML =
       '<div class="battle-arena">' +
+        สร้างฉากโคลอสเซียม() +
         '<div class="battle-side" data-side="A"><canvas class="battle-sprite" width="864" height="496"></canvas>' +
           '<div class="battle-float" aria-live="polite"></div></div>' +
         '<div class="battle-side" data-side="B"><canvas class="battle-sprite" width="864" height="496"></canvas>' +
@@ -377,6 +431,14 @@
       return new Promise(function (r) { setTimeout(r, ms); });
     }
 
+    // กองเชียร์กระโดดเชียร์ชั่วคราว (CSS class) — ตอนลูกเข้าเป้าและตอนน็อคเอาต์
+    var ตัวจับเวลาเชียร์ = null;
+    function เชียร์(นาน) {
+      สนาม.classList.add("is-cheering");
+      clearTimeout(ตัวจับเวลาเชียร์);
+      ตัวจับเวลาเชียร์ = setTimeout(function () { สนาม.classList.remove("is-cheering"); }, นาน);
+    }
+
     function ข้อความลอย(ฝั่งไหน, ข้อความ) {
       var กล่อง = ฝั่ง[ฝั่งไหน].querySelector(".battle-float");
       กล่อง.textContent = ข้อความ;
@@ -404,6 +466,7 @@
               ฝั่ง[เป้า].classList.add("is-blocking");
               return null;
             }
+            เชียร์(1200); // ลูกเข้าเป้า กองเชียร์ลุกฮือ
             return ตัวละคร[เป้า].เล่น("hit", false);
           });
           return Promise.all([การบิน, ท่ารับ, ร่าย.จบ]);
@@ -413,7 +476,7 @@
         });
       },
       ข้อความลอย: ข้อความลอย,
-      หมดแรง: function (ฝั่งไหน) { ฝั่ง[ฝั่งไหน].classList.add("is-ko"); },
+      หมดแรง: function (ฝั่งไหน) { ฝั่ง[ฝั่งไหน].classList.add("is-ko"); เชียร์(3000); },
       รีเซ็ต: function () {
         ฝั่ง.A.classList.remove("is-ko", "is-blocking");
         ฝั่ง.B.classList.remove("is-ko", "is-blocking");

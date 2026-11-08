@@ -26,6 +26,25 @@
                "Leelawadee UI", Tahoma, "Helvetica Neue", sans-serif;
 
   --tap-min: 48px; /* DESIGN.md 2.7/3.1 — ทุกปุ่มสูงอย่างน้อย 48px */
+
+  /* โซนอารีน่า (เข้ม) — คัดลอกจาก DESIGN.md ข้อ 2.1/2.2/2.3/2.4/2.8 ตรงตัว [เพิ่ม 2026-11-08]
+     ตอนนี้ใช้กับเวทีต่อสู้ (css/pet-animation.css) */
+  --bg-arena:          #141733;
+  --surface-arena:     #1E2247;
+  --surface-arena-alt: #2B3163;
+  --border-arena:      #3C4480;
+  --ink-arena:         #F6F8FF;
+  --ink-arena-muted:   #AEB7DE;
+  --bright-yellow:     #FFD21E;
+  --state-success-on-arena: #21C46A;
+  --state-warn-on-arena:    #FFD21E;
+  --state-error-on-arena:   #FF8A84;
+  --state-info-on-arena:    #3ED8EB;
+  --glow-arena: 0 0 20px rgba(255, 210, 30, .45);
+  /* สีประจำสาย — DESIGN.md ข้อ 2.5 (ใช้เป็นธงเชียร์บนอัฒจันทร์ฉากโคลอสเซียม) */
+  --species-wing: #FF6A13;
+  --species-leg:  #00B3C8;
+  --species-tail: #21C46A;
 }
 
 * { box-sizing: border-box; }

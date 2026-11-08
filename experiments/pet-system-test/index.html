@@ -80,7 +80,10 @@
     var สถานะA2 = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
     log(สถานะA2.pet !== null, "ซื้อไข่สำเร็จแล้ว pet ไม่เป็น null");
     log(สถานะA2.pet.stage === 0, "pet.stage = 0 (ไข่) หลังซื้อ");
-    log(JSON.stringify(สถานะA2.pet.stats) === JSON.stringify(window.PET_STAGE_STATS[0]), "pet.stats ตรงกับ PET_STAGE_STATS[0] เป๊ะ", JSON.stringify(สถานะA2.pet.stats));
+    // [แก้ 2026-11-08 สเปก 02 ซ.14] สเตตัสสุ่มแล้ว — เทียบกับการกระจายที่สุ่มได้ × (ขั้น+1) แทนค่าตายตัว
+    var ต่อขั้นA = สถานะA2.pet.statsPerStage;
+    log(!!ต่อขั้นA && window.ตรวจการกระจาย(ต่อขั้นA), "ซื้อไข่แล้วได้การกระจายที่ถูกกติกา (ในช่วง ผลรวม 50)", JSON.stringify(ต่อขั้นA));
+    log(JSON.stringify(สถานะA2.pet.stats) === JSON.stringify(window.สเตตัสของขั้น(ต่อขั้นA, 0)), "pet.stats = การกระจาย × 1 (ขั้นไข่)", JSON.stringify(สถานะA2.pet.stats));
     log(สถานะA2.pet.pointsSpent === window.PET_STAGE_COST[0], "pointsSpent = ต้นทุนไข่ (1)");
     log(สถานะA2.pointsAvailable === 35 - window.PET_STAGE_COST[0], "pointsAvailable หักต้นทุนไข่แล้ว", สถานะA2.pointsAvailable);
     log(สถานะA2.growthHistory.length === 1 && สถานะA2.growthHistory[0].endedAt === null, "growthHistory มี 1 รายการ endedAt เป็น null (ยังเลี้ยงอยู่)");
@@ -96,14 +99,15 @@
       await window.วิวัฒนาการ(STUDENT_A);
       var สถานะระหว่างทาง = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(STUDENT_A);
       var ตรงกับสเปก = สถานะระหว่างทาง.pet.stage === stage &&
-        JSON.stringify(สถานะระหว่างทาง.pet.stats) === JSON.stringify(window.PET_STAGE_STATS[stage]) &&
+        JSON.stringify(สถานะระหว่างทาง.pet.stats) === JSON.stringify(window.สเตตัสของขั้น(ต่อขั้นA, stage)) &&
+        JSON.stringify(สถานะระหว่างทาง.pet.statsPerStage) === JSON.stringify(ต่อขั้นA) && // วิวัฒนาการไม่สุ่มใหม่
         สถานะระหว่างทาง.pet.pointsSpent === window.PET_STAGE_CUMULATIVE_COST[stage];
       if (!ตรงกับสเปก) {
         ผ่านครบทุกขั้น = false;
         log(false, "วิวัฒนาการขั้น " + stage + " ตรงสเปก", JSON.stringify(สถานะระหว่างทาง.pet));
       }
     }
-    log(ผ่านครบทุกขั้น, "วิวัฒนาการครบ 0→4 ทุกขั้น stats/pointsSpent ตรงกับ PET_STAGE_STATS/PET_STAGE_CUMULATIVE_COST เป๊ะ");
+    log(ผ่านครบทุกขั้น, "วิวัฒนาการครบ 0→4 ทุกขั้น ใช้การกระจายเดิม stats/pointsSpent ตรงกับ การกระจาย×(ขั้น+1)/PET_STAGE_CUMULATIVE_COST เป๊ะ");
 
     // ── 6. วิวัฒนาการเกินร่างสุดท้าย (stage 4) ต้อง throw ──
     await expectThrow(function () { return window.วิวัฒนาการ(STUDENT_A); }, "วิวัฒนาการตอนถึงร่างสุดท้ายแล้วต้อง throw");
@@ -157,14 +161,66 @@
     var หลังซื้อ = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
     log(หลังซื้อ.pet && หลังซื้อ.pet.stage === ร่างสุดท้าย, "มี 51 แต้มพอดี ซื้อร่างสุดท้ายได้ stage = 4", หลังซื้อ.pet && หลังซื้อ.pet.stage);
     log(หลังซื้อ.pointsAvailable === 0 && หลังซื้อ.pet.pointsSpent === 51, "แต้มคงเหลือ 0 และ pointsSpent = 51", หลังซื้อ.pointsAvailable + "/" + หลังซื้อ.pet.pointsSpent);
-    log(window.PET_STAT_KEYS.every(function (k) { return หลังซื้อ.pet.stats[k] === window.PET_STAGE_STATS[ร่างสุดท้าย][k]; }),
-      "สเตตัสเท่ากับ PET_STAGE_STATS ร่างสุดท้ายทุกค่า", JSON.stringify(หลังซื้อ.pet.stats));
+    var รวมร่างสุดท้าย = window.PET_STAT_KEYS.reduce(function (s, k) { return s + หลังซื้อ.pet.stats[k]; }, 0);
+    log(window.ตรวจการกระจาย(หลังซื้อ.pet.statsPerStage) &&
+      JSON.stringify(หลังซื้อ.pet.stats) === JSON.stringify(window.สเตตัสของขั้น(หลังซื้อ.pet.statsPerStage, ร่างสุดท้าย)) &&
+      รวมร่างสุดท้าย === 250,
+      "ซื้อร่างสุดท้าย: สเตตัส = การกระจายที่สุ่มได้ × 5 ผลรวม 250", JSON.stringify(หลังซื้อ.pet.stats) + " รวม " + รวมร่างสุดท้าย);
     log(หลังซื้อ.growthHistory.length === 1 && หลังซื้อ.growthHistory[0].reachedStage === ร่างสุดท้าย && หลังซื้อ.growthHistory[0].endedAt === null,
       "growthHistory เพิ่ม 1 ชีวิตที่ถึงร่างสุดท้าย");
     await expectThrow(function () { return window.ซื้อร่างสุดท้าย(D); }, "ซื้อร่างสุดท้ายซ้ำตอนมี pet อยู่แล้วต้อง throw");
     await window.รีเซ็ตสัตว์เลี้ยง(D);
     var หลังรีเซ็ต = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
     log(หลังรีเซ็ต.pet === null && หลังรีเซ็ต.pointsAvailable === 51, "รีเซ็ตหลังซื้อร่างสุดท้ายได้แต้มคืนเต็ม 51", หลังรีเซ็ต.pointsAvailable);
+
+    // ── 13. สุ่มการกระจายสเตตัส (สเปก 02 ซ.14) ──
+    var ช่วง = window.PET_STAT_RANGE_PER_STAGE;
+    log(JSON.stringify(ช่วง) === JSON.stringify({ SPD: { min: 9, max: 15 }, ATK: { min: 5, max: 9 }, ACC: { min: 6, max: 10 }, EVA: { min: 9, max: 15 }, DEF: { min: 3, max: 5 }, HP: { min: 5, max: 9 } }),
+      "ช่วงต่อขั้น = ±30% ของค่าฐาน ปัดเข้าใน (ตรงกับสเปกและ firestore.rules)", JSON.stringify(ช่วง));
+    // สุ่ม 2000 ครั้ง: ทุกครั้งต้องถูกกติกา และทุกค่าต้องเคยแตะทั้งขอบล่างและขอบบน (พิสูจน์ว่าสุ่มได้ทั่วช่วงจริง ไม่ใช่ติดค่าเดิม)
+    var ผิดกติกา = 0, แตะขอบ = {};
+    window.PET_STAT_KEYS.forEach(function (k) { แตะขอบ[k] = { min: false, max: false }; });
+    var แบบที่ไม่ซ้ำ = {};
+    for (var n = 0; n < 2000; n++) {
+      var ก = window.สุ่มการกระจายสเตตัส();
+      if (!window.ตรวจการกระจาย(ก)) ผิดกติกา++;
+      window.PET_STAT_KEYS.forEach(function (k) {
+        if (ก[k] === ช่วง[k].min) แตะขอบ[k].min = true;
+        if (ก[k] === ช่วง[k].max) แตะขอบ[k].max = true;
+      });
+      แบบที่ไม่ซ้ำ[JSON.stringify(ก)] = true;
+    }
+    log(ผิดกติกา === 0, "สุ่ม 2000 ครั้ง ถูกกติกาทุกครั้ง (ในช่วง + ผลรวม 50)", "ผิด " + ผิดกติกา + " / 2000");
+    log(window.PET_STAT_KEYS.every(function (k) { return แตะขอบ[k].min && แตะขอบ[k].max; }), "ทุกค่าเคยสุ่มได้ทั้งขอบล่างและขอบบน", JSON.stringify(แตะขอบ));
+    log(Object.keys(แบบที่ไม่ซ้ำ).length > 200, "ได้การกระจายต่างกันจำนวนมาก (ไม่ซ้ำเดิม)", Object.keys(แบบที่ไม่ซ้ำ).length + " แบบ");
+
+    // สุ่มใหม่ในหน้าสัตว์เลี้ยง: ต้องมีสัตว์เลี้ยงก่อน
+    await expectThrow(function () { return window.สุ่มสเตตัสใหม่(D); }, "สุ่มสเตตัสใหม่ตอนยังไม่มีสัตว์เลี้ยงต้อง throw");
+    await window.ซื้อร่างสุดท้าย(D);
+    var ก่อนสุ่ม = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
+    var เปลี่ยนบ้าง = false;
+    for (var r = 0; r < 5; r++) {
+      await window.สุ่มสเตตัสใหม่(D);
+      var หลังสุ่ม = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
+      var รวม = window.PET_STAT_KEYS.reduce(function (s, k) { return s + หลังสุ่ม.pet.stats[k]; }, 0);
+      if (รวม !== 250 || หลังสุ่ม.pet.stage !== 4 || หลังสุ่ม.pointsAvailable !== ก่อนสุ่ม.pointsAvailable) {
+        log(false, "สุ่มใหม่ครั้งที่ " + (r + 1) + " ผลรวม 250 ขั้นเดิม แต้มไม่ลด", JSON.stringify(หลังสุ่ม.pet));
+      }
+      if (JSON.stringify(หลังสุ่ม.pet.stats) !== JSON.stringify(ก่อนสุ่ม.pet.stats)) เปลี่ยนบ้าง = true;
+    }
+    log(เปลี่ยนบ้าง, "สุ่มใหม่ 5 ครั้ง ฟรี (แต้มไม่ลด) ผลรวมคง 250 และสเตตัสเปลี่ยนจริง");
+    var ดึงหลังสุ่ม = await window.ดึงสัตว์เลี้ยงของนักเรียน(D);
+    log(Object.keys(ดึงหลังสุ่ม).sort().join(",") === "speciesKey,stage,stats", "ดึงสัตว์เลี้ยงของนักเรียน ยังคืน 3 field ตามสัญญาเดิม");
+
+    // สัตว์เลี้ยงก่อนกฎใหม่ (ไม่มี statsPerStage) วิวัฒนาการแล้วใช้ค่าฐาน Pixie
+    var เก่า = "legacy-uid";
+    await seedGradedAttempt(เก่า, 60);
+    await window.fsSetDoc(window.fsDoc(window.db, "pets", เก่า), {
+      pet: { speciesKey: "pixie", stage: 0, stats: window.PET_STAGE_STATS[0], pointsSpent: 1 }, growthHistory: []
+    });
+    await window.วิวัฒนาการ(เก่า);
+    var หลังเก่า = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(เก่า);
+    log(JSON.stringify(หลังเก่า.pet.stats) === JSON.stringify(window.PET_STAGE_STATS[1]), "สัตว์เลี้ยงก่อนกฎใหม่วิวัฒนาการแล้วใช้ค่าฐาน Pixie เดิม", JSON.stringify(หลังเก่า.pet.stats));
 
   } catch (e) {
     log(false, "เกิด exception ที่ไม่คาดคิดระหว่างรันเทส", e.message);

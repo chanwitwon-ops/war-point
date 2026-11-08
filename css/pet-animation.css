@@ -4,21 +4,88 @@
    ใช้เฉพาะ token ที่ประกาศไว้ใน :root ของ css/style.css (ห้าม hardcode สี)
    ───────────────────────────────────────────────────────────── */
 
+/* เวที "โคลอสเซียมยามค่ำคืน" — โซนอารีน่าตาม DESIGN.md ข้อ 1.3 (เข้ม น้ำเงินม่วง มีแสงไฟส่องเวที)
+   [แก้ 2026-11-08 — ทดลอง ถ้าไม่โอเคจะย้อนกลับ] ฉากหลัง (อัฒจันทร์ กองเชียร์ กำแพงซุ้มโค้ง คบเพลิง ธง)
+   เป็น inline SVG จาก js/pet-animation.js · สีทั้งหมดมาจาก token ใน :root เท่านั้น (ความโปร่งใสใช้ color-mix)
+   เหตุที่เลือกกลางคืน: ฉากป่ากลืนกับ Pixie สีเขียว · หินทรายกลางวันกลืนกับปีกน้ำตาลและต้องเพิ่มสีใหม่ */
 .battle-arena {
   position: relative;
   display: flex;
   justify-content: space-around;
   align-items: flex-end;
   gap: 8px;
-  min-height: 220px;
-  padding: 24px 8px 8px;
+  min-height: 240px;
+  padding: 24px 8px 14px;
   overflow: hidden;
   border-radius: 12px;
-  background: var(--surface-learn-alt);
+  border: 1px solid var(--border-arena);
+  /* ท้องฟ้ากลางคืน: เข้มสุดด้านบน */
+  background: linear-gradient(to bottom, var(--bg-arena) 0%, var(--surface-arena) 100%);
 }
+
+/* พื้นสนามทราย (โทนส้มจางๆ จากแสงคบเพลิง) + วงแสงตกกระทบใต้ตัวละครทั้ง 2 ฝั่ง */
+.battle-arena::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 25%;
+  z-index: 1; /* อยู่หน้าฉากหลัง (SVG) แต่หลังตัวละคร */
+  background: var(--surface-arena-alt); /* สำรอง ถ้าเบราว์เซอร์ไม่รองรับ color-mix */
+  background:
+    radial-gradient(ellipse 22% 60% at 25% 45%, color-mix(in srgb, var(--bright-yellow) 30%, transparent), transparent 70%),
+    radial-gradient(ellipse 22% 60% at 75% 45%, color-mix(in srgb, var(--bright-yellow) 30%, transparent), transparent 70%),
+    linear-gradient(to bottom,
+      color-mix(in srgb, var(--bright-orange) 22%, var(--surface-arena-alt)),
+      color-mix(in srgb, var(--bright-orange) 10%, var(--surface-arena)));
+  pointer-events: none;
+}
+
+/* ── ฉากหลังโคลอสเซียม (SVG) ── */
+.battle-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+.bd-moon { fill: var(--ink-arena-muted); opacity: 0.55; }
+.bd-stands { fill: var(--surface-arena); }
+.bd-crowd { fill: var(--border-arena); transform-box: fill-box; }
+.bd-row0 { opacity: 0.55; }
+.bd-row1 { opacity: 0.75; }
+.bd-row2 { opacity: 1; }
+.bd-wall { fill: var(--surface-arena-alt); }
+.bd-wall-cap { fill: var(--border-arena); }
+.bd-arch { fill: var(--bg-arena); }
+.bd-flag { transform-box: fill-box; transform-origin: top center; animation: bd-flag-wave 2.6s ease-in-out infinite alternate; }
+.bd-flag-wing { fill: var(--species-wing); }
+.bd-flag-leg  { fill: var(--species-leg); }
+.bd-flag-tail { fill: var(--species-tail); }
+.bd-torch-pole { fill: var(--border-arena); }
+.bd-flame { fill: var(--bright-yellow); transform-box: fill-box; transform-origin: bottom center; animation: bd-flicker 0.9s ease-in-out infinite alternate; }
+.bd-torch-glow { fill: url(#bd-glow-grad); }
+
+/* กองเชียร์โยกตัวเบาๆ ตลอด (4 กลุ่มจังหวะต่างกัน) และกระโดดเชียร์ตอนมีคนโดน/น็อคเอาต์ */
+.bd-crowd { animation: bd-sway 2.8s ease-in-out infinite alternate; }
+.bd-g1 { animation-delay: -0.7s; }
+.bd-g2 { animation-delay: -1.4s; }
+.bd-g3 { animation-delay: -2.1s; }
+.battle-arena.is-cheering .bd-crowd { animation: bd-cheer 0.32s ease-in-out infinite alternate; }
+.battle-arena.is-cheering .bd-g1 { animation-delay: -0.08s; }
+.battle-arena.is-cheering .bd-g2 { animation-delay: -0.16s; }
+.battle-arena.is-cheering .bd-g3 { animation-delay: -0.24s; }
+
+@keyframes bd-sway  { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
+@keyframes bd-cheer { from { transform: translateY(0); } to { transform: translateY(-7px); } }
+@keyframes bd-flag-wave { from { transform: skewX(-6deg); } to { transform: skewX(6deg); } }
+@keyframes bd-flicker { from { transform: scale(1, 1); opacity: 0.85; } to { transform: scale(0.85, 1.15); opacity: 1; } }
 
 .battle-side {
   position: relative;
+  z-index: 2; /* อยู่เหนือพื้นสนาม (::before) และฉากหลัง */
   flex: 1 1 0;
   max-width: 280px;
   transition: opacity 0.6s ease, filter 0.6s ease;
@@ -35,8 +102,8 @@
 
 .battle-side.is-blocking { animation: battle-shield 0.7s ease-out; border-radius: 50%; }
 @keyframes battle-shield {
-  0%   { box-shadow: 0 0 0 0 var(--deep-teal); }
-  40%  { box-shadow: 0 0 0 10px var(--deep-teal); }
+  0%   { box-shadow: 0 0 0 0 var(--state-info-on-arena); }
+  40%  { box-shadow: 0 0 0 10px var(--state-info-on-arena); }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
@@ -45,13 +112,21 @@
   top: 0;
   left: 0;
   right: 0;
+  /* ป้ายพื้นทึบรองหลังตัวเลข — ฉากโคลอสเซียมมีแสงคบเพลิงและธงสีสด ถ้าไม่มีป้าย ตัวอักษรที่ลอยทับ
+     จะ contrast ตกเหลือ 2.4–3.5:1 (วัด 2026-11-08) · บนป้าย --bg-arena ได้ 16.49:1 เสมอ */
+  width: fit-content;
+  margin: 0 auto;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--bg-arena);
   text-align: center;
   font-size: 22px;
   font-weight: 700;
-  color: var(--ink-learn);
+  color: var(--ink-arena); /* อักษรบนพื้นอารีน่าเข้ม (DESIGN.md 2.2) */
   opacity: 0;
   pointer-events: none;
 }
+.battle-float:empty { display: none; }
 .battle-float.is-showing { animation: battle-float-up 1.1s ease-out; }
 @keyframes battle-float-up {
   0%   { opacity: 0; transform: translateY(10px); }
@@ -61,6 +136,7 @@
 
 .battle-projectile {
   position: absolute;
+  z-index: 3; /* ลูกพลังอยู่หน้าตัวละครและพื้นสนาม */
   width: 80px;
   height: 80px;
   opacity: 0;
@@ -70,4 +146,7 @@
 @media (prefers-reduced-motion: reduce) {
   .battle-float.is-showing { animation: none; opacity: 1; }
   .battle-side.is-blocking { animation: none; }
+  /* กองเชียร์ ธง และเปลวไฟหยุดนิ่ง สำหรับผู้ที่ตั้งค่าลดการเคลื่อนไหว */
+  .bd-crowd, .bd-flag, .bd-flame,
+  .battle-arena.is-cheering .bd-crowd { animation: none; }
 }

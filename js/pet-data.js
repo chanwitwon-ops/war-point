@@ -15,8 +15,9 @@
 //     pet: {                      // null ถ้ายังไม่เคยซื้อไข่ (หรือรีเซ็ตไปแล้ว)
 //       speciesKey: "pixie",
 //       stage: 0-4,               // ดัชนีตรงกับ PET_STAGE_STATS / PET_STAGE_COST
-//       stats: { SPD, ATK, ACC, EVA, DEF, HP },  // ค่าสะสม ณ stage ปัจจุบัน (คัดลอกจาก
-//                                           // PET_STAGE_STATS[stage] ตอนซื้อ/วิวัฒนาการ)
+//       stats: { SPD, ATK, ACC, EVA, DEF, HP },  // ค่าสะสม ณ stage ปัจจุบัน = statsPerStage × (stage+1)
+//       statsPerStage: { SPD, ..., HP },  // [เพิ่ม 2026-11-08 สเปก 02 ซ.14] การกระจายต่อขั้นที่สุ่มได้
+//                                         // (รวม 50) — ไม่มี field นี้ = สัตว์เลี้ยงก่อนกฎใหม่ ใช้ค่าฐาน Pixie
 //       pointsSpent: number       // แต้มที่จ่ายไปแล้วสะสมทั้งหมดของตัวนี้ (ซื้อไข่ + วิวัฒนาการทุกขั้น)
 //     } | null,
 //     growthHistory: [            // ประวัติ "ชีวิต" ของสัตว์เลี้ยงแต่ละตัว (ซื้อไข่ใหม่ = เพิ่มรายการใหม่)
@@ -115,10 +116,12 @@
       );
     }
 
+    var ต่อขั้น = window.สุ่มการกระจายสเตตัส(); // สเปก 02 ซ.14 — สุ่มครั้งเดียวต่อชีวิต
     var petใหม่ = {
       speciesKey: window.PET_PURCHASABLE_SPECIES_KEY,
       stage: 0,
-      stats: copyOf(window.PET_STAGE_STATS[0]),
+      statsPerStage: ต่อขั้น,
+      stats: window.สเตตัสของขั้น(ต่อขั้น, 0),
       pointsSpent: ต้นทุนไข่
     };
 
@@ -161,10 +164,12 @@
       );
     }
 
+    var ต่อขั้นใหม่ = window.สุ่มการกระจายสเตตัส(); // สเปก 02 ซ.14
     var petใหม่ = {
       speciesKey: window.PET_PURCHASABLE_SPECIES_KEY,
       stage: ขั้นสุดท้าย,
-      stats: copyOf(window.PET_STAGE_STATS[ขั้นสุดท้าย]),
+      statsPerStage: ต่อขั้นใหม่,
+      stats: window.สเตตัสของขั้น(ต่อขั้นใหม่, ขั้นสุดท้าย),
       pointsSpent: ราคารวม
     };
 
@@ -206,10 +211,13 @@
       throw new Error("แต้มไม่พอให้วิวัฒนาการ — ต้องการอีก " + ส่วนต่าง + " แต้ม");
     }
 
+    // วิวัฒนาการใช้การกระจายเดิมของตัวนี้ (ไม่สุ่มใหม่) — สัตว์เลี้ยงก่อนกฎ ซ.14 ใช้ค่าฐาน Pixie
+    var ต่อขั้นเดิม = สถานะปัจจุบัน.pet.statsPerStage || copyOf(window.PET_BASE_PER_STAGE);
     var petใหม่ = {
       speciesKey: สถานะปัจจุบัน.pet.speciesKey,
       stage: ขั้นถัดไป,
-      stats: copyOf(window.PET_STAGE_STATS[ขั้นถัดไป]),
+      statsPerStage: ต่อขั้นเดิม,
+      stats: window.สเตตัสของขั้น(ต่อขั้นเดิม, ขั้นถัดไป),
       pointsSpent: สถานะปัจจุบัน.pet.pointsSpent + ต้นทุนขั้นถัดไป
     };
 
@@ -226,6 +234,29 @@
       console.error(err);
       throw new Error("วิวัฒนาการไม่สำเร็จ: " + err.message);
     }
+  };
+
+  // ── window.สุ่มสเตตัสใหม่(uid) ── (สเปก 02 ซ.14 เพิ่ม 2026-11-08)
+  // สุ่มการกระจายค่าสเตตัสใหม่ ฟรี ไม่จำกัดครั้ง — ผลรวมต่อขั้นเท่าเดิม (50) เปลี่ยนแค่การกระจาย
+  // ไม่กระทบทัวนาเมนต์ที่สร้างไปแล้ว (tournament-data คัดลอกสเตตัสไว้ตอนสร้าง)
+  // คืน Promise<{ statsPerStage, stats }> ชุดใหม่
+  window.สุ่มสเตตัสใหม่ = async function (uid) {
+    var สถานะปัจจุบัน = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(uid);
+    if (!สถานะปัจจุบัน.pet) {
+      throw new Error("ยังไม่มีสัตว์เลี้ยง ซื้อไข่หรือซื้อร่างสุดท้ายก่อน แล้วค่อยสุ่มสเตตัส");
+    }
+    var ต่อขั้น = window.สุ่มการกระจายสเตตัส();
+    var petใหม่ = Object.assign({}, สถานะปัจจุบัน.pet, {
+      statsPerStage: ต่อขั้น,
+      stats: window.สเตตัสของขั้น(ต่อขั้น, สถานะปัจจุบัน.pet.stage)
+    });
+    try {
+      await window.fsUpdateDoc(เอกสารอ้างอิงของ(uid), { pet: petใหม่ });
+    } catch (err) {
+      console.error(err);
+      throw new Error("สุ่มสเตตัสใหม่ไม่สำเร็จ: " + err.message);
+    }
+    return { statsPerStage: ต่อขั้น, stats: petใหม่.stats };
   };
 
   // ── window.รีเซ็ตสัตว์เลี้ยง(uid) ──

@@ -127,6 +127,22 @@ service cloud.firestore {
     // quizAttempts.scoreAwarded ที่มีอยู่แล้วในระบบ (เชื่อฝั่ง client เป็นหลัก ไม่ใช่ anti-cheat
     // เต็มรูปแบบ) เหมาะกับสเกลการบ้าน/เดโมในห้องเรียน ไม่ใช่ระบบแข่งขันที่มีเดิมพันสูง
     match /pets/{uid} {
+      // [เพิ่ม 2026-11-08 สเปก 02 ซ.14] สเตตัสต้องตรงกติกาการสุ่ม: ครบ 6 ค่า จำนวนเต็ม ทุกค่าอยู่ในช่วง
+      // (ค่าต่อขั้น × จำนวนขั้น) และผลรวม = 50 × จำนวนขั้น — นักเรียนตั้งสเตตัสเกินกติกาผ่าน DevTools ไม่ได้
+      // ช่วงต่อขั้นต้องตรงกับ PET_STAT_RANGE_PER_STAGE ใน js/pet-config.js
+      // (SPD 9–15, ATK 5–9, ACC 6–10, EVA 9–15, DEF 3–5, HP 5–9)
+      function statsValid(st, n) {
+        return st.keys().hasOnly(["SPD", "ATK", "ACC", "EVA", "DEF", "HP"]) &&
+          st.SPD is int && st.ATK is int && st.ACC is int && st.EVA is int && st.DEF is int && st.HP is int &&
+          st.SPD >= 9 * n && st.SPD <= 15 * n &&
+          st.ATK >= 5 * n && st.ATK <= 9 * n &&
+          st.ACC >= 6 * n && st.ACC <= 10 * n &&
+          st.EVA >= 9 * n && st.EVA <= 15 * n &&
+          st.DEF >= 3 * n && st.DEF <= 5 * n &&
+          st.HP >= 5 * n && st.HP <= 9 * n &&
+          st.SPD + st.ATK + st.ACC + st.EVA + st.DEF + st.HP == 50 * n;
+      }
+
       allow read: if request.auth != null;
       // [แก้ 2026-11-08] ต้องยอมรับกรณี pet == null ด้วย (ตอนรีเซ็ตสัตว์เลี้ยง) — เดิมเช็ค
       // .stage ตรงๆ ทุกครั้งทำให้ CEL evaluation error เมื่อ pet เป็น null แล้วถูก deny
@@ -135,7 +151,8 @@ service cloud.firestore {
       allow create, update: if request.auth != null && request.auth.uid == uid &&
         (request.resource.data.pet == null ||
          (request.resource.data.pet.stage is int &&
-          request.resource.data.pet.stage >= 0 && request.resource.data.pet.stage <= 4));
+          request.resource.data.pet.stage >= 0 && request.resource.data.pet.stage <= 4 &&
+          statsValid(request.resource.data.pet.stats, request.resource.data.pet.stage + 1)));
       allow delete: if false; // ไม่มีการลบสัตว์เลี้ยงทิ้ง — รีเซ็ตคือเขียน pet ใหม่ทับ ไม่ใช่ลบเอกสาร
     }
   }
