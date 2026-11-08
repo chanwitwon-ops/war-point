@@ -48,16 +48,20 @@ window.PET_STAGE_CUMULATIVE_COST = (function () {
 
 // ─────────────────────────────────────────────────────────────
 // สุ่มการกระจายค่าสเตตัส — สเปก 02 หัวข้อ ซ.14 (user ยืนยัน 2026-11-08)
-//   - ผลรวมต่อขั้นคงที่ 50 (ร่างสุดท้ายรวม 250 เท่ากันทุกคน) สุ่มแค่การกระจาย
-//   - แต่ละค่าต่อขั้นอยู่ในช่วง ±30% ของค่าฐาน Pixie (ปัดเข้าในเป็นจำนวนเต็ม):
-//     SPD 9–15, ATK 5–9, ACC 6–10, EVA 9–15, DEF 3–5, HP 5–9
+// [แก้ 2026-11-09 — user เลือก "ค่าสเตตัสมีราคา"] เดิมผลรวมต่อขั้นคงที่ 50 แต่จำลองแล้วพละกำลัง/
+// พลังชีวิตคุ้มเกิน (ใครเทลงสองค่านี้ชนะ ~60%, สาย Behemoth ชนะ 80–97%) จึงเปลี่ยนเป็น "งบเท่ากัน":
+//   - ราคาต่อแต้ม: ATK และ HP แต้มละ 2.25 · ค่าอื่นแต้มละ 1 (experiments/balance-sim/cost.html)
+//   - งบต่อขั้น = งบที่ Pixie ใช้ด้วยค่าเดิม 12/7/8/12/4/7 = 67.5 (Pixie คงตัวเลขเดิม)
+//   - สุ่มแล้วต้องใช้งบห่างจาก 67.5 ไม่เกิน 1 (ปัดเป็นจำนวนเต็มแล้วตรงพอดีไม่ได้ทุกกรณี)
+//     คิดเป็นจำนวนเต็ม ×4: 4×(SPD+ACC+EVA+DEF) + 9×(ATK+HP) อยู่ในช่วง 266–274 ต่อขั้น
+//   - แต่ละค่าต่อขั้นยังอยู่ในช่วง ±30% ของค่าฐาน Pixie: SPD 9–15, ATK 5–9, ACC 6–10, EVA 9–15, DEF 3–5, HP 5–9
 //   - สุ่มครั้งเดียวตอนได้สัตว์เลี้ยง แล้วทุกขั้นใช้ค่าต่อขั้นชุดนี้ × (ขั้น+1)
 //   - กดสุ่มใหม่ได้ฟรีไม่จำกัด (js/pet-data.js → window.สุ่มสเตตัสใหม่)
-// ช่วงเดียวกันนี้ถูกตรวจซ้ำใน firestore.rules (match /pets/{uid}) — แก้ที่นี่ต้องแก้ที่นั่นด้วย
+// ช่วงและงบเดียวกันนี้ถูกตรวจซ้ำใน firestore.rules (match /pets/{uid}) — แก้ที่นี่ต้องแก้ที่นั่นด้วย
 // ─────────────────────────────────────────────────────────────
-window.PET_STAT_POINTS_PER_STAGE = 50;
 window.PET_BASE_PER_STAGE = PIXIE_PER_STAGE;
 window.PET_STAT_RANDOM_SPREAD = 0.3;
+window.PET_STAT_COST = { SPD: 1, ATK: 2.25, ACC: 1, EVA: 1, DEF: 1, HP: 2.25 };
 
 window.PET_STAT_RANGE_PER_STAGE = (function () {
   var ช่วง = {};
@@ -72,40 +76,44 @@ window.PET_STAT_RANGE_PER_STAGE = (function () {
   return ช่วง;
 })();
 
-// สุ่มค่าต่อขั้น 6 ค่า (จำนวนเต็ม ในช่วง ผลรวม 50 พอดี) — สุ่ม = ฟังก์ชันคืนเลข [0,1) ใส่เองได้ตอนทดสอบ
+// งบที่ใช้ (×4 ให้เป็นจำนวนเต็ม): 4 ต่อแต้มราคา 1 · 9 ต่อแต้มราคา 2.25
+window.งบที่ใช้x4 = function (ค่า) {
+  return window.PET_STAT_KEYS.reduce(function (s, k) { return s + ค่า[k] * window.PET_STAT_COST[k] * 4; }, 0);
+};
+window.งบที่ใช้ = function (ค่า) { return window.งบที่ใช้x4(ค่า) / 4; };
+window.PET_STAT_BUDGET_PER_STAGE = window.งบที่ใช้(PIXIE_PER_STAGE); // 67.5
+window.PET_STAT_BUDGET_TOLERANCE = 1;                                  // ห่างจากงบได้ไม่เกิน ±1 ต่อขั้น
+
+// สุ่มค่าต่อขั้น 6 ค่า (จำนวนเต็ม ในช่วง ใช้งบห่างจาก 67.5 ไม่เกิน 1) — สุ่ม = ฟังก์ชันคืนเลข [0,1) ใส่เองได้ตอนทดสอบ
 window.สุ่มการกระจายสเตตัส = function (สุ่ม) {
   สุ่ม = สุ่ม || Math.random;
   var ช่วง = window.PET_STAT_RANGE_PER_STAGE;
   var คีย์ = window.PET_STAT_KEYS;
-  var ผล = {};
-  var รวม = 0;
-  คีย์.forEach(function (k) {
-    ผล[k] = ช่วง[k].min + Math.floor(สุ่ม() * (ช่วง[k].max - ช่วง[k].min + 1));
-    รวม += ผล[k];
-  });
-  // ปรับทีละ 1 แต้มที่ค่าซึ่งยังขยับได้ จนผลรวมเท่าเป้า (ช่วงรวม 37–63 ครอบ 50 เสมอ จึงจบแน่นอน)
-  var ส่วนต่าง = window.PET_STAT_POINTS_PER_STAGE - รวม;
-  while (ส่วนต่าง !== 0) {
-    var ขยับได้ = คีย์.filter(function (k) {
-      return ส่วนต่าง > 0 ? ผล[k] < ช่วง[k].max : ผล[k] > ช่วง[k].min;
-    });
-    var เลือก = ขยับได้[Math.floor(สุ่ม() * ขยับได้.length)];
-    ผล[เลือก] += ส่วนต่าง > 0 ? 1 : -1;
-    ส่วนต่าง += ส่วนต่าง > 0 ? -1 : 1;
+  var เป้าx4 = window.PET_STAT_BUDGET_PER_STAGE * 4, คลาดx4 = window.PET_STAT_BUDGET_TOLERANCE * 4;
+  for (var ลองใหม่ = 0; ลองใหม่ < 50; ลองใหม่++) {
+    var ผล = {};
+    คีย์.forEach(function (k) { ผล[k] = ช่วง[k].min + Math.floor(สุ่ม() * (ช่วง[k].max - ช่วง[k].min + 1)); });
+    // ปรับทีละ 1 แต้มที่ค่าซึ่งยังขยับได้ จนงบเข้าเกณฑ์ (ช่วงงบรวม 49.5–85.5 ครอบ 67.5 เสมอ)
+    for (var รอบ = 0; รอบ < 300; รอบ++) {
+      var ต่าง = เป้าx4 - window.งบที่ใช้x4(ผล);
+      if (Math.abs(ต่าง) <= คลาดx4) return ผล;
+      var ขยับได้ = คีย์.filter(function (k) { return ต่าง > 0 ? ผล[k] < ช่วง[k].max : ผล[k] > ช่วง[k].min; });
+      if (!ขยับได้.length) break;
+      var เลือก = ขยับได้[Math.floor(สุ่ม() * ขยับได้.length)];
+      ผล[เลือก] += ต่าง > 0 ? 1 : -1;
+    }
   }
-  return ผล;
+  return Object.assign({}, PIXIE_PER_STAGE); // กันพลาด (ไม่ควรเกิด): ใช้ค่าฐาน Pixie ซึ่งถูกกติกาแน่นอน
 };
 
-// ตรวจว่าการกระจายต่อขั้นถูกกติกา: ครบ 6 ค่า เป็นจำนวนเต็ม อยู่ในช่วง และรวม 50 (กติกาเดียวกับ firestore.rules)
+// ตรวจว่าการกระจายต่อขั้นถูกกติกา: ครบ 6 ค่า เป็นจำนวนเต็ม อยู่ในช่วง และใช้งบ 67.5 ± 1 (กติกาเดียวกับ firestore.rules)
 window.ตรวจการกระจาย = function (ค่าต่อขั้น) {
   if (!ค่าต่อขั้น) return false;
-  var รวม = 0;
   var ผ่าน = window.PET_STAT_KEYS.every(function (k) {
     var v = ค่าต่อขั้น[k], ช่วง = window.PET_STAT_RANGE_PER_STAGE[k];
-    รวม += v;
     return Number.isInteger(v) && v >= ช่วง.min && v <= ช่วง.max;
   });
-  return ผ่าน && รวม === window.PET_STAT_POINTS_PER_STAGE;
+  return ผ่าน && Math.abs(window.งบที่ใช้x4(ค่าต่อขั้น) - window.PET_STAT_BUDGET_PER_STAGE * 4) <= window.PET_STAT_BUDGET_TOLERANCE * 4;
 };
 
 // ค่าสเตตัสของขั้น = ค่าต่อขั้น × (ขั้น+1) — ไม่ส่งค่าต่อขั้นมา = ใช้ค่าฐาน Pixie (สัตว์เลี้ยงก่อนมีกฎนี้)

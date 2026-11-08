@@ -161,11 +161,12 @@
     var หลังซื้อ = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
     log(หลังซื้อ.pet && หลังซื้อ.pet.stage === ร่างสุดท้าย, "มี 51 แต้มพอดี ซื้อร่างสุดท้ายได้ stage = 4", หลังซื้อ.pet && หลังซื้อ.pet.stage);
     log(หลังซื้อ.pointsAvailable === 0 && หลังซื้อ.pet.pointsSpent === 51, "แต้มคงเหลือ 0 และ pointsSpent = 51", หลังซื้อ.pointsAvailable + "/" + หลังซื้อ.pet.pointsSpent);
-    var รวมร่างสุดท้าย = window.PET_STAT_KEYS.reduce(function (s, k) { return s + หลังซื้อ.pet.stats[k]; }, 0);
+    // [แก้ 2026-11-09] กติกางบ: ร่างสุดท้ายใช้งบ 67.5 × 5 = 337.5 (คลาดได้ ±1 ต่อขั้น = ±5)
+    var งบร่างสุดท้าย = window.งบที่ใช้(หลังซื้อ.pet.stats);
     log(window.ตรวจการกระจาย(หลังซื้อ.pet.statsPerStage) &&
       JSON.stringify(หลังซื้อ.pet.stats) === JSON.stringify(window.สเตตัสของขั้น(หลังซื้อ.pet.statsPerStage, ร่างสุดท้าย)) &&
-      รวมร่างสุดท้าย === 250,
-      "ซื้อร่างสุดท้าย: สเตตัส = การกระจายที่สุ่มได้ × 5 ผลรวม 250", JSON.stringify(หลังซื้อ.pet.stats) + " รวม " + รวมร่างสุดท้าย);
+      Math.abs(งบร่างสุดท้าย - 337.5) <= 5,
+      "ซื้อร่างสุดท้าย: สเตตัส = การกระจายที่สุ่มได้ × 5 ใช้งบ 337.5 ± 5", JSON.stringify(หลังซื้อ.pet.stats) + " งบ " + งบร่างสุดท้าย);
     log(หลังซื้อ.growthHistory.length === 1 && หลังซื้อ.growthHistory[0].reachedStage === ร่างสุดท้าย && หลังซื้อ.growthHistory[0].endedAt === null,
       "growthHistory เพิ่ม 1 ชีวิตที่ถึงร่างสุดท้าย");
     await expectThrow(function () { return window.ซื้อร่างสุดท้าย(D); }, "ซื้อร่างสุดท้ายซ้ำตอนมี pet อยู่แล้วต้อง throw");
@@ -190,7 +191,7 @@
       });
       แบบที่ไม่ซ้ำ[JSON.stringify(ก)] = true;
     }
-    log(ผิดกติกา === 0, "สุ่ม 2000 ครั้ง ถูกกติกาทุกครั้ง (ในช่วง + ผลรวม 50)", "ผิด " + ผิดกติกา + " / 2000");
+    log(ผิดกติกา === 0, "สุ่ม 2000 ครั้ง ถูกกติกาทุกครั้ง (ในช่วง + งบ 67.5 ± 1)", "ผิด " + ผิดกติกา + " / 2000");
     log(window.PET_STAT_KEYS.every(function (k) { return แตะขอบ[k].min && แตะขอบ[k].max; }), "ทุกค่าเคยสุ่มได้ทั้งขอบล่างและขอบบน", JSON.stringify(แตะขอบ));
     log(Object.keys(แบบที่ไม่ซ้ำ).length > 200, "ได้การกระจายต่างกันจำนวนมาก (ไม่ซ้ำเดิม)", Object.keys(แบบที่ไม่ซ้ำ).length + " แบบ");
 
@@ -202,13 +203,13 @@
     for (var r = 0; r < 5; r++) {
       await window.สุ่มสเตตัสใหม่(D);
       var หลังสุ่ม = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(D);
-      var รวม = window.PET_STAT_KEYS.reduce(function (s, k) { return s + หลังสุ่ม.pet.stats[k]; }, 0);
-      if (รวม !== 250 || หลังสุ่ม.pet.stage !== 4 || หลังสุ่ม.pointsAvailable !== ก่อนสุ่ม.pointsAvailable) {
-        log(false, "สุ่มใหม่ครั้งที่ " + (r + 1) + " ผลรวม 250 ขั้นเดิม แต้มไม่ลด", JSON.stringify(หลังสุ่ม.pet));
+      var งบ = window.งบที่ใช้(หลังสุ่ม.pet.stats);
+      if (Math.abs(งบ - 337.5) > 5 || หลังสุ่ม.pet.stage !== 4 || หลังสุ่ม.pointsAvailable !== ก่อนสุ่ม.pointsAvailable) {
+        log(false, "สุ่มใหม่ครั้งที่ " + (r + 1) + " งบ 337.5±5 ขั้นเดิม แต้มไม่ลด", JSON.stringify(หลังสุ่ม.pet));
       }
       if (JSON.stringify(หลังสุ่ม.pet.stats) !== JSON.stringify(ก่อนสุ่ม.pet.stats)) เปลี่ยนบ้าง = true;
     }
-    log(เปลี่ยนบ้าง, "สุ่มใหม่ 5 ครั้ง ฟรี (แต้มไม่ลด) ผลรวมคง 250 และสเตตัสเปลี่ยนจริง");
+    log(เปลี่ยนบ้าง, "สุ่มใหม่ 5 ครั้ง ฟรี (แต้มไม่ลด) งบคงที่ และสเตตัสเปลี่ยนจริง");
     var ดึงหลังสุ่ม = await window.ดึงสัตว์เลี้ยงของนักเรียน(D);
     log(Object.keys(ดึงหลังสุ่ม).sort().join(",") === "speciesKey,stage,stats", "ดึงสัตว์เลี้ยงของนักเรียน ยังคืน 3 field ตามสัญญาเดิม");
 
@@ -221,6 +222,19 @@
     await window.วิวัฒนาการ(เก่า);
     var หลังเก่า = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(เก่า);
     log(JSON.stringify(หลังเก่า.pet.stats) === JSON.stringify(window.PET_STAGE_STATS[1]), "สัตว์เลี้ยงก่อนกฎใหม่วิวัฒนาการแล้วใช้ค่าฐาน Pixie เดิม", JSON.stringify(หลังเก่า.pet.stats));
+    log(window.งบที่ใช้(window.PET_BASE_PER_STAGE) === 67.5 && window.ตรวจการกระจาย(window.PET_BASE_PER_STAGE), "ค่าฐาน Pixie ใช้งบ 67.5 พอดี และถูกกติกา");
+
+    // [2026-11-09] การกระจายที่สุ่มด้วยกติกาเดิม (ผลรวม 50) แต่งบเกินกติกาใหม่ → วิวัฒนาการแล้วสุ่มใหม่ให้
+    var เก่าผิด = "old-random-uid";
+    var ผิดกติกาใหม่ = { SPD: 9, ATK: 9, ACC: 8, EVA: 11, DEF: 4, HP: 9 }; // รวม 50 แต่งบ 72.5
+    await seedGradedAttempt(เก่าผิด, 60);
+    await window.fsSetDoc(window.fsDoc(window.db, "pets", เก่าผิด), {
+      pet: { speciesKey: "pixie", stage: 0, statsPerStage: ผิดกติกาใหม่, stats: window.สเตตัสของขั้น(ผิดกติกาใหม่, 0), pointsSpent: 1 }, growthHistory: []
+    });
+    log(!window.ตรวจการกระจาย(ผิดกติกาใหม่), "การกระจายรวม 50 แต่งบ 72.5 ถือว่าผิดกติกาใหม่");
+    await window.วิวัฒนาการ(เก่าผิด);
+    var หลังผิด = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง(เก่าผิด);
+    log(window.ตรวจการกระจาย(หลังผิด.pet.statsPerStage) && หลังผิด.pet.stage === 1, "วิวัฒนาการแล้วได้การกระจายใหม่ที่ถูกกติกา", JSON.stringify(หลังผิด.pet.statsPerStage));
 
   } catch (e) {
     log(false, "เกิด exception ที่ไม่คาดคิดระหว่างรันเทส", e.message);

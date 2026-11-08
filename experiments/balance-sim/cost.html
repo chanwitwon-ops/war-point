@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จำลองค่าสเตตัสมีราคา (scratch tool)</title>
+  <style>
+    /* scratch tool นอกสายเอกสาร — ไม่ใช่ prototype ตาม DESIGN.md */
+    body { font-family: sans-serif; margin: 16px; color: #171B2A; background: #FFFDF7; }
+    table { border-collapse: collapse; margin: 6px 0 16px; }
+    th, td { border: 1px solid #E6DAC4; padding: 4px 9px; text-align: right; }
+    th { background: #FFF1DC; }
+    td:first-child, th:first-child { text-align: left; }
+    .ok { color: #0F7A3D; font-weight: 600; } .warn { color: #8A6300; font-weight: 600; } .bad { color: #B3231C; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>ค่าสเตตัสมีราคา — พละกำลัง/พลังชีวิตแต้มละ c ค่าอื่นแต้มละ 1 (ข้อเสนอ ยังไม่ใช่ค่าในเกม)</h1>
+  <p>งบต่อขั้นทุกสายเท่ากัน = งบที่ Pixie ใช้ด้วยค่าเดิม 12/7/8/12/4/7 (Pixie ตัวเลขเดิม) · สุ่ม ±30% รอบค่าฐาน โดยงบคงที่ ·
+     engine จริงพร้อมยิงสองลูก · ?c=1.25,1.5 เลือกราคาที่จะลอง</p>
+  <div id="สถานะ">กำลังจำลอง…</div>
+  <div id="ผล"></div>
+  <script src="../../js/pet-config.js"></script>
+  <script src="../../js/combat-engine.js"></script>
+  <script>
+  (function () {
+    var q = new URLSearchParams(location.search);
+    var ราคาที่ลอง = (q.get("c") || "1,1.25,1.5,1.75,2").split(",").map(Number);
+    var K = window.PET_STAT_KEYS;
+    var PIXIE = { SPD: 12, ATK: 7, ACC: 8, EVA: 12, DEF: 4, HP: 7 };
+    var แพง = { ATK: true, HP: true };
+    function ราคาของ(v, c) { return K.reduce(function (s, k) { return s + v[k] * (แพง[k] ? c : 1); }, 0); }
+    function ri(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+
+    // สุ่ม ±30% รอบค่าฐาน แล้วปรับทีละแต้มจนใช้งบใกล้เคียงที่สุด (คลาดได้ไม่เกินครึ่งแต้มที่แพงที่สุด)
+    function สุ่มรอบฐาน(b, c, งบ) {
+      var ช่วง = {}, v = {};
+      K.forEach(function (k) {
+        ช่วง[k] = { min: Math.max(1, Math.ceil(+(b[k] * 0.7).toFixed(6))), max: Math.floor(+(b[k] * 1.3).toFixed(6)) };
+        v[k] = ri(ช่วง[k].min, ช่วง[k].max);
+      });
+      for (var รอบ = 0; รอบ < 200; รอบ++) {
+        var ต่าง = งบ - ราคาของ(v, c);
+        if (Math.abs(ต่าง) <= c / 2) break;
+        var ได้ = K.filter(function (k) { return ต่าง > 0 ? v[k] < ช่วง[k].max : v[k] > ช่วง[k].min; });
+        if (!ได้.length) break;
+        var k = ได้[Math.floor(Math.random() * ได้.length)];
+        v[k] += ต่าง > 0 ? 1 : -1;
+      }
+      return window.สเตตัสของขั้น(v, 4);
+    }
+
+    function ชนะกี่เปอร์(a, b, c, งบ, N) {
+      var w = 0, m = 0;
+      for (var i = 0; i < N; i++) {
+        var sw = i % 2, sa = สุ่มรอบฐาน(a, c, งบ), sb = สุ่มรอบฐาน(b, c, งบ);
+        var r = window.คำนวณผลการต่อสู้({ matchId: "c" + Math.random(),
+          sideA: { studentId: "A", petName: "A", species: "x", stats: sw ? sb : sa },
+          sideB: { studentId: "B", petName: "B", species: "x", stats: sw ? sa : sb } }).result;
+        if (!r.winner) continue;
+        m++;
+        if (sw ? r.winner === "B" : r.winner === "A") w++;
+      }
+      return w * 100 / m;
+    }
+
+    // ค่าแต่ละตัวมีผลแค่ไหน (Pixie vs Pixie สุ่ม): ฝั่งที่สูงกว่าชนะกี่ %
+    function ผลรายค่า(c, งบ, N) {
+      var st = {}; K.forEach(function (k) { st[k] = { w: 0, n: 0 }; });
+      for (var i = 0; i < N; i++) {
+        var a = สุ่มรอบฐาน(PIXIE, c, งบ), b = สุ่มรอบฐาน(PIXIE, c, งบ);
+        var r = window.คำนวณผลการต่อสู้({ matchId: "pv" + i, sideA: { studentId: "A", petName: "A", species: "x", stats: a },
+          sideB: { studentId: "B", petName: "B", species: "x", stats: b } }).result;
+        if (!r.winner) continue;
+        var W = r.winner === "A" ? a : b, L = r.winner === "A" ? b : a;
+        K.forEach(function (k) { if (W[k] === L[k]) return; st[k].n++; if (W[k] > L[k]) st[k].w++; });
+      }
+      var o = {}; K.forEach(function (k) { o[k] = st[k].w * 100 / st[k].n; }); return o;
+    }
+
+    // สร้างค่าฐานตามเอกลักษณ์ของสาย ให้ใช้งบเท่ากัน (จำนวนเต็ม ≥ 3)
+    function สร้างผู้สมัคร(สาย, c, งบ) {
+      for (var t = 0; t < 400; t++) {
+        var v = {};
+        if (สาย === "เต่า") { v.DEF = ri(13, 18); v.HP = ri(7, 11); v.SPD = ri(3, 6); }
+        if (สาย === "Behemoth") { v.ATK = ri(8, 13); v.HP = ri(8, 12); v.SPD = ri(3, 6); v.EVA = ri(3, 6); }
+        var ที่เหลือ = K.filter(function (k) { return v[k] == null; });
+        var ok = true;
+        ที่เหลือ.forEach(function (k, i) {
+          if (!ok) return;
+          var ใช้แล้ว = ราคาของ(Object.assign({ SPD: 0, ATK: 0, ACC: 0, EVA: 0, DEF: 0, HP: 0 }, v), c);
+          var เหลือ = งบ - ใช้แล้ว, ราคา = แพง[k] ? c : 1;
+          if (i === ที่เหลือ.length - 1) { v[k] = Math.round(เหลือ / ราคา); }
+          else { v[k] = ri(3, สาย === "มังกร" ? 12 : 10); }
+          if (v[k] < 3) ok = false;
+        });
+        if (!ok) continue;
+        if (Math.abs(ราคาของ(v, c) - งบ) > c / 2) continue;
+        var เรียง = K.map(function (k) { return v[k]; }).sort(function (x, y) { return y - x; });
+        if (สาย === "เต่า" && v.DEF !== เรียง[0]) continue;
+        // Behemoth: พละกำลังกับพลังชีวิตต้องสูงกว่าทุกค่าที่เหลือจริงๆ (ไม่ใช่แค่ติดสองอันดับแรก)
+        if (สาย === "Behemoth" && !K.every(function (k) { return k === "ATK" || k === "HP" || v[k] < Math.min(v.ATK, v.HP); })) continue;
+        if (สาย === "มังกร" && (เรียง[0] - เรียง[5] > 5)) continue;
+        return v;
+      }
+      return null;
+    }
+
+    var ผลทั้งหมด = [];
+    var สาย = ["เต่า", "Behemoth", "มังกร"];
+    var iราคา = 0;
+    function ทำราคาถัดไป() {
+      if (iราคา >= ราคาที่ลอง.length) { แสดง(); return; }
+      var c = ราคาที่ลอง[iราคา++];
+      var งบ = ราคาของ(PIXIE, c);
+      document.getElementById("สถานะ").textContent = "กำลังลองราคา " + c + " …";
+      setTimeout(function () {
+        var ฐาน = { Pixie: PIXIE };
+        สาย.forEach(function (s) {
+          var ดีสุด = null;
+          for (var n = 0; n < 40; n++) {
+            var v = สร้างผู้สมัคร(s, c, งบ); if (!v) continue;
+            var w = ชนะกี่เปอร์(v, PIXIE, c, งบ, 400);
+            if (!ดีสุด || Math.abs(w - 50) < Math.abs(ดีสุด.w - 50)) ดีสุด = { v: v, w: w };
+          }
+          ฐาน[s] = ดีสุด ? ดีสุด.v : null;
+        });
+        var ชื่อ = Object.keys(ฐาน).filter(function (n) { return ฐาน[n]; });
+        var M = {};
+        ชื่อ.forEach(function (a) { M[a] = {}; ชื่อ.forEach(function (b) { M[a][b] = a === b ? 50 : ชนะกี่เปอร์(ฐาน[a], ฐาน[b], c, งบ, 600); }); });
+        ผลทั้งหมด.push({ c: c, งบ: งบ, ฐาน: ฐาน, M: M, รายค่า: ผลรายค่า(c, งบ, 2500) });
+        ทำราคาถัดไป();
+      }, 30);
+    }
+
+    function สี(v) { var d = Math.abs(v - 50); return d <= 10 ? "ok" : d <= 15 ? "warn" : "bad"; }
+    function แสดง() {
+      var html = "";
+      ผลทั้งหมด.forEach(function (r) {
+        var ชื่อ = Object.keys(r.ฐาน).filter(function (n) { return r.ฐาน[n]; });
+        html += "<h2>ราคาพละกำลัง/พลังชีวิต = " + r.c + " (งบต่อขั้น " + r.งบ + ")</h2>";
+        html += "<table><tr><th>ค่าแต่ละตัว (Pixie vs Pixie สุ่ม): สูงกว่าแล้วชนะ</th>";
+        K.forEach(function (k) { html += "<th>" + k + "</th>"; }); html += "</tr><tr><td></td>";
+        K.forEach(function (k) { html += '<td class="' + สี(r.รายค่า[k]) + '">' + r.รายค่า[k].toFixed(0) + "</td>"; });
+        html += "</tr></table><table><tr><th>ค่าฐานต่อขั้น</th>";
+        K.forEach(function (k) { html += "<th>" + k + "</th>"; }); html += "<th>ผลรวมตัวเลข</th>";
+        ชื่อ.forEach(function (n) { html += "<th>vs " + n + "</th>"; }); html += "<th>เฉลี่ย</th></tr>";
+        ชื่อ.forEach(function (a) {
+          html += "<tr><td>" + a + "</td>";
+          K.forEach(function (k) { html += "<td>" + r.ฐาน[a][k] + "</td>"; });
+          html += "<td>" + K.reduce(function (s, k) { return s + r.ฐาน[a][k]; }, 0) + "</td>";
+          var รวม = 0;
+          ชื่อ.forEach(function (b) { var v = r.M[a][b]; if (a !== b) รวม += v; html += '<td class="' + (a === b ? "" : สี(v)) + '">' + v.toFixed(0) + "</td>"; });
+          var avg = รวม / (ชื่อ.length - 1);
+          html += '<td class="' + สี(avg) + '">' + avg.toFixed(0) + "</td></tr>";
+        });
+        html += "</table>";
+      });
+      document.getElementById("สถานะ").textContent = "เสร็จ (เขียว 40–60 · เหลือง 35–65 · แดง เกินกว่านั้น)";
+      document.getElementById("ผล").innerHTML = html;
+      window.__ผลราคา = ผลทั้งหมด.map(function (r) {
+        var ชื่อ = Object.keys(r.ฐาน).filter(function (n) { return r.ฐาน[n]; });
+        var avg = {}; ชื่อ.forEach(function (a) { avg[a] = Math.round(ชื่อ.filter(function (b) { return b !== a; }).reduce(function (s, b) { return s + r.M[a][b]; }, 0) / (ชื่อ.length - 1)); });
+        var ตาราง = {}; ชื่อ.forEach(function (a) { ตาราง[a] = ชื่อ.map(function (b) { return Math.round(r.M[a][b]); }).join("/"); });
+        return { c: r.c, งบ: r.งบ, avg: avg, ตาราง: ตาราง,
+          ฐาน: ชื่อ.reduce(function (o, n) { o[n] = K.map(function (k) { return r.ฐาน[n][k]; }).join("/"); return o; }, {}),
+          รายค่า: K.map(function (k) { return k + " " + Math.round(r.รายค่า[k]); }).join(", ") };
+      });
+    }
+    ทำราคาถัดไป();
+  })();
+  </script>
+</body>
+</html>

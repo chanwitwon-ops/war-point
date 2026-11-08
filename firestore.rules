@@ -128,9 +128,11 @@ service cloud.firestore {
     // เต็มรูปแบบ) เหมาะกับสเกลการบ้าน/เดโมในห้องเรียน ไม่ใช่ระบบแข่งขันที่มีเดิมพันสูง
     match /pets/{uid} {
       // [เพิ่ม 2026-11-08 สเปก 02 ซ.14] สเตตัสต้องตรงกติกาการสุ่ม: ครบ 6 ค่า จำนวนเต็ม ทุกค่าอยู่ในช่วง
-      // (ค่าต่อขั้น × จำนวนขั้น) และผลรวม = 50 × จำนวนขั้น — นักเรียนตั้งสเตตัสเกินกติกาผ่าน DevTools ไม่ได้
+      // (ค่าต่อขั้น × จำนวนขั้น) — นักเรียนตั้งสเตตัสเกินกติกาผ่าน DevTools ไม่ได้
       // ช่วงต่อขั้นต้องตรงกับ PET_STAT_RANGE_PER_STAGE ใน js/pet-config.js
       // (SPD 9–15, ATK 5–9, ACC 6–10, EVA 9–15, DEF 3–5, HP 5–9)
+      // [แก้ 2026-11-09] เลิกตรวจ "ผลรวม = 50 × ขั้น" → ตรวจ "งบ" แทน (ATK/HP แต้มละ 2.25 ค่าอื่น 1
+      // งบ 67.5 ± 1 ต่อขั้น) คิดเป็นจำนวนเต็ม ×4: 4×(SPD+ACC+EVA+DEF) + 9×(ATK+HP) อยู่ใน 266n–274n
       function statsValid(st, n) {
         return st.keys().hasOnly(["SPD", "ATK", "ACC", "EVA", "DEF", "HP"]) &&
           st.SPD is int && st.ATK is int && st.ACC is int && st.EVA is int && st.DEF is int && st.HP is int &&
@@ -140,7 +142,8 @@ service cloud.firestore {
           st.EVA >= 9 * n && st.EVA <= 15 * n &&
           st.DEF >= 3 * n && st.DEF <= 5 * n &&
           st.HP >= 5 * n && st.HP <= 9 * n &&
-          st.SPD + st.ATK + st.ACC + st.EVA + st.DEF + st.HP == 50 * n;
+          4 * (st.SPD + st.ACC + st.EVA + st.DEF) + 9 * (st.ATK + st.HP) >= 266 * n &&
+          4 * (st.SPD + st.ACC + st.EVA + st.DEF) + 9 * (st.ATK + st.HP) <= 274 * n;
       }
 
       allow read: if request.auth != null;

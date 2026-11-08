@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จำลองสายพันธุ์ต่อสายพันธุ์ (scratch tool)</title>
+  <style>
+    /* scratch tool นอกสายเอกสาร — ไม่ใช่ prototype ตาม DESIGN.md */
+    body { font-family: sans-serif; margin: 16px; color: #171B2A; background: #FFFDF7; }
+    table { border-collapse: collapse; margin: 8px 0 18px; }
+    th, td { border: 1px solid #E6DAC4; padding: 5px 10px; text-align: right; }
+    th { background: #FFF1DC; }
+    td:first-child, th:first-child { text-align: left; }
+    .ok { color: #0F7A3D; font-weight: 600; }
+    .warn { color: #8A6300; font-weight: 600; }
+    .bad { color: #B3231C; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>จำลองสายพันธุ์ต่อสายพันธุ์ — ร่างสุดท้าย (ข้อเสนอ ยังไม่ใช่ค่าในเกม)</h1>
+  <p>ค่าฐานต่อขั้นรวม 50 ทุกสาย · สุ่ม ±30% รอบค่าฐานของสายตัวเอง (ผลรวมคง 50) · engine จริงพร้อมยิงสองลูก ·
+     ตัวเลขในตาราง = แถวชนะคอลัมน์กี่ % (40–60 = สมดุล) · ?n=จำนวนแมตช์ต่อคู่ · ?bases=JSON แทนค่าฐานได้</p>
+  <div id="ผล">กำลังจำลอง…</div>
+  <script src="../../js/pet-config.js"></script>
+  <script src="../../js/combat-engine.js"></script>
+  <script>
+  (function () {
+    var q = new URLSearchParams(location.search);
+    var N = Number(q.get("n") || 1500);
+    var คีย์ = window.PET_STAT_KEYS;
+    // ข้อเสนอค่าฐานต่อขั้น (รวม 50) — Pixie คือค่าจริงในเกม ที่เหลือเป็นข้อเสนอตามแนวที่ผู้ใช้บอก
+    var ฐาน = q.get("bases") ? JSON.parse(q.get("bases")) : {
+      "Pixie (หลบหลีก)":        { SPD: 12, ATK: 7,  ACC: 8, EVA: 12, DEF: 4,  HP: 7 },
+      "เต่า (ป้องกัน)":          { SPD: 5,  ATK: 7,  ACC: 8, EVA: 5,  DEF: 15, HP: 10 },
+      "Behemoth (ตีแรง เลือดเยอะ)": { SPD: 6,  ATK: 14, ACC: 8, EVA: 4,  DEF: 6,  HP: 12 },
+      "มังกร (สมดุล)":          { SPD: 9,  ATK: 9,  ACC: 8, EVA: 8,  DEF: 7,  HP: 9 }
+    };
+    var ชื่อ = Object.keys(ฐาน);
+    ชื่อ.forEach(function (n) {
+      var รวม = คีย์.reduce(function (s, k) { return s + ฐาน[n][k]; }, 0);
+      if (รวม !== 50) throw new Error(n + " ผลรวมค่าฐาน = " + รวม + " ไม่ใช่ 50");
+    });
+
+    // สุ่มการกระจายรอบค่าฐานของสายนั้น — กติกาเดียวกับ window.สุ่มการกระจายสเตตัส แต่ใช้ฐานของแต่ละสาย
+    function สุ่มรอบฐาน(b) {
+      var ช่วง = {}, ผล = {}, รวม = 0;
+      คีย์.forEach(function (k) {
+        ช่วง[k] = { min: Math.max(1, Math.ceil(+(b[k] * 0.7).toFixed(6))), max: Math.floor(+(b[k] * 1.3).toFixed(6)) };
+        ผล[k] = ช่วง[k].min + Math.floor(Math.random() * (ช่วง[k].max - ช่วง[k].min + 1));
+        รวม += ผล[k];
+      });
+      var ต่าง = 50 - รวม;
+      while (ต่าง !== 0) {
+        var ได้ = คีย์.filter(function (k) { return ต่าง > 0 ? ผล[k] < ช่วง[k].max : ผล[k] > ช่วง[k].min; });
+        var k = ได้[Math.floor(Math.random() * ได้.length)];
+        ผล[k] += ต่าง > 0 ? 1 : -1; ต่าง += ต่าง > 0 ? -1 : 1;
+      }
+      return window.สเตตัสของขั้น(ผล, 4);
+    }
+
+    var ตาราง = {}, เทิร์น = {}, นับ = 0;
+    ชื่อ.forEach(function (a) {
+      ตาราง[a] = {}; เทิร์น[a] = {};
+      ชื่อ.forEach(function (b) {
+        var ชนะ = 0, มีผล = 0, t = 0;
+        for (var i = 0; i < N; i++) {
+          // สลับฝั่ง A/B ครึ่งหนึ่ง กันผลเอียงจากตำแหน่ง
+          var สลับ = i % 2 === 1;
+          var sa = สุ่มรอบฐาน(ฐาน[a]), sb = สุ่มรอบฐาน(ฐาน[b]);
+          var r = window.คำนวณผลการต่อสู้({ matchId: "sp-" + (นับ++),
+            sideA: { studentId: "A", petName: "A", species: "x", stats: สลับ ? sb : sa },
+            sideB: { studentId: "B", petName: "B", species: "x", stats: สลับ ? sa : sb } }).result;
+          t += r.turns;
+          if (!r.winner) continue;
+          มีผล++;
+          var แถวชนะ = สลับ ? r.winner === "B" : r.winner === "A";
+          if (แถวชนะ) ชนะ++;
+        }
+        ตาราง[a][b] = ชนะ * 100 / มีผล; เทิร์น[a][b] = t / N;
+      });
+    });
+
+    function สี(v) { var d = Math.abs(v - 50); return d <= 10 ? "ok" : d <= 15 ? "warn" : "bad"; }
+    var html = "<h2>ค่าฐานต่อขั้นที่ใช้ (×5 = ร่างสุดท้าย)</h2><table><tr><th>สาย</th>";
+    คีย์.forEach(function (k) { html += "<th>" + k + "</th>"; });
+    html += "</tr>";
+    ชื่อ.forEach(function (n) {
+      html += "<tr><td>" + n + "</td>";
+      คีย์.forEach(function (k) { html += "<td>" + ฐาน[n][k] + "</td>"; });
+      html += "</tr>";
+    });
+    html += "</table><h2>แถวชนะคอลัมน์ (%)</h2><table><tr><th></th>";
+    ชื่อ.forEach(function (n) { html += "<th>" + n + "</th>"; });
+    html += "<th>เฉลี่ยกับทุกสาย</th></tr>";
+    var สรุป = {};
+    ชื่อ.forEach(function (a) {
+      html += "<tr><td>" + a + "</td>";
+      var รวม = 0;
+      ชื่อ.forEach(function (b) {
+        var v = ตาราง[a][b]; รวม += v;
+        html += "<td class=\"" + (a === b ? "" : สี(v)) + "\">" + v.toFixed(1) + "</td>";
+      });
+      สรุป[a] = รวม / ชื่อ.length;
+      html += "<td class=\"" + สี(สรุป[a]) + "\">" + สรุป[a].toFixed(1) + "</td></tr>";
+    });
+    html += "</table><p>สีเขียว 40–60% · เหลือง 35–65% · แดง เกินกว่านั้น · แมตช์ละเฉลี่ย " +
+      (ชื่อ.reduce(function (s, a) { return s + ชื่อ.reduce(function (s2, b) { return s2 + เทิร์น[a][b]; }, 0); }, 0) / (ชื่อ.length * ชื่อ.length)).toFixed(1) + " เทิร์น</p>";
+    document.getElementById("ผล").innerHTML = html;
+    window.__ผลสายพันธุ์ = { ตาราง: ตาราง, สรุป: สรุป, ฐาน: ฐาน };
+  })();
+  </script>
+</body>
+</html>

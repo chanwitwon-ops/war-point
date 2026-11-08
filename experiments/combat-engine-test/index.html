@@ -44,7 +44,7 @@
   var r2 = window.คำนวณผลการต่อสู้({ matchId: "m-1", sideA: pixie("a", 4), sideB: pixie("b", 4) });
   function ตัดเวลา(r) { var c = JSON.parse(JSON.stringify(r)); delete c.computed_at; return JSON.stringify(c); }
   log(ตัดเวลา(r1) === ตัดเวลา(r2), "matchId เดิมได้ผลเดิมทุก byte (ไม่นับ computed_at)");
-  log(r1.engine_version === "2.1.0", "engine_version = 2.1.0 (เพิ่มยิงสองลูก)");
+  log(r1.engine_version === "2.2.0", "engine_version = 2.2.0 (ยิงสองลูกต่อแต้ม 8 + หาขั้นจากงบ)");
 
   // 2. structure
   log(r1.events[0].type === "match_start" && r1.events[r1.events.length - 1].type === "match_end", "เริ่มด้วย match_start จบด้วย match_end");
@@ -119,10 +119,11 @@
   var เฉลี่ย = ยาว.reduce(function (s, x) { return s + x; }, 0) / ยาว.length;
   log(เฉลี่ย >= 8 && เฉลี่ย <= 18, "ร่างเดียวกันสู้กันเฉลี่ยราว 9–12 เทิร์น (สั้นลงเพราะยิงสองลูก)", เฉลี่ย.toFixed(1));
 
-  // 11. ยิงสองลูก (v2.1.0): โอกาส = clamp(round(30 + (SPD ÷ จำนวนขั้น − 12) × 12), 5, 95)
+  // 11. ยิงสองลูก (v2.2.0): โอกาส = clamp(round(30 + (SPD ÷ จำนวนขั้น − 12) × 8), 5, 95)
+  //     จำนวนขั้น = งบที่ใช้ ÷ 67.5 (ATK/HP แต้มละ 2.25 ค่าอื่น 1)
   function โอกาสตามสูตร(st) {
-    var n = Math.max(1, Math.round((st.SPD + st.ATK + st.ACC + st.EVA + st.DEF + st.HP) / 50));
-    return Math.max(5, Math.min(95, Math.round(30 + (st.SPD / n - 12) * 12)));
+    var n = Math.max(1, Math.round((st.SPD + st.ACC + st.EVA + st.DEF + 2.25 * (st.ATK + st.HP)) / 67.5));
+    return Math.max(5, Math.min(95, Math.round(30 + (st.SPD / n - 12) * 8)));
   }
   var ds = [], สูตรผิด = 0, ไม่ตามด้วยยิง = 0;
   var สนามทดสอบ = [];
@@ -140,10 +141,11 @@
   }
   log(ds.length > 0 && สูตรผิด === 0, "โอกาสยิงลูกที่สองตรงสูตร และได้ยิงเมื่อทอยไม่เกิน", ds.length + " ครั้ง ผิด " + สูตรผิด);
   log(ไม่ตามด้วยยิง === 0, "double_shot ตามด้วย attack ของผู้ยิงคนเดิมเสมอ");
-  log(โอกาสตามสูตร({ SPD: 45, ATK: 45, ACC: 40, EVA: 60, DEF: 20, HP: 40 }) === 5 &&
+  // ร่างสุดท้ายที่ใช้งบ 337.5 พอดี: SPD 45 / 60 / 75 → 6% / 30% / 54%
+  log(โอกาสตามสูตร({ SPD: 45, ATK: 40, ACC: 40, EVA: 55, DEF: 20, HP: 35 }) === 6 &&
       โอกาสตามสูตร({ SPD: 60, ATK: 35, ACC: 40, EVA: 60, DEF: 20, HP: 35 }) === 30 &&
-      โอกาสตามสูตร({ SPD: 75, ATK: 30, ACC: 35, EVA: 50, DEF: 25, HP: 35 }) === 66,
-      "ร่างสุดท้าย SPD 45 / 60 / 75 → 5% / 30% / 66% ตามที่ตกลง");
+      โอกาสตามสูตร({ SPD: 75, ATK: 35, ACC: 40, EVA: 45, DEF: 20, HP: 35 }) === 54,
+      "ร่างสุดท้าย SPD 45 / 60 / 75 → 6% / 30% / 54% ตามที่ตกลง (ต่อแต้ม 8)");
   window.__DOUBLE_SHOT_PARAMS = { base: null };
   var ปิด = window.คำนวณผลการต่อสู้({ matchId: "ds-0", sideA: pixie("a", 4), sideB: pixie("b", 4) });
   delete window.__DOUBLE_SHOT_PARAMS;
