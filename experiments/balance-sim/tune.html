@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จูนกลไกยิงสองลูก (scratch tool)</title>
+  <style>
+    /* scratch tool นอกสายเอกสาร — ไม่ใช่ prototype ตาม DESIGN.md */
+    body { font-family: sans-serif; margin: 16px; color: #171B2A; background: #FFFDF7; }
+    table { border-collapse: collapse; margin: 8px 0 18px; }
+    th, td { border: 1px solid #E6DAC4; padding: 5px 9px; text-align: right; }
+    th { background: #FFF1DC; }
+    td:first-child, th:first-child { text-align: left; }
+    .ok { color: #0F7A3D; font-weight: 600; }
+    .warn { color: #8A6300; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>จูนกลไกยิงสองลูก — โอกาส% = clamp(ฐาน + (ความเร็วต่อขั้น − 12) × ต่อแต้ม, 5, 95)</h1>
+  <p>ร่างสุดท้าย vs ร่างสุดท้าย (ผลรวม 250 สุ่มการกระจาย) · ทุกชุดตัวเลขใช้คู่ต่อสู้ชุดเดียวกัน ?n= (ค่าเริ่ม 3000 คู่)
+     · ช่องค่าสเตตัส = ฝั่งที่มีค่านั้นสูงกว่าชนะกี่ % (ใกล้ 50 = สมดุล)</p>
+  <div id="ผล">กำลังจำลอง…</div>
+  <script src="../../js/pet-config.js"></script>
+  <script src="../../js/combat-engine.js"></script>
+  <script>
+  (function () {
+    var N = Number(new URLSearchParams(location.search).get("n") || 3000);
+    var คีย์ = window.PET_STAT_KEYS;
+    var คู่ = [];
+    for (var i = 0; i < N; i++) {
+      คู่.push([window.สเตตัสของขั้น(window.สุ่มการกระจายสเตตัส(), 4), window.สเตตัสของขั้น(window.สุ่มการกระจายสเตตัส(), 4)]);
+    }
+    // ชุดตัวเลขที่ลอง: โอกาส% = clamp(ฐาน + (ความเร็วต่อขั้น − 12) × ต่อแต้ม, 5, 95)
+    // ความเร็วต่อขั้นอยู่ช่วง 9–15 (ร่างสุดท้าย SPD 45–75)
+    var ชุด = [null];
+    var ลอง = (new URLSearchParams(location.search).get("grid") ||
+      "20:8,20:12,30:8,30:12,30:16,30:20,40:12,40:16,40:20,50:16,50:20").split(",");
+    ลอง.forEach(function (s) { var x = s.split(":"); ชุด.push({ base: +x[0], perPoint: +x[1], min: 5, max: 95 }); });
+
+    function วัด(p) {
+      window.__DOUBLE_SHOT_PARAMS = p;
+      var st = {}; คีย์.forEach(function (k) { st[k] = { ชนะ: 0, รวม: 0 }; });
+      var เทิร์น = 0, ยิงสอง = 0, ยิงทั้งหมด = 0, ครบเทิร์น = 0, เสมอ = 0;
+      คู่.forEach(function (c, i) {
+        var o = window.คำนวณผลการต่อสู้({ matchId: "tune-" + i,
+          sideA: { studentId: "A", petName: "A", species: "pixie", stats: c[0] },
+          sideB: { studentId: "B", petName: "B", species: "pixie", stats: c[1] } });
+        เทิร์น += o.result.turns;
+        if (o.result.reason !== "ko") ครบเทิร์น++;
+        o.events.forEach(function (e) { if (e.type === "attack") ยิงทั้งหมด++; if (e.type === "double_shot") ยิงสอง++; });
+        if (!o.result.winner) { เสมอ++; return; }
+        var ชนะ = o.result.winner === "A" ? c[0] : c[1], แพ้ = o.result.winner === "A" ? c[1] : c[0];
+        คีย์.forEach(function (k) { if (ชนะ[k] === แพ้[k]) return; st[k].รวม++; if (ชนะ[k] > แพ้[k]) st[k].ชนะ++; });
+      });
+      var pct = {}; var เบี่ยงสุด = 0;
+      คีย์.forEach(function (k) { pct[k] = st[k].ชนะ * 100 / st[k].รวม; เบี่ยงสุด = Math.max(เบี่ยงสุด, Math.abs(pct[k] - 50)); });
+      return { p: p, pct: pct, เบี่ยงสุด: เบี่ยงสุด, เทิร์น: เทิร์น / N, สัดส่วนยิงสอง: ยิงสอง * 100 / (ยิงทั้งหมด - ยิงสอง), ครบเทิร์น: ครบเทิร์น, เสมอ: เสมอ };
+    }
+
+    var ผลทั้งหมด = ชุด.map(วัด);
+    delete window.__DOUBLE_SHOT_PARAMS;
+    var html = "<table><tr><th>ชุดตัวเลข</th><th>โอกาสที่ SPD 45 / 60 / 75</th>";
+    คีย์.forEach(function (k) { html += "<th>" + k + "</th>"; });
+    html += "<th>เบี่ยงจาก 50 มากสุด</th><th>เทิร์นเฉลี่ย</th><th>เทิร์นที่ได้ยิงสอง</th></tr>";
+    ผลทั้งหมด.forEach(function (r) {
+      var ok = function (v) { return '<span class="' + (Math.abs(v - 50) <= 7 ? "ok" : "warn") + '">' + v.toFixed(1) + "</span>"; };
+      var โอกาส = [45, 60, 75].map(function (s) {
+        return r.p ? Math.max(r.p.min, Math.min(r.p.max, Math.round(r.p.base + (s / 5 - 12) * r.p.perPoint))) + "%" : "0%";
+      }).join(" / ");
+      html += "<tr><td>" + (r.p ? "ฐาน " + r.p.base + " / ต่อแต้ม " + r.p.perPoint : "ปิด (ปัจจุบัน)") + "</td><td>" + โอกาส + "</td>";
+      คีย์.forEach(function (k) { html += "<td>" + ok(r.pct[k]) + "</td>"; });
+      html += "<td>" + r.เบี่ยงสุด.toFixed(1) + "</td><td>" + r.เทิร์น.toFixed(1) + "</td><td>" + r.สัดส่วนยิงสอง.toFixed(1) + "%</td></tr>";
+    });
+    html += "</table><p>สีเขียว = อยู่ในช่วง 43–57% · ครบ 30 เทิร์น/เสมอ: " +
+      ผลทั้งหมด.map(function (r) { return r.ครบเทิร์น + "/" + r.เสมอ; }).join(", ") + "</p>";
+    document.getElementById("ผล").innerHTML = html;
+    window.__ผลจูน = ผลทั้งหมด.map(function (r) {
+      return { base: r.p ? r.p.base : null, perPoint: r.p ? r.p.perPoint : null, เบี่ยงสุด: +r.เบี่ยงสุด.toFixed(1), เทิร์น: +r.เทิร์น.toFixed(1), ยิงสอง: +r.สัดส่วนยิงสอง.toFixed(1),
+        pct: Object.keys(r.pct).reduce(function (o, k) { o[k] = +r.pct[k].toFixed(1); return o; }, {}) };
+    });
+  })();
+  </script>
+</body>
+</html>

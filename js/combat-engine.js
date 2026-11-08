@@ -15,6 +15,8 @@
 //   ดาเมจ   : round(ATK × 100 ÷ (100 + DEF) × สุ่ม 0.90–1.10) ขั้นต่ำ 1
 //   เลือด   : HP × 6
 //   เพดาน   : 30 เทิร์น — ครบแล้วใครเหลือ %เลือดมากกว่าชนะ เท่ากันเป๊ะ = winner null ให้ครูเลือก
+//   ยิงสองลูก [v2.1.0]: หลังลูกแรกของแต่ละฝ่าย ทอยโอกาสยิงลูกที่สอง (แรงเท่าลูกแรก ทอยโดน/บล็อกแยก)
+//             โอกาส% = clamp(30 + (SPD ÷ จำนวนขั้น − 12) × 12, 5, 95)
 //
 // ── สัญญา (contract) ของ window.คำนวณผลการต่อสู้ ──
 // input  = { matchId: string, sideA: ฝ่าย, sideB: ฝ่าย }
@@ -29,6 +31,7 @@
 //     attack        { actor, target }                         ← ประกาศว่ากำลังยิง (เล่นท่าเงยยิงฟ้า)
 //     attack_missed { actor, target, hitChance, roll }        ← ฝ่ายรับหลบ
 //     attack_blocked{ actor, target, blockChance, roll }      ← ฝ่ายรับบล็อก ดาเมจ 0
+//     double_shot   { actor, chance, roll }                   ← [v2.1.0] ได้ยิงลูกที่สอง ตามด้วย attack อีกชุด
 //     damage_dealt  { actor, target, amount, hpBefore, hpAfter }
 //     ko            { target }
 //     turn_limit    { hpPct: { A, B } }                       ← ครบ 30 เทิร์น
@@ -37,9 +40,13 @@
 // ─────────────────────────────────────────────────────────────
 
 (function () {
-  var ENGINE_VERSION = "2.0.0";
+  var ENGINE_VERSION = "2.1.0";
   var HP_MULTIPLIER = 6;
   var TURN_CAP = 30;
+  // กลไกยิงสองลูก — user เลือกชุด "ฐาน 30 / ต่อแต้ม 12" เมื่อ 2026-11-08 หลังจูนด้วย
+  // experiments/balance-sim/tune.html (4000 คู่: ความเร็วสูงกว่าแล้วชนะ 31% → 51%, เฉลี่ย 9.2 เทิร์น)
+  // ร่างสุดท้าย SPD 45 / 60 / 75 → โอกาส 5% / 30% / 66%
+  var DOUBLE_SHOT = { base: 30, perPoint: 12, min: 5, max: 95 };
 
   // xmur3 แฮช string เป็น seed + mulberry32 เป็นตัวสุ่ม — อัลกอริทึมสาธารณะมาตรฐาน
   // deterministic (seed เดิม = ผลเดิม) ห้ามใช้ Math.random() เพราะรีเพลย์ต้องได้ผลเดิมเสมอ
@@ -94,6 +101,35 @@
       events.push({ seq: seq++, turn: turn, type: type, payload: payload || {} });
     }
 
+    // [v2.1.0 — 2026-11-08 user เลือก] ยิงสองลูก: หลังยิงลูกแรกในเทิร์นของตัวเอง ทุกฝ่ายทอยโอกาส
+    // ยิงลูกที่สอง ยิ่งความเร็วของตัวเองมาก ยิ่งมีโอกาสมาก ลูกที่สองแรงเท่าลูกแรก ทอยโดน/บล็อกแยกกัน
+    // โอกาส% = clamp(ฐาน + (ความเร็วต่อขั้น − 12) × ต่อแต้ม, ต่ำสุด, สูงสุด)
+    //   ความเร็วต่อขั้น = SPD ÷ จำนวนขั้น (จำนวนขั้น = ผลรวมสเตตัส ÷ 50 ตามกติกา ซ.14) — 12 = ค่าฐาน Pixie
+    //   จึงใช้ได้ทุกขั้น ไม่ใช่แค่ร่างสุดท้าย · ต่ำสุด > 0 = ทุกฝ่ายมีโอกาสยิงสองลูกเสมอ
+    // ตัวเลขจริงอยู่ที่ DOUBLE_SHOT ด้านบน · หน้าจูน experiments/balance-sim/tune.html ทดลองค่าอื่นได้โดยตั้ง
+    // window.__DOUBLE_SHOT_PARAMS = { base, perPoint, min, max } (ตั้งเป็น { base: null } = ปิดกลไก)
+    function พารามิเตอร์ยิงสองลูก() {
+      return window.__DOUBLE_SHOT_PARAMS || DOUBLE_SHOT;
+    }
+
+    function จำนวนขั้นของ(ฝ่าย) {
+      var s = ฝ่าย.stats;
+      return Math.max(1, Math.round((s.SPD + s.ATK + s.ACC + s.EVA + s.DEF + s.HP) / 50));
+    }
+
+    // ยิงตามสิทธิ์ของเทิร์นนั้น (1 หรือ 2 ลูก) — คืน true ถ้าฝ่ายรับหมดแรง
+    function ยิงประจำเทิร์น(turn, ผู้ยิง, ผู้รับ) {
+      if (ยิง(turn, ผู้ยิง, ผู้รับ)) return true;
+      var p = พารามิเตอร์ยิงสองลูก();
+      if (!p || p.base == null) return false;
+      var ต่อขั้น = ผู้ยิง.stats.SPD / จำนวนขั้นของ(ผู้ยิง);
+      var chance = clamp(Math.round(p.base + (ต่อขั้น - 12) * p.perPoint), p.min, p.max);
+      var roll = ทอย();
+      if (roll > chance) return false;
+      บันทึก(turn, "double_shot", { actor: ผู้ยิง.studentId, chance: chance, roll: roll });
+      return ยิง(turn, ผู้ยิง, ผู้รับ);
+    }
+
     // คืน true ถ้าการยิงครั้งนี้ทำให้ฝ่ายรับหมดแรง
     function ยิง(turn, ผู้ยิง, ผู้รับ) {
       บันทึก(turn, "attack", { actor: ผู้ยิง.studentId, target: ผู้รับ.studentId });
@@ -140,9 +176,9 @@
       หลัง = ก่อน === A ? B : A;
       บันทึก(turn, "turn_start", { order: [ก่อน.studentId, หลัง.studentId] });
 
-      if (ยิง(turn, ก่อน, หลัง)) {
+      if (ยิงประจำเทิร์น(turn, ก่อน, หลัง)) {
         ผลลัพธ์ = { winner: ก่อน === A ? "A" : "B", reason: "ko", turns: turn };
-      } else if (ยิง(turn, หลัง, ก่อน)) {
+      } else if (ยิงประจำเทิร์น(turn, หลัง, ก่อน)) {
         ผลลัพธ์ = { winner: หลัง === A ? "A" : "B", reason: "ko", turns: turn };
       }
     }

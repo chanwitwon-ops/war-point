@@ -176,6 +176,8 @@
     var i = 0;
     while (i < events.length) {
       var เริ่มที่ = i;
+      // ลูกที่สอง [engine v2.1.0]: double_shot + attack ที่ตามมา + ผล (+ ko) เป็นจังหวะเดียว
+      if (events[i].type === "double_shot" && i + 1 < events.length && events[i + 1].type === "attack") i++;
       if (events[i].type === "attack") {
         i++;
         if (i < events.length && /^(attack_missed|attack_blocked|damage_dealt)$/.test(events[i].type)) i++;
@@ -199,6 +201,8 @@
           (ความเร็วเท่ากัน ? " (ความเร็วเท่ากัน สุ่มได้)" : " (เร็วกว่า)");
       case "attack":
         return ชื่อของ(p.actor) + " ยิงพลังใส่ " + ชื่อของ(p.target);
+      case "double_shot":
+        return "⚡ " + ชื่อของ(p.actor) + " เร็วพอ ได้ยิงลูกที่สอง! (โอกาส " + p.chance + "% ทอยได้ " + p.roll + ")";
       case "attack_missed":
         return ชื่อของ(p.target) + " หลบได้! (โอกาสโดน " + p.hitChance + "% ทอยได้ " + p.roll + ")";
       case "attack_blocked":
@@ -343,14 +347,17 @@
     กำลังเล่นจังหวะ = true;
     รีเฟรช();
     var แรก = เหตุการณ์[จ.เริ่ม];
+    // ลูกที่สอง: จังหวะเริ่มด้วย double_shot แล้วตามด้วย attack — ยิงเร็วต่อเนื่องไม่เล่นท่าร่ายซ้ำ
+    var ลูกที่สอง = แรก.type === "double_shot";
+    var ยิงครั้งนี้ = ลูกที่สอง ? เหตุการณ์[จ.เริ่ม + 1] : แรก;
 
-    if (เวที && แรก.type === "attack") {
-      var ผู้ยิง = ฝั่งของ(แรก.payload.actor);
-      var เป้า = ฝั่งของ(แรก.payload.target);
-      var ผล = เหตุการณ์[จ.เริ่ม + 1];
+    if (เวที && ยิงครั้งนี้ && ยิงครั้งนี้.type === "attack") {
+      var ผู้ยิง = ฝั่งของ(ยิงครั้งนี้.payload.actor);
+      var เป้า = ฝั่งของ(ยิงครั้งนี้.payload.target);
+      var ผล = เหตุการณ์[จ.เริ่ม + (ลูกที่สอง ? 2 : 1)];
       var ชนิดผล = ผล && ผล.type === "attack_missed" ? "miss" : ผล && ผล.type === "attack_blocked" ? "block" : "hit";
       ข้อความใต้ภาพ.textContent = ข้อความเหตุการณ์(แรก);
-      await เวที.ยิง(ผู้ยิง, ชนิดผล);
+      await เวที.ยิง(ผู้ยิง, ชนิดผล, { ลูกที่สอง: ลูกที่สอง });
       if (รุ่น !== รุ่นการเล่น) return;
       if (ชนิดผล === "miss") เวที.ข้อความลอย(เป้า, "หลบ!");
       else if (ชนิดผล === "block") เวที.ข้อความลอย(เป้า, "บล็อก!");

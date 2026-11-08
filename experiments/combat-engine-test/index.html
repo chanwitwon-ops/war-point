@@ -37,14 +37,14 @@
   }
   function custom(id, stats) { return { studentId: id, petName: id, species: "test", stats: stats }; }
 
-  var KNOWN = ["match_start", "turn_start", "attack", "attack_missed", "attack_blocked", "damage_dealt", "ko", "turn_limit", "match_end"];
+  var KNOWN = ["match_start", "turn_start", "attack", "attack_missed", "attack_blocked", "damage_dealt", "ko", "turn_limit", "match_end", "double_shot"];
 
   // 1. determinism
   var r1 = window.คำนวณผลการต่อสู้({ matchId: "m-1", sideA: pixie("a", 4), sideB: pixie("b", 4) });
   var r2 = window.คำนวณผลการต่อสู้({ matchId: "m-1", sideA: pixie("a", 4), sideB: pixie("b", 4) });
   function ตัดเวลา(r) { var c = JSON.parse(JSON.stringify(r)); delete c.computed_at; return JSON.stringify(c); }
   log(ตัดเวลา(r1) === ตัดเวลา(r2), "matchId เดิมได้ผลเดิมทุก byte (ไม่นับ computed_at)");
-  log(r1.engine_version === "2.0.0", "engine_version = 2.0.0");
+  log(r1.engine_version === "2.1.0", "engine_version = 2.1.0 (เพิ่มยิงสองลูก)");
 
   // 2. structure
   log(r1.events[0].type === "match_start" && r1.events[r1.events.length - 1].type === "match_end", "เริ่มด้วย match_start จบด้วย match_end");
@@ -83,9 +83,20 @@
   var m6 = window.คำนวณผลการต่อสู้({ matchId: "spd", sideA: slow, sideB: fast });
   var starts = m6.events.filter(function (e) { return e.type === "turn_start"; });
   log(starts.every(function (e) { return e.payload.order[0] === "fast"; }), "ฝ่ายเร็วกว่ายิงก่อนทุกเทิร์น", starts.length + " เทิร์น");
-  log(m6.events.filter(function (e) { return e.type === "attack"; }).every(function (e, i, arr) {
-    return i === 0 || arr[i - 1].payload.actor !== e.payload.actor;
-  }), "ผลัดกันยิงทีละฝ่าย ไม่มียิงซ้อน (ไม่มีกฎเร็ว 2 เท่าตี 2 ที)");
+  // [แก้ v2.1.0] ยิงซ้อนได้เฉพาะลูกที่สองที่มี double_shot นำหน้าเท่านั้น
+  var ยิงซ้อนผิด = 0;
+  ทุกแมตช์.concat([m6]).forEach(function (m) {
+    var ผู้ยิงก่อนหน้า = null, มีลูกสอง = false;
+    m.events.forEach(function (e) {
+      if (e.type === "turn_start") ผู้ยิงก่อนหน้า = null;
+      if (e.type === "double_shot") มีลูกสอง = true;
+      if (e.type === "attack") {
+        if (ผู้ยิงก่อนหน้า === e.payload.actor && !มีลูกสอง) ยิงซ้อนผิด++;
+        ผู้ยิงก่อนหน้า = e.payload.actor; มีลูกสอง = false;
+      }
+    });
+  });
+  log(ยิงซ้อนผิด === 0, "ยิงติดกันสองลูกเกิดเฉพาะหลัง double_shot เท่านั้น", "ผิด " + ยิงซ้อนผิด);
 
   // 7. turn cap + %HP decision: tanky + high EVA both sides
   var tank = custom("t1", { SPD: 50, ATK: 1, ACC: 1, EVA: 100, DEF: 100, HP: 100 });
@@ -106,7 +117,37 @@
   var ยาว = [];
   for (var k = 0; k < 50; k++) ยาว.push(window.คำนวณผลการต่อสู้({ matchId: "len-" + k, sideA: pixie("a", 4), sideB: pixie("b", 4) }).result.turns);
   var เฉลี่ย = ยาว.reduce(function (s, x) { return s + x; }, 0) / ยาว.length;
-  log(เฉลี่ย >= 8 && เฉลี่ย <= 18, "ร่างเดียวกันสู้กันเฉลี่ยราว 12 เทิร์น", เฉลี่ย.toFixed(1));
+  log(เฉลี่ย >= 8 && เฉลี่ย <= 18, "ร่างเดียวกันสู้กันเฉลี่ยราว 9–12 เทิร์น (สั้นลงเพราะยิงสองลูก)", เฉลี่ย.toFixed(1));
+
+  // 11. ยิงสองลูก (v2.1.0): โอกาส = clamp(round(30 + (SPD ÷ จำนวนขั้น − 12) × 12), 5, 95)
+  function โอกาสตามสูตร(st) {
+    var n = Math.max(1, Math.round((st.SPD + st.ATK + st.ACC + st.EVA + st.DEF + st.HP) / 50));
+    return Math.max(5, Math.min(95, Math.round(30 + (st.SPD / n - 12) * 12)));
+  }
+  var ds = [], สูตรผิด = 0, ไม่ตามด้วยยิง = 0;
+  var สนามทดสอบ = [];
+  for (var q = 0; q < 300; q++) {
+    var sa = window.สเตตัสของขั้น(window.สุ่มการกระจายสเตตัส(), 4), sb = window.สเตตัสของขั้น(window.สุ่มการกระจายสเตตัส(), 4);
+    var mq = window.คำนวณผลการต่อสู้({ matchId: "ds-" + q, sideA: custom("A", sa), sideB: custom("B", sb) });
+    mq.events.forEach(function (e, idx) {
+      if (e.type !== "double_shot") return;
+      ds.push(e);
+      var st = e.payload.actor === "A" ? sa : sb;
+      if (e.payload.chance !== โอกาสตามสูตร(st) || e.payload.roll > e.payload.chance) สูตรผิด++;
+      var ถัดไป = mq.events[idx + 1];
+      if (!ถัดไป || ถัดไป.type !== "attack" || ถัดไป.payload.actor !== e.payload.actor) ไม่ตามด้วยยิง++;
+    });
+  }
+  log(ds.length > 0 && สูตรผิด === 0, "โอกาสยิงลูกที่สองตรงสูตร และได้ยิงเมื่อทอยไม่เกิน", ds.length + " ครั้ง ผิด " + สูตรผิด);
+  log(ไม่ตามด้วยยิง === 0, "double_shot ตามด้วย attack ของผู้ยิงคนเดิมเสมอ");
+  log(โอกาสตามสูตร({ SPD: 45, ATK: 45, ACC: 40, EVA: 60, DEF: 20, HP: 40 }) === 5 &&
+      โอกาสตามสูตร({ SPD: 60, ATK: 35, ACC: 40, EVA: 60, DEF: 20, HP: 35 }) === 30 &&
+      โอกาสตามสูตร({ SPD: 75, ATK: 30, ACC: 35, EVA: 50, DEF: 25, HP: 35 }) === 66,
+      "ร่างสุดท้าย SPD 45 / 60 / 75 → 5% / 30% / 66% ตามที่ตกลง");
+  window.__DOUBLE_SHOT_PARAMS = { base: null };
+  var ปิด = window.คำนวณผลการต่อสู้({ matchId: "ds-0", sideA: pixie("a", 4), sideB: pixie("b", 4) });
+  delete window.__DOUBLE_SHOT_PARAMS;
+  log(!ปิด.events.some(function (e) { return e.type === "double_shot"; }), "ปิดกลไกด้วย { base: null } แล้วไม่มี double_shot (หน้าจูนใช้เทียบ)");
 
   // 10. no Math.random in engine source
   log(String(window.คำนวณผลการต่อสู้).indexOf("Math.random") === -1, "engine ไม่ใช้ Math.random()");

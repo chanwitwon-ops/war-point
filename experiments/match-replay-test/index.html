@@ -49,13 +49,19 @@
   <script src="js/tournament-match.js"></script>
   <script>
     (async function () {
-      function slot(uid, name, stage) {
-        return { studentUid: uid, studentName: name, speciesKey: "pixie", stage: stage, stats: window.PET_STAGE_STATS[stage] };
+      // [แก้ 2026-11-08] ทุกคนเป็นร่างสุดท้ายเหมือนวันเดโม (สเปก 08 ช.) แต่การกระจายสเตตัสสุ่มคนละแบบ
+      // (สเปก 02 ซ.14 ผลรวม 250 เท่ากัน) — โหลดหน้าใหม่ = สุ่มชุดใหม่ ไว้ดูว่าเกมสมดุลไหม
+      function slot(uid, name) {
+        var ร่างสุดท้าย = window.PET_STAGE_COST.length - 1;
+        return {
+          studentUid: uid, studentName: name, speciesKey: "pixie", stage: ร่างสุดท้าย,
+          stats: window.สเตตัสของขั้น(window.สุ่มการกระจายสเตตัส(), ร่างสุดท้าย)
+        };
       }
       window.CURRENT_USER = window.__ผู้ใช้ทดสอบ; // ครูในการสร้าง (data layer อ่าน CURRENT_USER)
       var id = await window.สร้างทัวนาเมนต์({
-        semifinal1: { slotA: slot("uid-a", "น้องเอ", 4), slotB: slot("uid-b", "น้องบี", 3) },
-        semifinal2: { slotA: slot("uid-c", "น้องซี", 2), slotB: slot("uid-d", "น้องดี", 1) }
+        semifinal1: { slotA: slot("uid-a", "น้องเอ"), slotB: slot("uid-b", "น้องบี") },
+        semifinal2: { slotA: slot("uid-c", "น้องซี"), slotB: slot("uid-d", "น้องดี") }
       });
       await window.คำนวณแมตช์ของทัวนาเมนต์(id, "semifinal1");
       await window.คำนวณแมตช์ของทัวนาเมนต์(id, "semifinal2");

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>จำลองความสมดุล (scratch tool)</title>
+  <style>
+    /* scratch tool นอกสายเอกสาร — ไม่ใช่ prototype ตาม DESIGN.md */
+    body { font-family: sans-serif; margin: 16px; max-width: 860px; color: #171B2A; background: #FFFDF7; }
+    table { border-collapse: collapse; margin: 8px 0 18px; }
+    th, td { border: 1px solid #E6DAC4; padding: 6px 10px; text-align: left; }
+    th { background: #FFF1DC; }
+    .ok { color: #0F7A3D; font-weight: 600; }
+    .warn { color: #8A6300; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>จำลองความสมดุล — Pixie ร่างสุดท้าย vs ร่างสุดท้าย</h1>
+  <p>ทั้งสองฝั่งเป็นร่างสุดท้าย ผลรวมสเตตัส 250 เท่ากัน ต่างกันแค่การกระจายที่สุ่ม (สเปก 02 ซ.14) ·
+     ใช้ engine จริง <code>js/combat-engine.js</code> · ?n=จำนวนแมตช์ (ค่าเริ่ม 3000)</p>
+  <div id="ผล">กำลังจำลอง…</div>
+
+  <script src="../../js/pet-config.js"></script>
+  <script src="../../js/combat-engine.js"></script>
+  <script>
+  (function () {
+    var N = Number(new URLSearchParams(location.search).get("n") || 3000);
+    var คีย์ = window.PET_STAT_KEYS, ชื่อ = window.PET_STAT_LABELS_TH, ร่าง = 4;
+    function ตัว(id) {
+      return { studentId: id, petName: id, species: "pixie", stats: window.สเตตัสของขั้น(window.สุ่มการกระจายสเตตัส(), ร่าง) };
+    }
+    var ชนะA = 0, ชนะB = 0, เสมอ = 0, ko = 0, ครบเทิร์น = 0, เทิร์นรวม = 0;
+    var ชนะเร็วกว่า = 0, มีฝั่งเร็วกว่า = 0;
+    var สถิติค่า = {}; // ฝั่งที่มีค่านี้สูงกว่า ชนะกี่ % (นับเฉพาะแมตช์ที่ค่านั้นไม่เท่ากันและมีผู้ชนะ)
+    คีย์.forEach(function (k) { สถิติค่า[k] = { ชนะ: 0, รวม: 0 }; });
+
+    for (var i = 0; i < N; i++) {
+      var A = ตัว("A"), B = ตัว("B");
+      var ผล = window.คำนวณผลการต่อสู้({ matchId: "balance-" + i, sideA: A, sideB: B }).result;
+      เทิร์นรวม += ผล.turns;
+      if (ผล.reason === "ko") ko++; else ครบเทิร์น++;
+      if (ผล.winner === null) { เสมอ++; continue; }
+      if (ผล.winner === "A") ชนะA++; else ชนะB++;
+      var ผู้ชนะ = ผล.winner === "A" ? A : B, ผู้แพ้ = ผล.winner === "A" ? B : A;
+      if (A.stats.SPD !== B.stats.SPD) { มีฝั่งเร็วกว่า++; if (ผู้ชนะ.stats.SPD > ผู้แพ้.stats.SPD) ชนะเร็วกว่า++; }
+      คีย์.forEach(function (k) {
+        if (A.stats[k] === B.stats[k]) return;
+        สถิติค่า[k].รวม++;
+        if (ผู้ชนะ.stats[k] > ผู้แพ้.stats[k]) สถิติค่า[k].ชนะ++;
+      });
+    }
+
+    // แมตช์กระจก: การกระจายเดียวกันทั้งสองฝั่ง — ควรเกือบ 50/50 (ดูว่าฝั่ง A/B ได้เปรียบเองหรือไม่)
+    var กระจกA = 0, กระจกB = 0, กระจกเสมอ = 0, M = Math.min(N, 2000);
+    for (var j = 0; j < M; j++) {
+      var st = window.สเตตัสของขั้น(window.สุ่มการกระจายสเตตัส(), ร่าง);
+      var r = window.คำนวณผลการต่อสู้({ matchId: "mirror-" + j,
+        sideA: { studentId: "A", petName: "A", species: "pixie", stats: st },
+        sideB: { studentId: "B", petName: "B", species: "pixie", stats: st } }).result;
+      if (r.winner === "A") กระจกA++; else if (r.winner === "B") กระจกB++; else กระจกเสมอ++;
+    }
+
+    function pct(a, b) { return b ? (a * 100 / b).toFixed(1) + "%" : "–"; }
+    function ป้าย(p, ต่ำ, สูง) { var v = parseFloat(p); return (v >= ต่ำ && v <= สูง) ? '<span class="ok">' + p + "</span>" : '<span class="warn">' + p + "</span>"; }
+    var มีผล = ชนะA + ชนะB;
+    var html =
+      "<h2>ภาพรวม " + N + " แมตช์ (สุ่มการกระจายทั้งสองฝั่ง)</h2><table>" +
+      "<tr><th>ฝั่ง A ชนะ</th><td>" + ป้าย(pct(ชนะA, มีผล), 45, 55) + "</td><th>ฝั่ง B ชนะ</th><td>" + ป้าย(pct(ชนะB, มีผล), 45, 55) + "</td></tr>" +
+      "<tr><th>เสมอจริง (ครูตัดสิน)</th><td>" + เสมอ + " (" + pct(เสมอ, N) + ")</td><th>เฉลี่ยกี่เทิร์น</th><td>" + (เทิร์นรวม / N).toFixed(1) + "</td></tr>" +
+      "<tr><th>จบด้วยน็อคเอาต์</th><td>" + pct(ko, N) + "</td><th>ครบ 30 เทิร์น</th><td>" + pct(ครบเทิร์น, N) + "</td></tr>" +
+      "</table>" +
+      "<h2>ค่าไหนมีผลต่อการชนะ</h2><p>ฝั่งที่มีค่านี้สูงกว่าคู่ต่อสู้ ชนะกี่ % — ใกล้ 50% = แทบไม่มีผล · สูงมาก = ค่านี้แรงเกิน</p><table><tr><th>ค่าสเตตัส</th><th>สูงกว่าแล้วชนะ</th><th>จำนวนแมตช์ที่นับ</th></tr>";
+    คีย์.forEach(function (k) {
+      html += "<tr><td>" + k + " · " + ชื่อ[k] + "</td><td>" + ป้าย(pct(สถิติค่า[k].ชนะ, สถิติค่า[k].รวม), 35, 65) + "</td><td>" + สถิติค่า[k].รวม + "</td></tr>";
+    });
+    html += "</table>" +
+      "<h2>แมตช์กระจก " + M + " แมตช์ (สเตตัสเหมือนกันทั้งสองฝั่ง)</h2><table>" +
+      "<tr><th>ฝั่ง A ชนะ</th><td>" + ป้าย(pct(กระจกA, กระจกA + กระจกB), 45, 55) + "</td><th>ฝั่ง B ชนะ</th><td>" + ป้าย(pct(กระจกB, กระจกA + กระจกB), 45, 55) + "</td><th>เสมอ</th><td>" + กระจกเสมอ + "</td></tr></table>" +
+      "<p>สีเขียว = อยู่ในช่วงที่ถือว่าสมดุล (ฝั่ง 45–55%, ค่าสเตตัส 35–65%) · สีเหลือง = ควรดู</p>";
+    document.getElementById("ผล").innerHTML = html;
+    window.__ผลสมดุล = { N: N, ชนะA: ชนะA, ชนะB: ชนะB, เสมอ: เสมอ, ko: ko, ครบเทิร์น: ครบเทิร์น, เทิร์นเฉลี่ย: เทิร์นรวม / N,
+      สถิติค่า: สถิติค่า, ชนะเร็วกว่า: pct(ชนะเร็วกว่า, มีฝั่งเร็วกว่า), กระจก: [กระจกA, กระจกB, กระจกเสมอ] };
+  })();
+  </script>
+</body>
+</html>
