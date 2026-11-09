@@ -5,14 +5,15 @@
 // quiz-attempts.html) และ tester.md ข้อ 1
 // ─────────────────────────────────────────────────────────────
 const { test, expect } = require("@playwright/test");
-const { accounts, login, submitFirstMcqAttempt, waitForResultsLoaded } = require("./helpers");
+const { accounts, login, submitTestMcqAttempt, waitForResultsLoaded, ensureTestQuizSets } = require("./helpers");
+
+test.beforeAll(async ({ browser }) => { await ensureTestQuizSets(browser); }); // ชุดข้อสอบเฉพาะเทสต์ (tests/helpers.js)
 
 test("นักเรียนทำแบบทดสอบ mcq แล้วส่ง เห็นในรายการของตัวเอง (รวมหลังรีเฟรช)", async ({ page }) => {
   await login(page, accounts.student1);
 
-  // ทำแบบทดสอบ mcq ชุดแรกที่เจอในระบบให้เสร็จแล้วกดส่ง — ถ้าไม่มีชุด mcq เลยในระบบ
-  // ให้ throw ข้อความชัดเจน (ถือเป็น blocker ของข้อมูลทดสอบ ไม่ใช่บั๊กแอป)
-  const { attemptId, title } = await submitFirstMcqAttempt(page);
+  // ทำชุด mcq ของเทสต์ (autotest-mcq) แล้วกดส่ง — ไม่แตะชุดข้อสอบจริงของห้อง [แก้ 2026-11-09]
+  const { attemptId, title } = await submitTestMcqAttempt(page);
   expect(attemptId).toBeTruthy();
 
   // mcq ตรวจให้คะแนนอัตโนมัติทันที ต้องเห็นสถานะ "ตรวจแล้ว" (graded) บนหน้ารายละเอียดทันที

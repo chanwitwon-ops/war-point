@@ -7,14 +7,16 @@
 // อ้างอิง tester.md ข้อ 2
 // ─────────────────────────────────────────────────────────────
 const { test, expect } = require("@playwright/test");
-const { accounts, login, logout, submitFirstTextAttempt, waitForResultsLoaded } = require("./helpers");
+const { accounts, login, logout, submitTestTextAttempt, waitForResultsLoaded, ensureTestQuizSets } = require("./helpers");
+
+test.beforeAll(async ({ browser }) => { await ensureTestQuizSets(browser); }); // ชุดข้อสอบเฉพาะเทสต์ (tests/helpers.js)
 
 test("ครูให้คะแนนงาน pending_review แล้วสถานะเปลี่ยนเป็น graded จริง (รอดรีเฟรช)", async ({ page }) => {
   const answerText = "คำตอบทดสอบจาก Playwright — " + Date.now();
 
   // 1) student1 ทำแบบทดสอบ worksheet/attachment แล้วส่ง → ได้ status pending_review
   await login(page, accounts.student1);
-  const { attemptId, title } = await submitFirstTextAttempt(page, answerText);
+  const { attemptId, title } = await submitTestTextAttempt(page, answerText); // ชุดใบงานของเทสต์ [แก้ 2026-11-09]
   expect(attemptId).toBeTruthy();
   await expect(page.locator("#กล่องงาน")).toContainText("รอครูตรวจ");
   await expect(page.locator("#กล่องงาน")).toContainText(answerText);
@@ -41,21 +43,22 @@ test("ครูให้คะแนนงาน pending_review แล้วส�
 
   // 3) กรอกคะแนน + feedback แล้วบันทึก
   await expect(page.locator("#ช่องคะแนน")).toBeVisible();
-  await page.locator("#ช่องคะแนน").fill("8");
+  // ให้ 0 คะแนน — เทสต์ต้องไม่เพิ่มแต้มให้บัญชีนักเรียน (บัญชีเดียวกับที่ใช้เดโม) [แก้ 2026-11-09]
+  await page.locator("#ช่องคะแนน").fill("0");
   const feedbackText = "ทำได้ดี ทดสอบให้คะแนนโดย Playwright";
   await page.locator("#ช่องความเห็น").fill(feedbackText);
   await page.locator("#ปุ่มให้คะแนน").click();
 
   // 4) สถานะต้องเปลี่ยนเป็น graded บนหน้าจอทันที และฟอร์มให้คะแนนต้องหายไป (ตรวจแล้วแก้กลับไม่ได้)
   await expect(page.locator("#กล่องงาน")).toContainText("ตรวจแล้ว");
-  await expect(page.locator("#กล่องงาน")).toContainText("8");
+  await expect(page.locator("#กล่องงาน")).toContainText("0 / 10");
   await expect(page.locator("#ช่องคะแนน")).toHaveCount(0);
   await expect(page.locator("#รายการรีวิว")).toContainText(feedbackText);
 
   // 5) รีเฟรชหน้า (อ่านจาก Firestore ใหม่) ต้องยังเห็นค่าที่เปลี่ยนอยู่ — พิสูจน์ว่าบันทึกจริง
   await page.reload();
   await expect(page.locator("#กล่องงาน")).toContainText("ตรวจแล้ว");
-  await expect(page.locator("#กล่องงาน")).toContainText("8");
+  await expect(page.locator("#กล่องงาน")).toContainText("0 / 10");
   await expect(page.locator("#รายการรีวิว")).toContainText(feedbackText);
 
   // 6) และในรายการรวม (quiz-attempts.html) ก็ต้องเห็นสถานะใหม่เช่นกัน

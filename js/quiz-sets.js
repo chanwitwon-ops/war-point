@@ -35,9 +35,12 @@
     try {
       var สแนปช็อต = await window.fsGetDocs(window.fsCollection(window.db, "quizSets"));
       รายการทั้งหมด = [];
+      var เป็นนักเรียน = window.CURRENT_USER && window.CURRENT_USER.role === "student";
       สแนปช็อต.forEach(function (เอกสาร) {
         var ข้อมูล = เอกสาร.data();
         ข้อมูล.id = เอกสาร.id;
+        // [เพิ่ม 2026-11-09] ชุดสำหรับเทสต์อัตโนมัติ (tests/helpers.js) — ซ่อนจากนักเรียน ครูยังเห็น
+        if (ข้อมูล.testOnly === true && เป็นนักเรียน) return;
         รายการทั้งหมด.push(ข้อมูล);
       });
       วาดตาราง();

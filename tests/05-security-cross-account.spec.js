@@ -6,12 +6,14 @@
 // อ้างอิง firestore.rules (match /quizAttempts/{attemptId} allow read) และ tester.md ข้อ 5
 // ─────────────────────────────────────────────────────────────
 const { test, expect } = require("@playwright/test");
-const { accounts, login, logout, submitFirstMcqAttempt } = require("./helpers");
+const { accounts, login, logout, submitTestMcqAttempt, ensureTestQuizSets } = require("./helpers");
+
+test.beforeAll(async ({ browser }) => { await ensureTestQuizSets(browser); }); // ชุดข้อสอบเฉพาะเทสต์ (tests/helpers.js)
 
 test("[security] student2 เปิดดูรายละเอียดงานของ student1 ผ่าน URL ตรงๆ ไม่ได้", async ({ page }) => {
   // 1) สร้าง attempt ที่เป็นของ student1 แน่นอน (ทำ mcq ให้เสร็จ ไม่ต้องรอครูตรวจ)
   await login(page, accounts.student1);
-  const { attemptId } = await submitFirstMcqAttempt(page);
+  const { attemptId } = await submitTestMcqAttempt(page); // ชุด mcq ของเทสต์ [แก้ 2026-11-09]
   expect(attemptId).toBeTruthy();
   await logout(page);
 

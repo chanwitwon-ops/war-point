@@ -18,6 +18,7 @@
       ชุดทั้งหมด.forEach(function (d) {
         if (ทำแล้ว[d.id]) return;
         var ข้อมูล = d.data();
+        if (ข้อมูล.testOnly === true) return; // [เพิ่ม 2026-11-09] ชุดสำหรับเทสต์อัตโนมัติ ไม่ใช่งานของนักเรียน
         ผล.push({ id: d.id, title: ข้อมูล.title, format: ข้อมูล.format, fullScore: ข้อมูล.fullScore });
       });
       return ผล;

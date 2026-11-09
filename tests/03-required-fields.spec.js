@@ -5,7 +5,9 @@
 // tester.md ข้อ 3
 // ─────────────────────────────────────────────────────────────
 const { test, expect } = require("@playwright/test");
-const { accounts, login, findQuizSetLink, waitForResultsLoaded } = require("./helpers");
+const { accounts, login, waitForResultsLoaded, ensureTestQuizSets, TEST_SETS } = require("./helpers");
+
+test.beforeAll(async ({ browser }) => { await ensureTestQuizSets(browser); }); // ชุดข้อสอบเฉพาะเทสต์ (tests/helpers.js)
 
 test("ส่งงาน worksheet/attachment โดยเว้นช่องคำตอบว่างไว้ ต้องไม่บันทึกและมีข้อความเตือน", async ({ page }) => {
   await login(page, accounts.student2);
@@ -15,10 +17,8 @@ test("ส่งงาน worksheet/attachment โดยเว้นช่อง�
   await waitForResultsLoaded(page);
   const countBefore = await page.locator("tr[data-id]").count();
 
-  const found = await findQuizSetLink(page, ["ใบงาน", "แนบไฟล์"]);
-  test.skip(!found, "ไม่พบชุดข้อสอบฟอร์แมต worksheet/attachment เลยในระบบ quiz-sets.html — เป็น precondition ของข้อมูลทดสอบ ไม่ใช่บั๊ก");
-
-  await page.goto(found.href);
+  // ชุดใบงานของเทสต์ (autotest-worksheet) — ไม่แตะชุดข้อสอบจริงของห้อง [แก้ 2026-11-09]
+  await page.goto("/quiz-attempt-new.html?quizSetId=" + TEST_SETS.worksheet.id);
   await page.waitForSelector("#กล่องหลัก:not(.hidden)");
 
   // ไม่กรอกอะไรในช่องคำตอบเลย แล้วกดส่งทันที
