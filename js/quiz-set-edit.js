@@ -16,6 +16,7 @@
 
   var ช่องชื่อชุด = document.getElementById("ชื่อชุด");
   var ช่องคะแนนเต็ม = document.getElementById("คะแนนเต็ม");
+  var ช่องจำนวนครั้ง = document.getElementById("จำนวนครั้ง");
   var กล่องคำถาม = document.getElementById("กล่องคำถาม");
   var ปุ่มเพิ่มข้อเอง = document.getElementById("ปุ่มเพิ่มข้อเอง");
   var ปุ่มบันทึก = document.getElementById("ปุ่มบันทึก");
@@ -66,6 +67,7 @@
 
       ช่องชื่อชุด.value = ชุดข้อสอบเดิม.title || "";
       ช่องคะแนนเต็ม.value = ชุดข้อสอบเดิม.fullScore != null ? ชุดข้อสอบเดิม.fullScore : "";
+      ช่องจำนวนครั้ง.value = จำนวนครั้งที่ทำได้(ชุดข้อสอบเดิม);
       คำถามทั้งหมด = (Array.isArray(ชุดข้อสอบเดิม.questions) ? ชุดข้อสอบเดิม.questions : []).map(function (ข้อ) {
         return {
           questionText: ข้อ.questionText || "",
@@ -178,6 +180,11 @@
       เตือนบันทึก("คะแนนเต็มต้องเป็นตัวเลขมากกว่า 0");
       return;
     }
+    var จำนวนครั้ง = Number(ช่องจำนวนครั้ง.value.trim());
+    if (!Number.isInteger(จำนวนครั้ง) || จำนวนครั้ง < 1 || จำนวนครั้ง > จำนวนครั้งสูงสุดที่ตั้งได้) {
+      เตือนบันทึก("จำนวนครั้งที่ทำได้ต้องเป็นตัวเลข 1–" + จำนวนครั้งสูงสุดที่ตั้งได้);
+      return;
+    }
     if (คำถามทั้งหมด.length === 0) {
       เตือนบันทึก("ต้องมีอย่างน้อย 1 ข้อ ก่อนบันทึก");
       return;
@@ -208,6 +215,7 @@
       await window.fsUpdateDoc(window.fsDoc(window.db, "quizSets", quizSetId), {
         title: ชื่อชุด,
         fullScore: คะแนนเต็ม,
+        maxAttempts: จำนวนครั้ง,
         questions: คำถามทั้งหมด
       });
       กล่องสำเร็จ.textContent = "✅ บันทึกการแก้ไขสำเร็จแล้ว";

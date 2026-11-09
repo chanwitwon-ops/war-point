@@ -35,14 +35,45 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "teacher";
     }
 
+    // ครั้งที่ส่ง (attemptNo) ต้องอยู่ใน 1..maxAttempts ของชุด — ชุดที่ไม่มี maxAttempts ใช้ 3
+    // (ต้องตรงกับ จำนวนครั้งเริ่มต้น ใน js/util.js)
+    function attemptCreateValid(a, qs) {
+      return a.attemptNo is int && a.attemptNo >= 1 && a.attemptNo <= qs.get("maxAttempts", 3) &&
+        attemptScoreValid(a, qs);
+    }
+
+    function attemptScoreValid(a, qs) {
+      return (qs.format == "mcq" && a.status == "graded" &&
+              a.scoreAwarded is int && a.scoreAwarded >= 0 && a.scoreAwarded <= qs.fullScore) ||
+             (qs.format != "mcq" && a.status == "pending_review" && a.scoreAwarded == null);
+    }
+
     // ── quizAttempts: จุดที่ข้อมูลรั่ว — ต้องเป็นเจ้าของหรือ teacher เท่านั้น ──
     match /quizAttempts/{attemptId} {
       allow read: if request.auth != null &&
         (isTeacher() || resource.data.studentId == request.auth.uid);
 
       // นักเรียนส่งงานใหม่ได้เฉพาะของตัวเอง (studentId ต้องตรงกับ uid ผู้เขียนเสมอ)
+      // [แก้ 2026-11-09] ปิดช่องปลอมแต้ม — เดิมสร้าง status "graded" พร้อม scoreAwarded เท่าไหร่ก็ได้
+      // และส่งซ้ำได้ไม่จำกัด (แต้มสัตว์เลี้ยง/กระดานเกียรติยศเชื่อตัวเลขนี้):
+      //   - id ต้องเป็น {quizSetId}_{uid}_{attemptNo} และ attemptNo อยู่ใน 1..maxAttempts ที่ครูตั้ง
+      //     → ทำได้ไม่เกินจำนวนครั้งที่ครูตั้ง (ส่งครั้งเดิมซ้ำ = update ซึ่งเป็นสิทธิ์ครูเท่านั้น)
+      //     แต้มนับคะแนนรอบดีที่สุดของแต่ละชุด (js/util.js แต้มจากคะแนนดีที่สุดต่อชุด)
+      //   - ชุดข้อสอบต้องมีจริง
+      //   - mcq: graded ได้ แต่คะแนนเป็นจำนวนเต็ม 0..fullScore ของชุดนั้น
+      //   - ชุดตรวจมือ: ต้องเป็น pending_review และ scoreAwarded = null (ครูให้คะแนนทีหลัง)
+      // ข้อจำกัดที่เหลือ: rules ตรวจคำตอบทีละข้อไม่ได้ นักเรียนที่ใช้ DevTools ยังให้ตัวเองได้
+      // คะแนนเต็มของชุด mcq ได้ (ชุดละครั้ง) — ปิดสนิทต้องตรวจฝั่งเซิร์ฟเวอร์ (Cloud Functions/Blaze)
       allow create: if request.auth != null &&
-        request.resource.data.studentId == request.auth.uid;
+        request.resource.data.studentId == request.auth.uid &&
+        request.resource.data.attemptNo is int &&
+        attemptId == request.resource.data.quizSetId + "_" + request.auth.uid + "_" +
+          string(request.resource.data.attemptNo) &&
+        request.resource.data.keys().hasOnly(["studentId", "studentNickname", "quizSetId",
+          "quizSetTitle", "attemptNo", "submittedAt", "status", "scoreAwarded", "submittedText"]) &&
+        exists(/databases/$(database)/documents/quizSets/$(request.resource.data.quizSetId)) &&
+        attemptCreateValid(request.resource.data,
+          get(/databases/$(database)/documents/quizSets/$(request.resource.data.quizSetId)).data);
 
       // เปลี่ยนสถานะ/ให้คะแนน (ตรวจงาน) ทำได้เฉพาะ teacher เท่านั้น
       allow update: if isTeacher();
@@ -169,6 +200,9 @@ service cloud.firestore {
         (request.resource.data.pet == null ||
          (request.resource.data.pet.stage is int &&
           request.resource.data.pet.stage >= 0 && request.resource.data.pet.stage <= 4 &&
+          // [แก้ 2026-11-09] แต้มที่ใช้ต้องตรงราคาสะสมของขั้น (PET_STAGE_CUMULATIVE_COST ใน
+          // js/pet-config.js: 1, 6, 16, 31, 51) — เดิมเขียน stage 4 + pointsSpent 0 ได้ฟรี
+          request.resource.data.pet.pointsSpent == [1, 6, 16, 31, 51][request.resource.data.pet.stage] &&
           statsValid(request.resource.data.pet.stats, request.resource.data.pet.stage + 1)));
       allow delete: if false; // ไม่มีการลบสัตว์เลี้ยงทิ้ง — รีเซ็ตคือเขียน pet ใหม่ทับ ไม่ใช่ลบเอกสาร
     }

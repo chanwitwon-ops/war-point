@@ -73,7 +73,7 @@
       var ตามuid = {};
       ผู้ใช้.forEach(function (d) {
         var ข้อมูล = d.data();
-        ตามuid[d.id] = { uid: d.id, nickname: ข้อมูล.name || "ไม่ระบุชื่อ", totalScore: 0, attemptIds: [] };
+        ตามuid[d.id] = { uid: d.id, nickname: ข้อมูล.name || "ไม่ระบุชื่อ", totalScore: 0, attemptIds: [], งาน: [] };
       });
 
       var งาน = await window.fsGetDocs(
@@ -83,11 +83,17 @@
         var ข้อมูล = d.data();
         var น = ตามuid[ข้อมูล.studentId];
         if (!น || typeof ข้อมูล.scoreAwarded !== "number") return; // ไม่ใช่นักเรียนในห้อง หรือยังไม่มีคะแนน
-        น.totalScore += ข้อมูล.scoreAwarded;
+        น.งาน.push(ข้อมูล);
         น.attemptIds.push(d.id);
       });
 
-      var ทั้งห้อง = Object.keys(ตามuid).map(function (k) { return ตามuid[k]; });
+      // [แก้ 2026-11-09] ทำซ้ำได้หลายครั้ง → คะแนนรอบดีที่สุดของแต่ละชุด (ตรงกับแต้มใน js/pet-data.js)
+      var ทั้งห้อง = Object.keys(ตามuid).map(function (k) {
+        var น = ตามuid[k];
+        น.totalScore = แต้มจากคะแนนดีที่สุดต่อชุด(น.งาน);
+        delete น.งาน;
+        return น;
+      });
       var ผลสรุป = {
         entries: window.เลือกครึ่งบน(ทั้งห้อง),
         classSize: ทั้งห้อง.length,

@@ -7,7 +7,7 @@
 
 ## บริบท / ที่มา
 
-- แรงบันดาลใจด้านไอเดียมาจากเว็บแอปตัวอย่าง "Smart Classroom" (Google Apps Script — คลิปตัวอย่าง: https://www.youtube.com/watch?v=izocrxRe7u0) ที่ผู้ใช้ชอบและอยากพัฒนาต่อให้ดีขึ้น — ยืมแค่แนวคิดว่าให้นักเรียนเห็นอันดับแล้วอยากเรียน **ไม่ได้นำโค้ด สูตร ตัวเลข หรือหน้าจอของ Smart Classroom มาใช้**
+- แรงบันดาลใจด้านไอเดียมาจากเว็บแอปตัวอย่าง "Smart Classroom" (Google Apps Script — คลิปตัวอย่าง: https://www.youtube.com/watch?v=izocrxRe7u0 · Google Sheet ต้นฉบับที่โคลนมา: https://docs.google.com/spreadsheets/d/1eSDIwYITsuPVj7OVjIIc7GaPxbzO2q6srx1bvK88GsE/edit) ที่ผู้ใช้ชอบและอยากพัฒนาต่อให้ดีขึ้น — ยืมแค่แนวคิดว่าให้นักเรียนเห็นอันดับแล้วอยากเรียน **ไม่ได้นำโค้ด สูตร ตัวเลข หรือหน้าจอของ Smart Classroom มาใช้**
 - เป้าหมาย: ให้นักเรียนที่เรียนดีภูมิใจที่ชื่อตัวเองขึ้นโชว์ และเห็นว่าใครเคยเป็นแชมป์ทัวนาเมนต์
 - trace กลับไปที่ root cause สายที่ 1 (แรงจูงใจของเด็ก) ใน [[20260821-00-problem-statement|20260821-00-problem-statement]]
 

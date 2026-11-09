@@ -43,6 +43,13 @@
   var ปุ่มส่งคำตอบ = document.getElementById("ปุ่มส่งคำตอบ");
 
   var ชุดข้อสอบ = null;
+  var ครั้งที่จะส่ง = 1; // ครั้งที่เท่าไหร่ของชุดนี้ (1..จำนวนครั้งที่ทำได้) — คำนวณตอนโหลดหน้า
+
+  // [แก้ 2026-11-09] id = {ชุด}_{uid}_{ครั้งที่} — ครูตั้งจำนวนครั้งต่อชุด (maxAttempts)
+  // firestore.rules บังคับ: ครั้งที่ต้องอยู่ใน 1..maxAttempts และแต่ละครั้งสร้างได้ครั้งเดียว
+  function รหัสงานของ(รหัสชุด, ครั้งที่) {
+    return รหัสชุด + "_" + window.CURRENT_USER.uid + "_" + ครั้งที่;
+  }
 
   // ต่อระบบบันทึกจริง: สร้างเอกสาร quizAttempts ใหม่ — mcq ตรวจอัตโนมัติทันที
   // (status: "graded" พร้อมคะแนน) ส่วน worksheet/attachment เป็น "pending_review"
@@ -55,6 +62,7 @@
       studentNickname: window.CURRENT_USER.name,
       quizSetId: payload.quizSetId,
       quizSetTitle: quizSet.title,
+      attemptNo: payload.attemptNo,
       submittedAt: เวลาตอนนี้()
     };
 
@@ -81,11 +89,14 @@
     }
 
     try {
-      var เอกสารใหม่ = window.fsDoc(window.fsCollection(window.db, "quizAttempts"));
+      var เอกสารใหม่ = window.fsDoc(window.db, "quizAttempts", รหัสงานของ(payload.quizSetId, payload.attemptNo));
       await window.fsSetDoc(เอกสารใหม่, ข้อมูลใหม่);
       return เอกสารใหม่.id;
     } catch (err) {
       console.error(err);
+      if (err && err.code === "permission-denied") {
+        throw new Error("ส่งไม่ได้ — ครั้งนี้ส่งไปแล้ว หรือใช้สิทธิ์ทำชุดนี้ครบแล้ว ลองรีเฟรชหน้า");
+      }
       throw new Error("บันทึกคำตอบลงระบบไม่สำเร็จ: " + err.message);
     }
   };
@@ -124,7 +135,31 @@
       ชุดข้อสอบ = สแนปช็อต.data();
       ชุดข้อสอบ.id = สแนปช็อต.id;
 
+      // นับครั้งที่ส่งชุดนี้ไปแล้ว (รวมงานเก่าก่อนมีระบบจำนวนครั้ง) + หาคะแนนดีที่สุด
+      var งานเดิม = await window.fsGetDocs(window.fsQuery(
+        window.fsCollection(window.db, "quizAttempts"),
+        window.fsWhere("studentId", "==", window.CURRENT_USER.uid),
+        window.fsWhere("quizSetId", "==", quizSetId)
+      ));
+      var ส่งไปแล้ว = 0;
+      var ดีที่สุด = null;
+      งานเดิม.forEach(function (d) {
+        ส่งไปแล้ว++;
+        var s = d.data().scoreAwarded;
+        if (typeof s === "number" && (ดีที่สุด === null || s > ดีที่สุด)) ดีที่สุด = s;
+      });
+      var ทำได้ = จำนวนครั้งที่ทำได้(ชุดข้อสอบ);
+      var ข้อความคะแนน = ดีที่สุด === null ? "" : " · คะแนนดีที่สุดตอนนี้ " + ดีที่สุด + "/" + ชุดข้อสอบ.fullScore;
+
+      if (ส่งไปแล้ว >= ทำได้) {
+        แสดงไม่พบ("ทำชุด \"" + (ชุดข้อสอบ.title || "") + "\" ครบ " + ทำได้ + " ครั้งแล้ว" + ข้อความคะแนน +
+          " — ดูผลแต่ละครั้งได้ที่หน้ารายการส่งงาน");
+        return;
+      }
+      ครั้งที่จะส่ง = ส่งไปแล้ว + 1;
+
       วาดฟอร์ม();
+      รายละเอียดชุดข้อสอบEl.textContent += " · ครั้งที่ " + ครั้งที่จะส่ง + " จาก " + ทำได้ + ข้อความคะแนน;
       กล่องหลัก.classList.remove("hidden");
     } catch (err) {
       แสดงไม่พบ("โหลดชุดข้อสอบไม่สำเร็จ: " + err.message);
@@ -195,6 +230,7 @@
     var payload = {
       quizSetId: quizSetId,
       quizSet: ชุดข้อสอบ,
+      attemptNo: ครั้งที่จะส่ง,
       คำตอบที่เลือก: null,
       ข้อความคำตอบ: null
     };

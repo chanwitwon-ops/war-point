@@ -9,6 +9,7 @@
 
   var ช่องชื่อชุด = document.getElementById("ชื่อชุด");
   var ช่องคะแนนเต็ม = document.getElementById("คะแนนเต็ม");
+  var ช่องจำนวนครั้ง = document.getElementById("จำนวนครั้ง");
   var ช่องเนื้อหาบทเรียน = document.getElementById("เนื้อหาบทเรียน");
   var ช่องจำนวนข้อ = document.getElementById("จำนวนข้อ");
 
@@ -238,6 +239,11 @@
       เตือนบันทึก("คะแนนเต็มต้องเป็นตัวเลขมากกว่า 0");
       return;
     }
+    var จำนวนครั้ง = Number(ช่องจำนวนครั้ง.value.trim());
+    if (!Number.isInteger(จำนวนครั้ง) || จำนวนครั้ง < 1 || จำนวนครั้ง > จำนวนครั้งสูงสุดที่ตั้งได้) {
+      เตือนบันทึก("จำนวนครั้งที่ทำได้ต้องเป็นตัวเลข 1–" + จำนวนครั้งสูงสุดที่ตั้งได้);
+      return;
+    }
     if (คำถามทั้งหมด.length === 0) {
       เตือนบันทึก("ต้องมีอย่างน้อย 1 ข้อ ก่อนบันทึก");
       return;
@@ -271,6 +277,7 @@
         title: ชื่อชุด,
         format: "mcq",
         fullScore: คะแนนเต็ม,
+        maxAttempts: จำนวนครั้ง,
         creationSource: บันทึกการเรียกAI.length > 0 ? "ai" : "teacher",
         gradingMethod: "auto",
         questions: คำถามทั้งหมด,

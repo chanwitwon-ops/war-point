@@ -77,13 +77,10 @@
         )
       );
 
-      var totalPointsEarned = 0;
-      สแนปช็อตงานที่ตรวจแล้ว.forEach(function (เอกสาร) {
-        var ข้อมูลงาน = เอกสาร.data();
-        if (typeof ข้อมูลงาน.scoreAwarded === "number") {
-          totalPointsEarned += ข้อมูลงาน.scoreAwarded;
-        }
-      });
+      // [แก้ 2026-11-09] ทำซ้ำได้หลายครั้ง → นับคะแนนรอบดีที่สุดของแต่ละชุด (js/util.js)
+      var รายการงาน = [];
+      สแนปช็อตงานที่ตรวจแล้ว.forEach(function (เอกสาร) { รายการงาน.push(เอกสาร.data()); });
+      var totalPointsEarned = แต้มจากคะแนนดีที่สุดต่อชุด(รายการงาน);
 
       var ข้อมูลสัตว์เลี้ยง = await อ่านเอกสารดิบ(uid);
       var pointsAvailable = totalPointsEarned - (ข้อมูลสัตว์เลี้ยง.pet ? ข้อมูลสัตว์เลี้ยง.pet.pointsSpent : 0);
