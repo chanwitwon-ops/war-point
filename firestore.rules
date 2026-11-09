@@ -83,9 +83,23 @@ service cloud.firestore {
       }
     }
 
-    // ── users: ผูก role กับ Firebase Auth uid — คงพฤติกรรมเดิม (auth != null) ──
+    // ── users: ผูก role กับ Firebase Auth uid ──
+    // [แก้ 2026-11-09] เดิม write: auth != null ทำให้นักเรียนตั้ง role เป็น teacher เอง
+    // หรือเขียนทับ/ลบเอกสารของคนอื่นได้ผ่าน DevTools
+    // - read  : คงเดิม (หน้าทัวนาเมนต์/กระดานเกียรติยศ query รายชื่อ role == "student")
+    // - create: เฉพาะเอกสารของตัวเอง และ role ต้องเป็น "student" (ตรงกับ js/register.js)
+    // - update: เฉพาะของตัวเอง ห้ามเปลี่ยน role (ตอนนี้ไม่มีโค้ดในแอปจุดไหน update)
+    // - delete: ไม่อนุญาต
+    // ตั้ง teacher ทำผ่าน Firebase Console เท่านั้น (Console ไม่ผ่าน rules)
     match /users/{uid} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == uid &&
+        request.resource.data.role == "student" &&
+        request.resource.data.keys().hasOnly(["name", "email", "role"]);
+      allow update: if request.auth != null && request.auth.uid == uid &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.keys().hasOnly(["name", "email", "role"]);
+      allow delete: if false;
     }
 
     // ── tournaments: โหมดทัวนาเมนต์แพ้คัดออกสำหรับเดโม 18 ธ.ค. 2026 ──
