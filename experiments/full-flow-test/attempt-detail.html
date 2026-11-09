@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>harness: quiz-attempt-detail.html (mock)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness รัน js/quiz-attempt-detail.js ของจริงบน mock Firestore (เพิ่ม 2026-11-09)
+       ?id=<รหัสงาน> · ข้อมูล: นักเรียน s1 ทำชุด qsR (maxAttempts 3) 2 ครั้ง ได้ 30 แล้ว 20 + ชุด qsW รอตรวจ -->
+  <div class="container">
+    <h1>รายละเอียดการส่งงาน <small>(harness)</small></h1>
+    <div id="กล่องงาน" class="card"><p>กำลังโหลดข้อมูล…</p></div>
+    <div id="กล่องแต้ม"></div>
+    <div id="กล่องรีวิว" class="card hidden"><h2>ความเห็นการตรวจ</h2><div id="รายการรีวิว"></div></div>
+    <div id="กล่องสรุปนักเรียน" class="card hidden">
+      <div id="กล่องข้อความสรุป" class="alert alert-ai hidden"></div>
+      <div id="กล่องเตือนสรุป" class="alert alert-error hidden"></div>
+      <button type="button" class="btn-ghost" id="ปุ่มสรุปนักเรียน">AI</button>
+    </div>
+  </div>
+  <script src="../../js/util.js"></script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script>
+    window.__ครูทดสอบ = window.CURRENT_USER; delete window.CURRENT_USER;
+    (async function () {
+      var D = window.db, set = window.fsSetDoc, doc = window.fsDoc;
+      await set(doc(D, "quizSets", "qsR"), { title: "ชุดทำซ้ำ", format: "mcq", fullScore: 50, maxAttempts: 3 });
+      await set(doc(D, "quizSets", "qsW"), { title: "ใบงาน", format: "worksheet", fullScore: 20 });
+      var base = { studentId: "s1", studentNickname: "ขวานฟ้า", submittedAt: "2026-11-09 12:00" };
+      await set(doc(D, "quizAttempts", "qsR_s1_1"), Object.assign({}, base, { quizSetId: "qsR", quizSetTitle: "ชุดทำซ้ำ", attemptNo: 1, status: "graded", scoreAwarded: 30 }));
+      await set(doc(D, "quizAttempts", "qsR_s1_2"), Object.assign({}, base, { quizSetId: "qsR", quizSetTitle: "ชุดทำซ้ำ", attemptNo: 2, status: "graded", scoreAwarded: 20 }));
+      await set(doc(D, "quizAttempts", "qsW_s1_1"), Object.assign({}, base, { quizSetId: "qsW", quizSetTitle: "ใบงาน", attemptNo: 1, status: "pending_review", scoreAwarded: null, submittedText: "x" }));
+      window.CURRENT_USER = new URLSearchParams(location.search).get("role") === "teacher"
+        ? window.__ครูทดสอบ : { uid: "s1", name: "ขวานฟ้า", role: "student" };
+      window.dispatchEvent(new Event("auth-ready"));
+    })();
+  </script>
+  <script src="../../js/quiz-attempt-detail.js"></script>
+</body>
+</html>

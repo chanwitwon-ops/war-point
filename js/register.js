@@ -41,8 +41,9 @@
     try {
       var ผลลัพธ์ = await window.fbCreateUser(window.auth, email, password);
       await window.fsSetDoc(window.fsDoc(window.db, "users", ผลลัพธ์.user.uid), {
+        // [แก้ 2026-11-09] ไม่เก็บ email ใน users แล้ว — users อ่านได้ทุกคนที่ล็อกอิน (ใช้แสดงชื่อ/
+        // กระดานเกียรติยศ) เก็บไว้จะทำให้นักเรียนเห็นอีเมลกันเอง · อีเมลอยู่ใน Firebase Auth อยู่แล้ว
         name: ชื่อเล่น,
-        email: email,
         role: "student"
       });
       location.href = "home.html";

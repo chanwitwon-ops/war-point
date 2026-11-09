@@ -262,9 +262,10 @@
     กล่องเตือนสรุป.classList.remove("hidden");
   }
 
-  // ── แต้มที่ได้จากงานนี้ (เฉพาะนักเรียนเจ้าของงาน — ครูและนักเรียนคนอื่นไม่เห็นกล่องนี้) ──
-  // 1 คะแนน = 1 แต้ม · ใช้ scoreAwarded ที่โหลดมาในหน้านี้แล้ว ไม่ query เพิ่ม
-  function วาดกล่องแต้มของนักเรียน() {
+  // ── แต้มของชุดนี้ (เฉพาะนักเรียนเจ้าของงาน — ครูและนักเรียนคนอื่นไม่เห็นกล่องนี้) ──
+  // [แก้ 2026-11-09] ทำซ้ำได้หลายครั้ง แต้มนับคะแนนรอบดีที่สุดของชุด (js/util.js) — กล่องนี้จึงแสดง
+  // "คะแนนครั้งนี้" แยกจาก "แต้มของชุดนี้" และบอกว่ายังทำได้อีกกี่ครั้ง เพื่อชวนให้กลับไปอ่านแล้วทำใหม่
+  async function วาดกล่องแต้มของนักเรียน() {
     var กล่องแต้ม = document.getElementById("กล่องแต้ม");
     var เป็นเจ้าของ = window.CURRENT_USER.role === "student" && งาน.studentId === window.CURRENT_USER.uid;
     if (!เป็นเจ้าของ) {
@@ -272,18 +273,42 @@
       return;
     }
 
+    // งานทุกครั้งของชุดนี้ (ของตัวเอง) → คะแนนดีที่สุด + จำนวนครั้งที่เหลือ
+    var งานของชุด = [งาน];
+    try {
+      var ผล = await window.fsGetDocs(window.fsQuery(
+        window.fsCollection(window.db, "quizAttempts"),
+        window.fsWhere("studentId", "==", window.CURRENT_USER.uid),
+        window.fsWhere("quizSetId", "==", งาน.quizSetId)
+      ));
+      งานของชุด = [];
+      ผล.forEach(function (d) { งานของชุด.push(d.data()); });
+    } catch (err) {
+      console.error(err); // โหลดไม่ได้ → แสดงเฉพาะคะแนนครั้งนี้
+    }
+    var ตรวจแล้ว = งานของชุด.filter(function (a) { return a.status === "graded"; });
+    var แต้มของชุด = แต้มจากคะแนนดีที่สุดต่อชุด(ตรวจแล้ว);
+    var เหลือ = ชุดข้อสอบ ? Math.max(0, จำนวนครั้งที่ทำได้(ชุดข้อสอบ) - งานของชุด.length) : 0;
+    var ลิงก์ทำใหม่ = เหลือ > 0
+      ? '<a class="btn-ghost" href="quiz-attempt-new.html?quizSetId=' + encodeURIComponent(งาน.quizSetId) +
+        '">ทำอีกครั้ง (เหลือ ' + เหลือ + " ครั้ง)</a>"
+      : "";
+    var เต็ม = ชุดข้อสอบ && ชุดข้อสอบ.fullScore != null ? " / " + esc(ชุดข้อสอบ.fullScore) : "";
+
     if (งาน.status === "graded") {
       กล่องแต้ม.innerHTML =
         '<div class="card">' +
-        '<p class="section-title">ได้ ' + (งาน.scoreAwarded == null ? "—" : esc(งาน.scoreAwarded)) + " แต้ม</p>" +
-        '<p class="hint">(1 คะแนน = 1 แต้ม)</p>' +
-        '<div class="btn-row"><a class="btn-ghost" href="pet.html">ไปเลี้ยงสัตว์เลี้ยง →</a></div>' +
+        '<p class="section-title">แต้มของชุดนี้: ' + esc(แต้มของชุด) + " แต้ม</p>" +
+        '<p class="hint">คะแนนครั้งนี้ ' + (งาน.scoreAwarded == null ? "—" : esc(งาน.scoreAwarded)) + เต็ม +
+        " · นับแต้มจากรอบที่ดีที่สุดของชุด (1 คะแนน = 1 แต้ม) ทำรอบหลังได้น้อยกว่าก็ไม่ถูกหัก</p>" +
+        '<div class="btn-row">' + ลิงก์ทำใหม่ + '<a class="btn-ghost" href="pet.html">ไปเลี้ยงสัตว์เลี้ยง →</a></div>' +
         "</div>";
     } else if (งาน.status === "pending_review") {
       กล่องแต้ม.innerHTML =
         '<div class="card">' +
         '<p class="section-title">รอครูตรวจ</p>' +
-        '<p class="hint">ครูตรวจแล้วจะได้แต้ม</p>' +
+        '<p class="hint">ครูตรวจแล้วจะได้แต้ม' + (ตรวจแล้ว.length ? " · แต้มของชุดนี้ตอนนี้ " + esc(แต้มของชุด) + " แต้ม" : "") + "</p>" +
+        (ลิงก์ทำใหม่ ? '<div class="btn-row">' + ลิงก์ทำใหม่ + "</div>" : "") +
         "</div>";
     } else {
       กล่องแต้ม.innerHTML = "";
