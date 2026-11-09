@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>harness: auth-guard network failure (scratch tool)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- เพิ่ม 2026-11-09 — รัน js/auth-guard.js ของจริงด้วย Firebase ปลอม
+       ?case=fail  : อ่าน users ไม่สำเร็จ (เน็ตสะดุด) → ต้องขึ้นกล่องเตือน + ปุ่มลองใหม่ ไม่ส่ง auth-ready
+       ?case=ok    : ปกติ → ต้องส่ง auth-ready และไม่มีกล่องเตือน
+       ?case=nosdk : Firebase SDK ไม่โหลด (firebase-ready ไม่มา) → ต้องขึ้นกล่องเตือนหลัง 15 วินาที -->
+  <div class="container">
+    <p class="nav-user" id="navUser"></p>
+    <h1>auth-guard harness</h1>
+    <p id="สถานะ">กำลังโหลด…</p>
+  </div>
+  <script src="../../js/util.js"></script>
+  <script>
+    var กรณี = new URLSearchParams(location.search).get("case") || "fail";
+    window.addEventListener("auth-ready", function () {
+      document.getElementById("สถานะ").textContent = "auth-ready: " + window.CURRENT_USER.name + " (" + window.CURRENT_USER.role + ")";
+    });
+    if (กรณี !== "nosdk") {
+      window.db = {};
+      window.auth = {};
+      window.fsDoc = function () { return {}; };
+      window.fbOnAuthStateChanged = function (auth, cb) { setTimeout(function () { cb({ uid: "u1", email: "a@x" }); }, 50); };
+      window.fbSignOut = function () { return Promise.resolve(); };
+      window.fsGetDoc = function () {
+        return กรณี === "fail"
+          ? Promise.reject(new Error("Failed to get document because the client is offline."))
+          : Promise.resolve({ exists: function () { return true; }, data: function () { return { name: "ครูจาน", role: "teacher" }; } });
+      };
+    }
+  </script>
+  <script src="../../js/auth-guard.js"></script>
+</body>
+</html>

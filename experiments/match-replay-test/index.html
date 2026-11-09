@@ -46,6 +46,25 @@
   </script>
   <script src="js/tournament-data.js"></script>
   <script src="js/pet-animation.js"></script>
+  <script>
+    // [เพิ่ม 2026-11-09] นับลูกยิงที่วิ่งพร้อมกัน — window.__ยิงซ้อนสูงสุด ต้องไม่เกิน 1 (บั๊กหยุดแล้วก้าวถัดไป)
+    (function () {
+      var เดิม = window.สร้างเวทีต่อสู้;
+      var วิ่งอยู่ = 0;
+      window.__ยิงซ้อนสูงสุด = 0;
+      window.สร้างเวทีต่อสู้ = function () {
+        var เวที = เดิม.apply(this, arguments);
+        if (!เวที) return เวที;
+        var ยิงเดิม = เวที.ยิง;
+        เวที.ยิง = async function () {
+          วิ่งอยู่++;
+          window.__ยิงซ้อนสูงสุด = Math.max(window.__ยิงซ้อนสูงสุด, วิ่งอยู่);
+          try { return await ยิงเดิม.apply(this, arguments); } finally { วิ่งอยู่--; }
+        };
+        return เวที;
+      };
+    })();
+  </script>
   <script src="js/tournament-match.js"></script>
   <script>
     (async function () {

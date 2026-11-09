@@ -13,6 +13,9 @@
       เริ่มตรวจ();
     } else {
       window.addEventListener("firebase-ready", เริ่มตรวจ, { once: true });
+      // [เพิ่ม 2026-11-09] โหลด Firebase SDK จาก gstatic ไม่ได้ (เน็ตหลุด/เครือข่ายบล็อก) → firebase-ready
+      // ไม่มีวันมา หน้าจะค้าง — รอ 15 วินาทีแล้วขึ้นกล่องเตือน + ปุ่มลองใหม่
+      setTimeout(function () { if (!window.db) แสดงเชื่อมต่อไม่สำเร็จ(); }, 15000);
     }
   }
 
@@ -23,7 +26,16 @@
         return;
       }
 
-      var สแนปช็อต = await window.fsGetDoc(window.fsDoc(window.db, "users", user.uid));
+      // [แก้ 2026-11-09] เดิมไม่ดัก error — เน็ตสะดุดตรงนี้หน้าจะค้าง "กำลังโหลด…" เงียบๆ
+      // ตอนนี้ขึ้นกล่องเตือนพร้อมปุ่ม "ลองใหม่" แทน (ไม่ส่ง auth-ready เพราะยังไม่รู้บทบาท)
+      var สแนปช็อต;
+      try {
+        สแนปช็อต = await window.fsGetDoc(window.fsDoc(window.db, "users", user.uid));
+      } catch (err) {
+        console.error(err);
+        แสดงเชื่อมต่อไม่สำเร็จ();
+        return;
+      }
       var ข้อมูลผู้ใช้ = สแนปช็อต.exists() ? สแนปช็อต.data() : { name: user.email, role: "student" };
 
       window.CURRENT_USER = {
@@ -36,6 +48,20 @@
       แสดงผู้ใช้ในนำทาง();
       window.dispatchEvent(new Event("auth-ready"));
     });
+  }
+
+  function แสดงเชื่อมต่อไม่สำเร็จ() {
+    if (document.getElementById("กล่องเชื่อมต่อไม่สำเร็จ")) return;
+    var กล่อง = document.createElement("div");
+    กล่อง.id = "กล่องเชื่อมต่อไม่สำเร็จ";
+    กล่อง.className = "alert alert-error";
+    กล่อง.setAttribute("role", "alert");
+    กล่อง.innerHTML =
+      "⚠️ เชื่อมต่อระบบไม่สำเร็จ — ตรวจอินเทอร์เน็ตแล้วกดลองใหม่" +
+      '<div class="btn-row"><button type="button" class="btn-ok" id="ปุ่มลองเชื่อมต่อใหม่">ลองใหม่</button></div>';
+    var ที่วาง = document.querySelector(".container") || document.body;
+    ที่วาง.insertBefore(กล่อง, ที่วาง.firstChild);
+    document.getElementById("ปุ่มลองเชื่อมต่อใหม่").addEventListener("click", function () { location.reload(); });
   }
 
   var ป้ายบทบาท = { student: "นักเรียน", teacher: "ครู" };
