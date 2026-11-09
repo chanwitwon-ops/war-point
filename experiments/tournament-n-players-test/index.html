@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<title>tournament N players + delete — data-layer test (scratch tool)</title>
+<style>
+  body { font-family: monospace; padding: 20px; background: #111; color: #ddd; }
+  .pass { color: #7CFC00; } .fail { color: #FF5C5C; font-weight: bold; }
+  #summary { font-size: 1.2em; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<h1>js/tournament-data.js — ทัวนาเมนต์กี่คนก็ได้ + ลบ (เพิ่ม 2026-11-09)</h1>
+<p>ใช้ mock-firestore.js (ไม่แตะ Firebase จริง) · ทุก N = 2..9 คน: สร้าง → สู้ทุกคู่ตามลำดับ → ได้แชมป์ → ลบ</p>
+<div id="summary"></div>
+<pre id="log" style="white-space:pre-wrap;background:#000;padding:10px;"></pre>
+
+<script src="../../js/util.js"></script>
+<script src="../../js/pet-config.js"></script>
+<script src="../../js/combat-engine.js"></script>
+<script src="../tournament-integration-test/mock-firestore.js"></script>
+<script src="../../js/tournament-data.js"></script>
+<script src="../../js/leaderboard-data.js"></script>
+<script src="../../js/home-data.js"></script>
+<script>
+(async function () {
+  var logEl = document.getElementById("log"), summaryEl = document.getElementById("summary");
+  var pass = 0, fail = 0;
+  function check(ok, msg, extra) {
+    if (ok) pass++; else fail++;
+    logEl.innerHTML += '<span class="' + (ok ? "pass" : "fail") + '">[' + (ok ? "PASS" : "FAIL") + "] " +
+      msg + (extra !== undefined ? " — " + extra : "") + "</span>\n";
+  }
+  function คน(i) {
+    return { studentUid: "u" + i, studentName: "นักเรียน" + i, speciesKey: "pixie", stage: 4,
+      stats: { SPD: 60, ATK: 35, ACC: 40, EVA: 60, DEF: 20, HP: 35 } };
+  }
+  async function throws(fn) { try { await fn(); return false; } catch (e) { return e.message; } }
+
+  try {
+    check(!!(await throws(function () { return window.สร้างทัวนาเมนต์([คน(1)]); })), "1 คน → ต้อง error");
+    check(!!(await throws(function () { return window.สร้างทัวนาเมนต์([คน(1), คน(1)]); })), "คนซ้ำ → ต้อง error");
+
+    for (var N = 2; N <= 9; N++) {
+      var ผู้เล่น = []; for (var i = 1; i <= N; i++) ผู้เล่น.push(คน(i));
+      var id = await window.สร้างทัวนาเมนต์(ผู้เล่น);
+      var t = await window.โหลดทัวนาเมนต์(id);
+      var ขนาด = 1; while (ขนาด < N) ขนาด *= 2;
+      check(t.participantCount === N && t.rounds.length === Math.log2(ขนาด), "N=" + N + " สร้างผัง " + t.rounds.length + " รอบ");
+
+      var รอบแรก = t.rounds[0];
+      var บาย = รอบแรก.filter(function (m) { return m.bye; });
+      check(บาย.length === ขนาด - N, "N=" + N + " ได้บาย " + บาย.length + " คน", "คาด " + (ขนาด - N));
+      if (บาย.length) {
+        var e = await throws(function () { return window.คำนวณแมตช์ของทัวนาเมนต์(id, บาย[0].key); });
+        check(!!e, "N=" + N + " กดต่อสู้คู่บาย → error", e);
+      }
+
+      // สู้ทุกคู่ที่พร้อมจนจบ (เสมอ → ครูเลือกฝั่ง A)
+      var สู้ไป = 0, กันวน = 0, ครูชี้ขาด = 0;
+      while (กันวน++ < 50) {
+        t = await window.โหลดทัวนาเมนต์(id);
+        var พร้อม = [];
+        t.rounds.forEach(function (r) { r.forEach(function (m) { if (!m.bye && !m.matchId && m.slotA && m.slotB) พร้อม.push(m); }); });
+        if (!พร้อม.length) break;
+        for (var k = 0; k < พร้อม.length; k++) {
+          var log = await window.คำนวณแมตช์ของทัวนาเมนต์(id, พร้อม[k].key);
+          สู้ไป++;
+          if (log.result.winner === null) { await window.ครูเลือกผู้ชนะ(id, พร้อม[k].key, "slotA"); ครูชี้ขาด++; }
+        }
+      }
+      t = await window.โหลดทัวนาเมนต์(id);
+      var แชมป์ = แชมป์ของทัวนาเมนต์(t);
+      check(!!แชมป์, "N=" + N + " ได้แชมป์", แชมป์ && แชมป์.slot.studentName);
+      check(สู้ไป === N - 1, "N=" + N + " สู้จริง " + สู้ไป + " คู่ (= N-1)", "เสมอให้ครูชี้ " + ครูชี้ขาด);
+
+      // ทุกคนยกเว้นแชมป์แพ้ครั้งเดียวพอดี
+      var แพ้ = {};
+      t.rounds.forEach(function (r) { r.forEach(function (m) {
+        if (m.bye) return;
+        var ฝั่งแพ้ = m.winnerSlot === "slotA" ? "slotB" : "slotA";
+        แพ้[m[ฝั่งแพ้].studentUid] = (แพ้[m[ฝั่งแพ้].studentUid] || 0) + 1;
+      }); });
+      var uidแพ้ = Object.keys(แพ้);
+      check(uidแพ้.length === N - 1 && uidแพ้.every(function (u) { return แพ้[u] === 1; }) && !แพ้[แชมป์.slot.studentUid],
+        "N=" + N + " ทุกคนยกเว้นแชมป์แพ้ 1 ครั้งพอดี");
+      check(t.rounds.every(function (r) { return r.every(function (m) { return m.bye || !!m.matchLog; }); }),
+        "N=" + N + " ทุกคู่ที่สู้แล้วมี battle log ให้ดูรีเพลย์");
+
+      var ซ้ำ = await throws(function () { return window.คำนวณแมตช์ของทัวนาเมนต์(id, t.finalKey); });
+      check(!!ซ้ำ, "N=" + N + " กดต่อสู้คู่ที่สู้แล้วซ้ำ → error", ซ้ำ);
+    }
+
+    // หน้าหลัก / กระดานเกียรติยศ / รายการ อ่านแชมป์จากโครงใหม่ได้
+    var รายการ = await window.โหลดรายการทัวนาเมนต์();
+    check(รายการ.length === 8 && รายการ.every(function (x) { return !!x.championName && x.participantCount >= 2; }),
+      "รายการทัวนาเมนต์มี 8 รายการ ทุกรายการมีแชมป์ + จำนวนคน");
+    var ล่าสุด = await window.โหลดทัวนาเมนต์ล่าสุด();
+    check(!!(ล่าสุด && ล่าสุด.championName), "หน้าหลัก: ทัวนาเมนต์ล่าสุดมีชื่อแชมป์", ล่าสุด && ล่าสุด.championName);
+    var ทำเนียบ = await window.โหลดทำเนียบแชมป์();
+    var แชมป์ทั้งหมด = ทำเนียบ.reduce(function (s, w) { return s + w.champions.length; }, 0);
+    check(แชมป์ทั้งหมด === 8, "กระดานเกียรติยศ: แชมป์ครบ 8 รายการ", แชมป์ทั้งหมด);
+
+    // โครงเก่า 4 คนยังอ่านแชมป์ได้
+    await window.fsSetDoc(window.fsDoc(window.db, "tournaments", "old1"), {
+      createdAt: "2026-11-01 10:00",
+      semifinal1: {}, semifinal2: {},
+      final: { winnerSlot: "slotB", slotB: { studentName: "แชมป์เก่า", speciesKey: "pixie", stage: 4 }, decidedByTeacher: true }
+    });
+    ทำเนียบ = await window.โหลดทำเนียบแชมป์();
+    var เจอเก่า = ทำเนียบ.some(function (w) { return w.champions.some(function (c) { return c.championName === "แชมป์เก่า" && c.decidedByTeacher; }); });
+    check(เจอเก่า, "ทัวนาเมนต์โครงเก่ายังขึ้นกระดานเกียรติยศ (พร้อมป้ายครูตัดสิน)");
+
+    // ลบ
+    var ลบอันนี้ = รายการ[0].id;
+    var ก่อนลบ = await window.โหลดทัวนาเมนต์(ลบอันนี้);
+    var matchIds = [];
+    ก่อนลบ.rounds.forEach(function (r) { r.forEach(function (m) { if (m.matchId) matchIds.push(m.matchId); }); });
+    await window.ลบทัวนาเมนต์(ลบอันนี้);
+    var ยังอยู่ = (await window.fsGetDoc(window.fsDoc(window.db, "tournaments", ลบอันนี้))).exists();
+    check(!ยังอยู่, "ลบแล้วเอกสารทัวนาเมนต์หาย");
+    var logเหลือ = 0;
+    for (var x = 0; x < matchIds.length; x++) {
+      if ((await window.fsGetDoc(window.fsDoc(window.db, "tournaments", ลบอันนี้, "matches", matchIds[x]))).exists()) logเหลือ++;
+    }
+    check(matchIds.length > 0 && logเหลือ === 0, "ลบแล้ว battle log ทุกแมตช์หาย", matchIds.length + " แมตช์");
+    var หลังลบ = await window.โหลดรายการทัวนาเมนต์();
+    check(หลังลบ.length === 8 && !หลังลบ.some(function (x) { return x.id === ลบอันนี้; }), "รายการไม่มีทัวนาเมนต์ที่ลบแล้ว (เหลือ 7 ใหม่ + 1 เก่า)");
+    await window.ลบทัวนาเมนต์("old1");
+    check(!(await window.fsGetDoc(window.fsDoc(window.db, "tournaments", "old1"))).exists(), "ลบทัวนาเมนต์โครงเก่าได้");
+  } catch (err) {
+    check(false, "exception", err.message);
+    console.error(err);
+  }
+  summaryEl.innerHTML = '<span class="' + (fail ? "fail" : "pass") + '">' + pass + " passed / " + (pass + fail) + " total</span>";
+})();
+</script>
+</body>
+</html>

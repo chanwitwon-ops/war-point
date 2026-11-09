@@ -59,3 +59,25 @@ function แต้มจากคะแนนดีที่สุดต่อ�
   });
   return Object.keys(ดีสุด).reduce(function (s, k) { return s + ดีสุด[k]; }, 0);
 }
+
+// ── ทัวนาเมนต์: ตัวช่วยที่หลายหน้าใช้ร่วมกัน (เพิ่ม 2026-11-09 — รองรับผู้เข้าแข่งกี่คนก็ได้) ──
+// โครงใหม่: tournaments/{id}.matches = { "r1m1": {...}, ... } + roundCount + finalKey
+// โครงเก่า (4 คนตายตัว): semifinal1/semifinal2/final — ยังอ่านได้เพื่อไม่ให้ข้อมูลเก่าพัง
+
+// ชื่อรอบ: ชิงชนะเลิศ / รองชนะเลิศ / รอบแรก / รอบที่ n
+function ชื่อรอบทัวนาเมนต์(รอบ, จำนวนรอบ) {
+  var เหลือ = จำนวนรอบ - รอบ;
+  if (เหลือ === 0) return "รอบชิงชนะเลิศ";
+  if (เหลือ === 1) return "รอบรองชนะเลิศ";
+  if (รอบ === 1) return "รอบแรก";
+  return "รอบที่ " + รอบ;
+}
+
+// แชมป์ของทัวนาเมนต์ → { slot, decidedByTeacher } หรือ null ถ้ายังไม่จบ
+function แชมป์ของทัวนาเมนต์(ข้อมูล) {
+  var คู่ = null;
+  if (ข้อมูล && ข้อมูล.matches && ข้อมูล.finalKey) คู่ = ข้อมูล.matches[ข้อมูล.finalKey];
+  else if (ข้อมูล && ข้อมูล.final) คู่ = ข้อมูล.final;
+  if (!คู่ || (คู่.winnerSlot !== "slotA" && คู่.winnerSlot !== "slotB") || !คู่[คู่.winnerSlot]) return null;
+  return { slot: คู่[คู่.winnerSlot], decidedByTeacher: คู่.decidedByTeacher === true };
+}

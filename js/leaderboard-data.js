@@ -158,11 +158,11 @@
       var ตามสัปดาห์ = {};
       ผล.forEach(function (d) {
         var ข้อมูล = d.data();
-        var f = ข้อมูล.final;
-        if (!f || (f.winnerSlot !== "slotA" && f.winnerSlot !== "slotB") || !f[f.winnerSlot]) return; // ยังไม่มีแชมป์
+        var ผลแชมป์ = แชมป์ของทัวนาเมนต์(ข้อมูล); // js/util.js — รองรับทั้งผังกี่คนก็ได้และผัง 4 คนแบบเก่า
+        if (!ผลแชมป์) return; // ยังไม่มีแชมป์
         var จันทร์ = วันจันทร์ของ(ข้อมูล.createdAt);
         if (!จันทร์) return;
-        var แชมป์ = f[f.winnerSlot];
+        var แชมป์ = ผลแชมป์.slot;
         var คีย์ = รหัสวัน(จันทร์);
         if (!ตามสัปดาห์[คีย์]) {
           ตามสัปดาห์[คีย์] = { weekStart: คีย์, weekLabel: ป้ายสัปดาห์(จันทร์), champions: [] };
@@ -173,7 +173,7 @@
           championName: แชมป์.studentName || "ไม่ระบุชื่อ",
           speciesKey: แชมป์.speciesKey || null,
           stage: typeof แชมป์.stage === "number" ? แชมป์.stage : null,
-          decidedByTeacher: f.decidedByTeacher === true
+          decidedByTeacher: ผลแชมป์.decidedByTeacher
         });
       });
       return Object.keys(ตามสัปดาห์).sort().reverse().map(function (k) { return ตามสัปดาห์[k]; });

@@ -141,6 +141,9 @@ service cloud.firestore {
     match /tournaments/{tournamentId} {
       allow read: if request.auth != null;
       allow create, update: if isTeacher();
+      // [เพิ่ม 2026-11-09] ครูลบทัวนาเมนต์ได้ (เช่นจำลองการต่อสู้ทุกวัน/ลบรอบซ้อม) — battle log
+      // ใน matches/ ลบได้ด้วย allow write ด้านล่างอยู่แล้ว
+      allow delete: if isTeacher();
 
       // battle log เต็มของแต่ละแมตช์ — อ่านได้ทุกคนที่ล็อกอิน เขียนได้เฉพาะ teacher
       match /matches/{matchId} {

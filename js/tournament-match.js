@@ -2,13 +2,13 @@
 // js/tournament-match.js — หน้ารายละเอียดผลแมตช์ 1 คู่ของทัวนาเมนต์ (เดโม 18 ธ.ค. 2026)
 // ตามสเปก docs/01-requirements/01-spec/20261103-08-tournament-bracket-demo.md
 //
-// อ่านค่าจาก URL: tournament-match.html?tournamentId=...&slotKey=semifinal1|semifinal2|final
+// อ่านค่าจาก URL: tournament-match.html?tournamentId=...&match=r1m2 (รหัสคู่)
 // แล้วเล่น battle log ที่บันทึกไว้ (ไม่คำนวณผลเอง) ทั้งเป็นแอนิเมชัน Pixie และบันทึกข้อความ
 // เปิดได้ทั้งครูและนักเรียน (นักเรียนดูอย่างเดียว — หน้านี้ไม่มีปุ่มเขียนข้อมูลใดๆ อยู่แล้ว)
 //
 // ── สัญญาที่ใช้ ──
 //   window.โหลดทัวนาเมนต์(tournamentId) → Tournament (js/tournament-data.js)
-//     Tournament[slotKey] = { slotA, slotB, matchId, winnerSlot, decidedByTeacher?, matchLog? }
+//     Tournament.matches[matchKey] = { slotA, slotB, matchId, winnerSlot, decidedByTeacher?, matchLog? }
 //     slot = { studentUid, studentName, speciesKey, stage, stats }
 //   matchLog = ผลของ window.คำนวณผลการต่อสู้ v2 (js/combat-engine.js) — sideA ↔ slotA
 //     result = { winner: "A"|"B"|null, reason: "ko"|"turn_limit"|"teacher_decides", turns }
@@ -17,13 +17,9 @@
 
 (function () {
   var tournamentId = ค่าจากURL("tournamentId");
-  var slotKey = ค่าจากURL("slotKey");
-
-  var ชื่อรอบ = {
-    semifinal1: "รอบรองชนะเลิศ คู่ที่ 1",
-    semifinal2: "รอบรองชนะเลิศ คู่ที่ 2",
-    final: "รอบชิงชนะเลิศ"
-  };
+  // [แก้ 2026-11-09] ทัวนาเมนต์กี่คนก็ได้ — ระบุคู่ด้วย ?match=r1m2 (รหัสคู่ใน tournaments/{id}.matches)
+  var matchKey = ค่าจากURL("match");
+  var หัวข้อของคู่ = "";
 
   var ชื่อเหตุผล = {
     ko: "น็อคเอาต์",
@@ -84,7 +80,7 @@
       แสดงไม่พบ("ไม่พบรหัสทัวนาเมนต์ในลิงก์ — กลับไปเลือกแมตช์จากหน้าผังทัวนาเมนต์");
       return;
     }
-    if (!Object.prototype.hasOwnProperty.call(ชื่อรอบ, slotKey)) {
+    if (!/^r\d+m\d+$/.test(matchKey)) {
       แสดงไม่พบ("ไม่พบแมตช์นี้ — ลิงก์ไม่ถูกต้อง");
       return;
     }
@@ -95,7 +91,10 @@
         แสดงไม่พบ("ไม่พบทัวนาเมนต์นี้ — ลิงก์อาจไม่ถูกต้อง");
         return;
       }
-      คู่ = ผลโหลด[slotKey] || null;
+      คู่ = (ผลโหลด.matches && ผลโหลด.matches[matchKey]) || null;
+      if (คู่) {
+        หัวข้อของคู่ = ชื่อรอบทัวนาเมนต์(คู่.round, ผลโหลด.roundCount) + " · คู่ที่ " + คู่.index;
+      }
       แมตช์ = คู่ ? คู่.matchLog : null;
       if (!แมตช์) {
         แสดงไม่พบ("แมตช์นี้ยังไม่ได้ต่อสู้ — รอครูกดต่อสู้ที่หน้าผังทัวนาเมนต์ก่อน");
@@ -229,7 +228,7 @@
   }
 
   function วาดหัวข้อ() {
-    หัวข้อแมตช์.textContent = ชื่อรอบ[slotKey];
+    หัวข้อแมตช์.textContent = หัวข้อของคู่;
     คำอธิบายแมตช์.textContent = ฝ่าย.A.name + " VS " + ฝ่าย.B.name + " · สู้ยกเดียวจนเลือดหมด";
   }
 

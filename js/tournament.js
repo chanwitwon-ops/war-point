@@ -5,8 +5,8 @@
 //
 // หน้านี้ทำงานตามค่าใน URL และบทบาท:
 //   - ไม่มี ?tournamentId → รายการ "ทัวนาเมนต์ที่ผ่านมา" (ทุกบทบาท)
-//                          + ฟอร์มตั้งค่านักเรียน 4 คน (เฉพาะครู — ไม่อยู่ใน DOM ของนักเรียน)
-//   - มี ?tournamentId=... → ผัง bracket (semifinal1, semifinal2 → final)
+//                          + ฟอร์มสร้างทัวนาเมนต์ (ติ๊กเลือกนักเรียนกี่คนก็ได้ — เฉพาะครู)
+//   - มี ?tournamentId=... → ผัง bracket ทุกรอบ (r1m1, r1m2 … → รอบชิง)
 //                          ครูเห็นปุ่ม "ต่อสู้" / "เลือก X ชนะ" · นักเรียนอ่านอย่างเดียว (ไม่มีปุ่มเหล่านี้ใน DOM)
 //
 // **ขอบเขตของไฟล์นี้ (ui-screens): ห้ามคำนวณผลการต่อสู้/แต้มเอง และห้ามอ่าน/เขียน Firestore เอง**
@@ -14,31 +14,24 @@
 //
 // ── สัญญา (contract) ──
 // 1) window.โหลดรายชื่อนักเรียนสำหรับทัวนาเมนต์() → Promise<[{ uid, name, pet: {speciesKey, stage, stats} | null }]>
-// 2) window.สร้างทัวนาเมนต์(bracketData) → Promise<tournamentId>
-//      bracketData = { semifinal1: {slotA, slotB}, semifinal2: {slotA, slotB}, final: {slotA: null, slotB: null} }
+// 2) window.สร้างทัวนาเมนต์([slot, ...]) → Promise<tournamentId>  (อย่างน้อย 2 คน — ระบบสุ่มจับคู่/บายเอง)
 //      slot = { studentUid, studentName, speciesKey, stage, stats: {SPD,ATK,ACC,EVA,DEF,HP} }
 //      (stats/stage/speciesKey มาจาก pet ของนักเรียนที่เลือก — หน้านี้ไม่ได้ derive ค่าเอง)
-// 3) window.โหลดทัวนาเมนต์(tournamentId) → Promise<Tournament | null>
-//      Tournament.semifinal1 / semifinal2 / final = { slotA, slotB, matchId, winnerSlot, matchLog? }
+// 3) window.โหลดทัวนาเมนต์(tournamentId) → Promise<Tournament>
+//      Tournament.rounds = [[{ key, round, index, slotA, slotB, matchId, winnerSlot, bye, matchLog? }, ...], ...]
+//      Tournament.roundCount, finalKey, participantCount
 //      matchLog.result = { winner: "A" | "B" | null, reason: "ko" | "turn_limit" | "teacher_decides", turns }
-//      sideA ↔ slotA, sideB ↔ slotB · final.slotA/slotB เป็น null จนกว่า semifinal ทั้งคู่จบ
-// 4) window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId, slotKey) → Promise<void>
-//      slotKey = "semifinal1" | "semifinal2" | "final"
-// 5) window.ครูเลือกผู้ชนะ(tournamentId, slotKey, winnerSlot) → Promise<void>
+// 4) window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId, matchKey) → Promise<void>   (matchKey เช่น "r1m2")
+// 5) window.ครูเลือกผู้ชนะ(tournamentId, matchKey, winnerSlot) → Promise<void>
 //      ใช้เมื่อ matchLog.result.winner === null (เลือดเท่ากันครบ 30 เทิร์น) · winnerSlot = "slotA" | "slotB"
-// 6) window.โหลดรายการทัวนาเมนต์() → Promise<[{ id, createdAt, createdByTeacherName, championName }]> เรียงใหม่สุดก่อน
+// 6) window.โหลดรายการทัวนาเมนต์() → Promise<[{ id, createdAt, participantCount, championName }]> เรียงใหม่สุดก่อน
+// 7) window.ลบทัวนาเมนต์(tournamentId) → Promise<void> (ครูเท่านั้น)
 //
 // reject ทุกตัวด้วย Error ที่ .message เป็นภาษาไทย (หน้านี้แสดงในกล่องเตือนให้ผู้ใช้เห็น)
 // ─────────────────────────────────────────────────────────────
 
 (function () {
   var tournamentId = ค่าจากURL("tournamentId");
-
-  var ชื่อรอบ = {
-    semifinal1: "รอบรองชนะเลิศ คู่ที่ 1",
-    semifinal2: "รอบรองชนะเลิศ คู่ที่ 2",
-    final: "รอบชิงชนะเลิศ"
-  };
 
   // ป้ายเหตุผลของผลแมตช์ (อ่านจาก matchLog.result.reason) — ไม่แสดงสกอร์ยกแล้ว
   var ป้ายเหตุผล = {
@@ -47,13 +40,7 @@
     teacher_decides: "ครูตัดสิน"
   };
 
-  // ช่องเลือกนักเรียน 4 ช่อง (รองชนะเลิศ 2 คู่ × 2 ฝั่ง)
-  var ช่องเลือกนักเรียน = [
-    { key: "semifinal1", side: "slotA", ป้าย: "รอบรองชนะเลิศ คู่ที่ 1 · ฝั่ง A" },
-    { key: "semifinal1", side: "slotB", ป้าย: "รอบรองชนะเลิศ คู่ที่ 1 · ฝั่ง B" },
-    { key: "semifinal2", side: "slotA", ป้าย: "รอบรองชนะเลิศ คู่ที่ 2 · ฝั่ง A" },
-    { key: "semifinal2", side: "slotB", ป้าย: "รอบรองชนะเลิศ คู่ที่ 2 · ฝั่ง B" }
-  ];
+  var จำนวนขั้นต่ำ = 2; // [แก้ 2026-11-09] เลือกได้ตั้งแต่ 2 คนจนถึงทุกคนที่มีสัตว์เลี้ยง
 
   var กล่องกำลังโหลด = document.getElementById("กล่องกำลังโหลด");
   var ที่วางหลัก = document.getElementById("ที่วางหลัก");
@@ -66,7 +53,7 @@
     throw new Error("ยังไม่ได้เชื่อมระบบโหลดรายชื่อนักเรียนสำหรับทัวนาเมนต์");
   };
 
-  window.สร้างทัวนาเมนต์ = window.สร้างทัวนาเมนต์ || async function (bracketData) {
+  window.สร้างทัวนาเมนต์ = window.สร้างทัวนาเมนต์ || async function () {
     throw new Error("ยังไม่ได้เชื่อมระบบบันทึกทัวนาเมนต์ — ยังเริ่มทัวนาเมนต์จริงไม่ได้");
   };
 
@@ -84,6 +71,10 @@
 
   window.โหลดรายการทัวนาเมนต์ = window.โหลดรายการทัวนาเมนต์ || async function () {
     throw new Error("ยังไม่ได้เชื่อมระบบโหลดรายการทัวนาเมนต์");
+  };
+
+  window.ลบทัวนาเมนต์ = window.ลบทัวนาเมนต์ || async function () {
+    throw new Error("ยังไม่ได้เชื่อมระบบลบทัวนาเมนต์");
   };
 
   // กระดานเกียรติยศ (สเปก 09) — สัญญาอยู่ที่หัวไฟล์ js/leaderboard-data.js
@@ -234,6 +225,7 @@
   }
 
   // ── ฟอร์มตั้งค่า (ครูเท่านั้น) ──
+  // [แก้ 2026-11-09] เลือกนักเรียนกี่คนก็ได้ (ติ๊กจากรายชื่อ) — ระบบสุ่มจับคู่และสุ่มคนได้บายเอง
 
   async function โหลดฟอร์มตั้งค่า() {
     var กล่อง = document.getElementById("กล่องฟอร์มตั้งค่า");
@@ -242,7 +234,7 @@
     } catch (err) {
       console.error(err);
       กล่อง.innerHTML =
-        '<p class="section-title">ตั้งค่านักเรียน 4 คน</p>' +
+        '<p class="section-title">สร้างทัวนาเมนต์ใหม่</p>' +
         '<div class="alert alert-error">⚠️ โหลดรายชื่อนักเรียนไม่สำเร็จ: ' + esc(err.message) + "</div>";
       return;
     }
@@ -251,108 +243,91 @@
 
   function วาดฟอร์มตั้งค่า(กล่อง) {
     var จำนวนที่มีสัตว์เลี้ยง = รายชื่อนักเรียน.filter(function (น) { return น.pet != null; }).length;
-    var เริ่มได้ = จำนวนที่มีสัตว์เลี้ยง >= ช่องเลือกนักเรียน.length;
 
     var html =
-      '<p class="section-title">ตั้งค่านักเรียน 4 คน</p>' +
-      '<p class="hint">เลือกนักเรียนจากรายชื่อ — นักเรียนที่ยังไม่ได้ซื้อไข่เลือกไม่ได้ และเลือกคนเดิมซ้ำในหลายช่องไม่ได้</p>';
+      '<p class="section-title">สร้างทัวนาเมนต์ใหม่</p>' +
+      '<p class="hint">ติ๊กเลือกนักเรียนที่จะลงแข่ง (อย่างน้อย ' + จำนวนขั้นต่ำ + ' คน) — ระบบสุ่มจับคู่ ' +
+      'ถ้าจำนวนคนไม่ลงตัว ระบบสุ่มคนที่ได้บาย (ผ่านเข้ารอบถัดไปโดยไม่ต้องสู้) · นักเรียนที่ยังไม่ได้ซื้อไข่เลือกไม่ได้</p>';
 
     if (รายชื่อนักเรียน.length === 0) {
       html += '<div class="alert alert-error">⚠️ ยังไม่มีนักเรียนในระบบ จึงเริ่มทัวนาเมนต์ไม่ได้</div>';
-    } else if (!เริ่มได้) {
+    } else if (จำนวนที่มีสัตว์เลี้ยง < จำนวนขั้นต่ำ) {
       html +=
         '<div class="alert alert-error">⚠️ เริ่มทัวนาเมนต์ไม่ได้ — ตอนนี้มีนักเรียนที่มีสัตว์เลี้ยงเพียง ' +
-        จำนวนที่มีสัตว์เลี้ยง + " คน ต้องมีอย่างน้อย " + ช่องเลือกนักเรียน.length + " คน</div>";
+        จำนวนที่มีสัตว์เลี้ยง + " คน ต้องมีอย่างน้อย " + จำนวนขั้นต่ำ + " คน</div>";
     }
 
-    ช่องเลือกนักเรียน.forEach(function (ช่อง) {
-      var รหัส = ช่อง.key + "-" + ช่อง.side;
-      html +=
-        '<div class="slot-form-row">' +
-        '<p class="slot-form-title">' + esc(ช่อง.ป้าย) + "</p>" +
-        '<label for="เลือก-' + รหัส + '">นักเรียน</label>' +
-        '<select id="เลือก-' + รหัส + '" data-slot-select="' + รหัส + '"></select>' +
-        "</div>";
-    });
+    if (จำนวนที่มีสัตว์เลี้ยง > 0) {
+      html += '<div class="btn-row"><button type="button" class="btn-ghost" id="ปุ่มเลือกทั้งหมด">เลือกทุกคนที่มีสัตว์เลี้ยง</button></div>';
+    }
+
+    html += '<div class="choice-list">' + รายชื่อนักเรียน.map(function (น) {
+      var ไม่มีสัตว์เลี้ยง = น.pet == null;
+      var ข้อความ = (น.name || "ไม่ระบุชื่อ") + " — " +
+        (ไม่มีสัตว์เลี้ยง ? "ยังไม่ได้ซื้อไข่" : ชื่อสายพันธุ์(น.pet.speciesKey) + " " + ชื่อขั้น(น.pet.stage));
+      return (
+        '<label class="choice-row">' +
+        '<input type="checkbox" data-student-uid="' + esc(น.uid) + '"' + (ไม่มีสัตว์เลี้ยง ? " disabled" : "") + ">" +
+        "<span>" + esc(ข้อความ) + "</span>" +
+        "</label>"
+      );
+    }).join("") + "</div>";
 
     html +=
+      '<p class="hint" id="สรุปที่เลือก"></p>' +
       '<div id="กล่องเตือนตั้งค่า" class="alert alert-error hidden"></div>' +
-      '<div class="btn-row"><button type="button" class="btn" id="ปุ่มเริ่มทัวนาเมนต์"' +
-      (เริ่มได้ ? "" : " disabled") + ">เริ่มทัวนาเมนต์</button></div>";
+      '<div class="btn-row"><button type="button" class="btn" id="ปุ่มเริ่มทัวนาเมนต์" disabled>เริ่มทัวนาเมนต์</button></div>';
 
     กล่อง.innerHTML = html;
 
-    กล่อง.querySelectorAll("[data-slot-select]").forEach(function (ตัวเลือก) {
-      ตัวเลือก.addEventListener("change", รีเฟรชตัวเลือกนักเรียน);
+    กล่อง.querySelectorAll("[data-student-uid]").forEach(function (ช่อง) {
+      ช่อง.addEventListener("change", อัปเดตสรุปที่เลือก);
     });
-    document.getElementById("ปุ่มเริ่มทัวนาเมนต์").addEventListener("click", เริ่มทัวนาเมนต์);
-    รีเฟรชตัวเลือกนักเรียน();
-  }
-
-  // เติมตัวเลือกใหม่ทุกช่องตามค่าที่เลือกอยู่ — คนที่เลือกไว้ช่องอื่นแล้ว หรือยังไม่มีสัตว์เลี้ยง จะถูกปิดการเลือก
-  function รีเฟรชตัวเลือกนักเรียน() {
-    var รหัสช่องทั้งหมด = ช่องเลือกนักเรียน.map(function (ช่อง) { return ช่อง.key + "-" + ช่อง.side; });
-
-    var ค่าที่เลือกไว้ = {};
-    รหัสช่องทั้งหมด.forEach(function (รหัส) {
-      var ตัวเลือก = document.getElementById("เลือก-" + รหัส);
-      ค่าที่เลือกไว้[รหัส] = ตัวเลือก ? ตัวเลือก.value : "";
-    });
-
-    รหัสช่องทั้งหมด.forEach(function (รหัส) {
-      var ตัวเลือก = document.getElementById("เลือก-" + รหัส);
-      if (!ตัวเลือก) return;
-      var ที่เลือกอยู่ = ค่าที่เลือกไว้[รหัส];
-
-      var html = '<option value="">— เลือกนักเรียน —</option>';
-      รายชื่อนักเรียน.forEach(function (น) {
-        var ไม่มีสัตว์เลี้ยง = น.pet == null;
-        var ถูกเลือกช่องอื่น = รหัสช่องทั้งหมด.some(function (อื่น) {
-          return อื่น !== รหัส && ค่าที่เลือกไว้[อื่น] === น.uid;
-        });
-        var ปิด = ไม่มีสัตว์เลี้ยง || ถูกเลือกช่องอื่น;
-
-        var ข้อความ = (น.name || "ไม่ระบุชื่อ") + " — " +
-          (ไม่มีสัตว์เลี้ยง
-            ? "ยังไม่ได้ซื้อไข่"
-            : ชื่อสายพันธุ์(น.pet.speciesKey) + " " + ชื่อขั้น(น.pet.stage));
-        if (ถูกเลือกช่องอื่น) {
-          ข้อความ += " (เลือกไว้ช่องอื่นแล้ว)";
-        }
-
-        html +=
-          '<option value="' + esc(น.uid) + '"' +
-          (น.uid === ที่เลือกอยู่ ? " selected" : "") +
-          (ปิด ? " disabled" : "") + ">" +
-          esc(ข้อความ) + "</option>";
+    var ปุ่มทั้งหมด = document.getElementById("ปุ่มเลือกทั้งหมด");
+    if (ปุ่มทั้งหมด) {
+      ปุ่มทั้งหมด.addEventListener("click", function () {
+        กล่อง.querySelectorAll("[data-student-uid]:not(:disabled)").forEach(function (ช่อง) { ช่อง.checked = true; });
+        อัปเดตสรุปที่เลือก();
       });
-      ตัวเลือก.innerHTML = html;
-    });
+    }
+    document.getElementById("ปุ่มเริ่มทัวนาเมนต์").addEventListener("click", เริ่มทัวนาเมนต์);
+    อัปเดตสรุปที่เลือก();
   }
 
-  // อ่านค่าจากฟอร์ม → bracketData ตามสัญญา หรือ { error } ถ้ากรอกไม่ครบ/ไม่ถูกต้อง
+  function uidที่เลือก() {
+    return Array.prototype.map.call(
+      document.querySelectorAll("[data-student-uid]:checked"),
+      function (ช่อง) { return ช่อง.getAttribute("data-student-uid"); }
+    );
+  }
+
+  // แสดงจำนวนคน/จำนวนรอบ/จำนวนบาย ที่จะได้ ก่อนกดเริ่ม
+  function อัปเดตสรุปที่เลือก() {
+    var n = uidที่เลือก().length;
+    var สรุป = document.getElementById("สรุปที่เลือก");
+    var ปุ่ม = document.getElementById("ปุ่มเริ่มทัวนาเมนต์");
+    if (n < จำนวนขั้นต่ำ) {
+      สรุป.textContent = "เลือกแล้ว " + n + " คน — ต้องเลือกอย่างน้อย " + จำนวนขั้นต่ำ + " คน";
+      ปุ่ม.disabled = true;
+      return;
+    }
+    var ขนาด = 1;
+    while (ขนาด < n) ขนาด *= 2;
+    var รอบ = Math.round(Math.log(ขนาด) / Math.LN2);
+    var บาย = ขนาด - n;
+    สรุป.textContent = "เลือกแล้ว " + n + " คน → แข่ง " + รอบ + " รอบ" + (บาย > 0 ? " · สุ่มให้ได้บาย " + บาย + " คน" : "");
+    ปุ่ม.disabled = false;
+  }
+
+  // อ่านค่าจากฟอร์ม → รายชื่อผู้เข้าแข่งขันตามสัญญา หรือ { error }
   function อ่านฟอร์ม() {
-    var bracketData = {
-      semifinal1: { slotA: null, slotB: null },
-      semifinal2: { slotA: null, slotB: null },
-      final: { slotA: null, slotB: null }
-    };
-    var เลือกแล้ว = {};
-
-    for (var i = 0; i < ช่องเลือกนักเรียน.length; i++) {
-      var ช่อง = ช่องเลือกนักเรียน[i];
-      var รหัส = ช่อง.key + "-" + ช่อง.side;
-      var uid = document.getElementById("เลือก-" + รหัส).value;
-
-      if (!uid) {
-        return { error: "เลือกนักเรียนให้ครบ 4 คนก่อน จึงจะเริ่มทัวนาเมนต์ได้" };
-      }
-      if (Object.prototype.hasOwnProperty.call(เลือกแล้ว, uid)) {
-        return { error: "นักเรียนคนเดิมถูกเลือกซ้ำ — เลือกให้แต่ละช่องเป็นคนละคน" };
-      }
-      เลือกแล้ว[uid] = true;
-
-      var น = รายชื่อนักเรียน.filter(function (x) { return x.uid === uid; })[0];
+    var uids = uidที่เลือก();
+    if (uids.length < จำนวนขั้นต่ำ) {
+      return { error: "เลือกนักเรียนอย่างน้อย " + จำนวนขั้นต่ำ + " คนก่อน จึงจะเริ่มทัวนาเมนต์ได้" };
+    }
+    var ผู้เข้าแข่งขัน = [];
+    for (var i = 0; i < uids.length; i++) {
+      var น = รายชื่อนักเรียน.filter(function (x) { return x.uid === uids[i]; })[0];
       if (!น || !น.pet) {
         return { error: "นักเรียนที่เลือกยังไม่มีสัตว์เลี้ยง — เลือกใหม่" };
       }
@@ -360,17 +335,15 @@
       if (!สเตตัส) {
         return { error: "สเตตัสของสัตว์เลี้ยงของ " + (น.name || "นักเรียนคนนี้") + " ไม่ครบ — ตรวจข้อมูลก่อนเริ่มทัวนาเมนต์" };
       }
-
-      bracketData[ช่อง.key][ช่อง.side] = {
+      ผู้เข้าแข่งขัน.push({
         studentUid: น.uid,
         studentName: น.name || "ไม่ระบุชื่อ",
         speciesKey: น.pet.speciesKey,
         stage: น.pet.stage,
         stats: สเตตัส
-      };
+      });
     }
-
-    return { bracketData: bracketData };
+    return { ผู้เข้าแข่งขัน: ผู้เข้าแข่งขัน };
   }
 
   // คัดลอกเฉพาะ 6 ค่าสเตตัสตาม PET_STAT_KEYS — ถ้าขาดค่าใดค่าหนึ่งคืน null (ไม่เดาค่าให้)
@@ -402,7 +375,7 @@
     ปุ่ม.textContent = "กำลังสร้างทัวนาเมนต์...";
 
     try {
-      var รหัสใหม่ = await window.สร้างทัวนาเมนต์(ผลอ่าน.bracketData);
+      var รหัสใหม่ = await window.สร้างทัวนาเมนต์(ผลอ่าน.ผู้เข้าแข่งขัน);
       location.href = "tournament.html?tournamentId=" + encodeURIComponent(รหัสใหม่);
     } catch (err) {
       console.error(err);
@@ -430,13 +403,25 @@
               "<li>" +
               '<a href="tournament.html?tournamentId=' + encodeURIComponent(t.id) + '">' + esc(t.createdAt || "ไม่ทราบเวลา") + "</a>" +
               '<span class="sub-note">' +
+              (t.participantCount ? esc(t.participantCount) + " คน · " : "") +
               (t.championName ? "แชมป์: " + esc(t.championName) : "ยังไม่มีแชมป์") +
-              "</span></li>"
+              "</span>" +
+              (เป็นครู() ? ' <button type="button" class="btn-ghost" data-delete-tournament="' + esc(t.id) + '">ลบ</button>' : "") +
+              "</li>"
             );
           }).join("") +
           "</ul>";
       }
+      if (เป็นครู()) html += '<div id="กล่องเตือนลบ" class="alert alert-error hidden"></div>';
       กล่อง.innerHTML = html;
+      กล่อง.querySelectorAll("[data-delete-tournament]").forEach(function (ปุ่ม) {
+        ปุ่ม.addEventListener("click", function () {
+          กดลบทัวนาเมนต์(ปุ่ม.getAttribute("data-delete-tournament"), ปุ่ม, document.getElementById("กล่องเตือนลบ"), function () {
+            โหลดรายการทัวนาเมนต์ที่ผ่านมา();
+            โหลดทำเนียบแชมป์();
+          });
+        });
+      });
     } catch (err) {
       console.error(err);
       กล่อง.innerHTML =
@@ -473,19 +458,38 @@
     // กล่องเตือนของการกดปุ่มครู — สร้างเฉพาะครู
     var กล่องเตือนผัง = เป็นครู() ? '<div id="กล่องเตือนผัง" class="alert alert-error hidden"></div>' : "";
 
+    // [แก้ 2026-11-09] ผังกี่รอบก็ได้ — 1 คอลัมน์ต่อรอบ (จอแคบเรียงลงล่าง)
+    var แชมป์ = แชมป์ของทัวนาเมนต์(ทัวนาเมนต์);
     กล่อง.innerHTML =
       กล่องเตือนผัง +
-      '<div class="bracket">' +
-        '<div class="bracket-col bracket-col-sf">' +
-          สร้างกล่องคู่("semifinal1", ทัวนาเมนต์) +
-          สร้างกล่องคู่("semifinal2", ทัวนาเมนต์) +
-        "</div>" +
-        '<div class="bracket-connector" aria-hidden="true"></div>' +
-        '<div class="bracket-col bracket-col-final">' +
-          สร้างกล่องคู่("final", ทัวนาเมนต์) +
-        "</div>" +
+      '<p class="section-title">' + esc(ทัวนาเมนต์.participantCount) + " คน · " + esc(ทัวนาเมนต์.roundCount) + " รอบ" +
+        (ทัวนาเมนต์.createdAt ? ' <span class="sub-note">' + esc(ทัวนาเมนต์.createdAt) + "</span>" : "") + "</p>" +
+      (แชมป์ ? '<p class="bracket-champion">👑 แชมป์: ' + esc(แชมป์.slot.studentName) + "</p>" : "") +
+      '<div class="bracket bracket-rounds">' +
+        ทัวนาเมนต์.rounds.map(function (คู่ในรอบ, i) {
+          return (
+            '<div class="bracket-col">' +
+              '<p class="bracket-round-title">' + esc(ชื่อรอบทัวนาเมนต์(i + 1, ทัวนาเมนต์.roundCount)) + "</p>" +
+              '<div class="bracket-col-matches">' +
+                คู่ในรอบ.map(function (คู่) { return สร้างกล่องคู่(คู่, ทัวนาเมนต์); }).join("") +
+              "</div>" +
+            "</div>"
+          );
+        }).join("") +
       "</div>" +
-      '<p class="hint">รอบรองชนะเลิศ 2 คู่ — ผู้ชนะทั้งสองคู่เลื่อนเข้ารอบชิงชนะเลิศโดยอัตโนมัติ · กด "ดูรายละเอียด" เพื่อดูบันทึกการต่อสู้ทีละเหตุการณ์</p>';
+      '<p class="hint">ระบบสุ่มจับคู่และสุ่มคนที่ได้บายตอนสร้างทัวนาเมนต์ — ผู้ชนะแต่ละคู่เลื่อนเข้ารอบถัดไปโดยอัตโนมัติ · กด "ดูรายละเอียด" เพื่อดูรีเพลย์การต่อสู้</p>' +
+      (เป็นครู()
+        ? '<div class="btn-row"><button type="button" class="btn-ghost" id="ปุ่มลบทัวนาเมนต์นี้">ลบทัวนาเมนต์นี้</button></div>'
+        : "");
+
+    var ปุ่มลบ = document.getElementById("ปุ่มลบทัวนาเมนต์นี้");
+    if (ปุ่มลบ) {
+      ปุ่มลบ.addEventListener("click", function () {
+        กดลบทัวนาเมนต์(tournamentId, ปุ่มลบ, document.getElementById("กล่องเตือนผัง"), function () {
+          location.href = "tournament.html";
+        });
+      });
+    }
 
     // ปุ่มของครูเท่านั้น — นักเรียนไม่มี element เหล่านี้ใน DOM
     กล่อง.querySelectorAll("[data-action-slot-key]").forEach(function (ปุ่ม) {
@@ -511,14 +515,24 @@
     return { ฝั่ง: null, เหตุผล: null };
   }
 
-  function สร้างกล่องคู่(key, ทัวนาเมนต์) {
-    var คู่ = ทัวนาเมนต์[key] || {};
+  function สร้างกล่องคู่(คู่, ทัวนาเมนต์) {
+    var key = คู่.key;
     var slotA = คู่.slotA || null;
     var slotB = คู่.slotB || null;
     var ผู้ชนะ = หาผู้ชนะ(คู่);
 
     var ข้อความสถานะ;
     var ปุ่มHtml = "";
+
+    if (คู่.bye) {
+      ข้อความสถานะ = "ได้บาย — ผ่านเข้ารอบถัดไปโดยไม่ต้องสู้";
+      return (
+        '<div class="bracket-match is-bye" data-slot-key="' + esc(key) + '">' +
+          สร้างช่องฝ่าย(slotA, false) +
+          '<p class="bracket-status">' + ข้อความสถานะ + "</p>" +
+        "</div>"
+      );
+    }
 
     if (คู่.matchLog) {
       if (ผู้ชนะ.ฝั่ง) {
@@ -537,7 +551,7 @@
       }
       ปุ่มHtml +=
         '<div class="btn-row"><a class="btn-ghost" href="tournament-match.html?tournamentId=' +
-        encodeURIComponent(tournamentId) + "&slotKey=" + encodeURIComponent(key) + '">ดูรายละเอียด →</a></div>';
+        encodeURIComponent(tournamentId) + "&match=" + encodeURIComponent(key) + '">ดูรายละเอียด →</a></div>';
     } else if (slotA && slotB) {
       ข้อความสถานะ = "ยังไม่ได้ต่อสู้";
       if (เป็นครู()) {
@@ -545,14 +559,12 @@
           '<div class="btn-row"><button type="button" class="btn-ok" data-action-slot-key="' + esc(key) + '">ต่อสู้</button></div>';
       }
     } else {
-      ข้อความสถานะ = key === "final"
-        ? "รอผู้เข้ารอบ — ต้องมีผู้ชนะรอบรองชนะเลิศครบทั้ง 2 คู่ก่อน"
-        : "รอผู้เข้ารอบ";
+      ข้อความสถานะ = "รอผู้เข้ารอบ — รอผลของรอบก่อนหน้า";
     }
 
     return (
       '<div class="bracket-match" data-slot-key="' + esc(key) + '">' +
-        '<p class="bracket-match-title">' + esc(ชื่อรอบ[key]) + "</p>" +
+        '<p class="bracket-match-title">คู่ที่ ' + esc(คู่.index) + "</p>" +
         สร้างช่องฝ่าย(slotA, ผู้ชนะ.ฝั่ง === "slotA") +
         '<p class="vs-mark">VS</p>' +
         สร้างช่องฝ่าย(slotB, ผู้ชนะ.ฝั่ง === "slotB") +
@@ -614,6 +626,22 @@
       console.error(err);
       เตือนผัง("เลือกผู้ชนะไม่สำเร็จ: " + err.message);
       ปุ่มทั้งหมด.forEach(function (b) { b.disabled = false; });
+    }
+  }
+
+  // ลบทัวนาเมนต์ (ครูเท่านั้น) — ยืนยันก่อน เพราะลบแล้วกู้คืนไม่ได้ และแชมป์จะหายจากกระดานเกียรติยศ
+  async function กดลบทัวนาเมนต์(รหัส, ปุ่ม, กล่องเตือน, เมื่อสำเร็จ) {
+    if (!window.confirm("ลบทัวนาเมนต์นี้? ผลการแข่งและรีเพลย์ทั้งหมดจะหายไป และกู้คืนไม่ได้")) return;
+    ปุ่ม.disabled = true;
+    ปุ่ม.textContent = "กำลังลบ...";
+    try {
+      await window.ลบทัวนาเมนต์(รหัส);
+      เมื่อสำเร็จ();
+    } catch (err) {
+      console.error(err);
+      if (กล่องเตือน) แสดงเตือนในกล่อง(กล่องเตือน, err.message);
+      ปุ่ม.disabled = false;
+      ปุ่ม.textContent = "ลบ";
     }
   }
 

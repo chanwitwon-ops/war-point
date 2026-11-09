@@ -11,7 +11,7 @@
 </head>
 <body>
   <!-- เครื่องมือทดสอบ: รัน js/tournament-match.js ของจริงบน mock Firestore (ไม่ต้องล็อกอิน)
-       เปิดด้วย ?tournamentId=auto_1&slotKey=semifinal1 — ทัวนาเมนต์ใน mock จะได้ id auto_1 เสมอ -->
+       เปิดด้วย ?tournamentId=auto_1&match=r1m1 (r1m1/r1m2 = รอบรอง, r2m1 = รอบชิง) — ทัวนาเมนต์ใน mock จะได้ id auto_1 เสมอ -->
   <div class="container">
     <div class="top-links"><a id="ลิงก์กลับผัง" href="#">← (harness)</a></div>
     <h1 id="หัวข้อแมตช์">รายละเอียดแมตช์</h1>
@@ -59,13 +59,12 @@
         };
       }
       window.CURRENT_USER = window.__ผู้ใช้ทดสอบ; // ครูในการสร้าง (data layer อ่าน CURRENT_USER)
-      var id = await window.สร้างทัวนาเมนต์({
-        semifinal1: { slotA: slot("uid-a", "น้องเอ"), slotB: slot("uid-b", "น้องบี") },
-        semifinal2: { slotA: slot("uid-c", "น้องซี"), slotB: slot("uid-d", "น้องดี") }
-      });
-      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "semifinal1");
-      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "semifinal2");
-      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "final");
+      // [แก้ 2026-11-09] API ใหม่: ส่งรายชื่อผู้เข้าแข่ง ระบบสุ่มจับคู่เอง — 4 คน = r1m1, r1m2 → r2m1
+      var id = await window.สร้างทัวนาเมนต์([slot("uid-a", "น้องเอ"), slot("uid-b", "น้องบี"), slot("uid-c", "น้องซี"), slot("uid-d", "น้องดี")]);
+      for (var k of ["r1m1", "r1m2", "r2m1"]) {
+        var ผล = await window.คำนวณแมตช์ของทัวนาเมนต์(id, k);
+        if (ผล.result.winner === null) await window.ครูเลือกผู้ชนะ(id, k, "slotA");
+      }
       window.CURRENT_USER = { uid: "uid-a", name: "น้องเอ", role: "student" }; // ดูในฐานะนักเรียน
       window.dispatchEvent(new Event("auth-ready"));
     })();

@@ -128,6 +128,16 @@
     return Promise.resolve();
   };
 
+  // [เพิ่ม 2026-11-09] สำหรับ window.ลบทัวนาเมนต์
+  window.fsDeleteDoc = function (docRef) {
+    delete store[docRef.path];
+    if (docRef.collectionPath && collections[docRef.collectionPath]) {
+      delete collections[docRef.collectionPath][docRef.id];
+    }
+    บันทึกถาวร();
+    return Promise.resolve();
+  };
+
   window.CURRENT_USER = { uid: "teacher-test-uid", name: "ครูทดสอบ", role: "teacher" };
 
   window.__MOCK_STORE__ = store; // เปิดดูได้ตรงๆ เวลาดีบัก

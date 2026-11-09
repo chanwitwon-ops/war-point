@@ -52,11 +52,11 @@
       ผล.forEach(function (d) {
         if (แรก) return;
         var ข้อมูล = d.data();
-        var f = ข้อมูล.final;
+        var แชมป์ = แชมป์ของทัวนาเมนต์(ข้อมูล); // js/util.js — รองรับทั้งผังกี่คนก็ได้และผัง 4 คนแบบเก่า
         แรก = {
           id: d.id,
           createdAt: ข้อมูล.createdAt,
-          championName: f && f.winnerSlot && f[f.winnerSlot] ? f[f.winnerSlot].studentName : null
+          championName: แชมป์ ? แชมป์.slot.studentName : null
         };
       });
       return แรก;
