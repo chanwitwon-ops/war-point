@@ -3,6 +3,12 @@
 รันด้วย `npm test` (Playwright) ต่อ Firebase project จริง `warpoint-191be` ผ่าน `http://localhost:3001`
 (`npm run dev`) — บัญชีที่ใช้: `teacher`, `student1`, `student2` จาก `tests/test-accounts.local.js`
 
+> ⚠️ **ผลด้านล่างเป็นของ 2026-09-25 — ยังไม่ได้รันใหม่หลังแก้ 2026-11-09**
+> เทสต์ 01/02/03/05 เปลี่ยนไปใช้ชุดข้อสอบเฉพาะเทสต์ (`autotest-mcq`, `autotest-worksheet` — `testOnly`, ทำได้ 1000 ครั้ง,
+> ได้ 0 คะแนนเสมอ) ที่ `tests/helpers.js` สร้างเองผ่านบัญชีครูตอนรันครั้งแรก เพื่อไม่ใช้สิทธิ์ทำข้อสอบ/แต้มของบัญชีที่ใช้เดโม
+> **ทดสอบอื่นที่ทำ 2026-11-09 (ไม่ต้องล็อกอิน):** Firebase Rules API 51/51 กรณี · `experiments/tournament-n-players-test` 71/71 ·
+> `experiments/pet-system-test` 52/52 · `experiments/leaderboard-test` 15/15 · harness หน้าจริงบน mock Firestore (ทัวนาเมนต์/รีเพลย์/รายละเอียดงาน/auth-guard)
+
 **รันล่าสุด (ผ่านทั้งหมด):** 2026-09-25 10:15 น. (SEAST) — `npm test` → **6/6 tests passed** (25.3s)
 รันซ้ำอีกรอบก่อนหน้าด้วย `npx playwright test` ก็ผ่านทั้งหมดเช่นกัน (26.6s) — ยืนยันว่าไม่ใช่ฟลุ๊ค
 
