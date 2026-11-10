@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบ W2/B1 — AI สรุปภาพรวมนักเรียน</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; }
+    .ok { color: #0a6b2d; } .bad { color: #a11; }
+    iframe { width: 900px; height: 500px; border: 1px solid #999; display: block; margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>ทดสอบ W2/B1 (2026-11-11)</h1>
+  <p id="สรุป">กำลังรัน…</p>
+  <ol id="ผล"></ol>
+  <div id="เฟรม"></div>
+  <script>
+    var ผล = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผล.push({ ชื่อ: ชื่อ, ผ่าน: !!ผ่าน });
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "bad";
+      li.textContent = (ผ่าน ? "✅ " : "❌ ") + ชื่อ + (รายละเอียด ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function รอ(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function เปิด(qs) {
+      var f = document.createElement("iframe");
+      f.src = "page.html?" + qs;
+      document.getElementById("เฟรม").appendChild(f);
+      for (var i = 0; i < 100; i++) {
+        await รอ(50);
+        var w = f.contentWindow;
+        if (w.__ข้อผิดพลาด) throw new Error(w.__ข้อผิดพลาด);
+        if (w.__พร้อม) return w;
+      }
+      throw new Error("หน้าไม่พร้อม: " + qs);
+    }
+    function ร้าน(w) { return w.__MOCK_STORE__ || {}; }
+    async function กดสรุป(w) {
+      w.document.getElementById("ปุ่มสรุปนักเรียน").click();
+      for (var i = 0; i < 60; i++) {
+        await รอ(50);
+        if (!w.document.getElementById("ปุ่มสรุปนักเรียน").disabled) return;
+      }
+    }
+    function ซ่อน(w, id) { return w.document.getElementById(id).classList.contains("hidden"); }
+
+    (async function () {
+      // 0) ยืนยันว่า mock จับบั๊กเดิมได้จริง — updateDoc กับเอกสารที่ไม่มีต้องพัง
+      var w0 = await เปิด("scene=noDoc&id=a1");
+      var พัง = false;
+      try { await w0.fsUpdateDoc(w0.fsDoc(w0.db, "students", "ไม่มีคนนี้"), { x: 1 }); } catch (e) { พัง = true; }
+      ตรวจ("mock: updateDoc กับเอกสารที่ไม่มีโยน error (แบบเดียวกับ Firestore จริง)", พัง);
+
+      // 1) นักเรียนสมัครจริง ไม่มี students/{uid}
+      var w = await เปิด("scene=noDoc&id=a1");
+      ตรวจ("ครูเห็นกล่องสรุปนักเรียน", !ซ่อน(w, "กล่องสรุปนักเรียน"));
+      ตรวจ("ยังไม่มีสรุปเดิม → ไม่แสดงกล่องข้อความสรุป", ซ่อน(w, "กล่องข้อความสรุป"));
+      ตรวจ("ก่อนกด ไม่มีเอกสาร students/uReal", ร้าน(w)["students/uReal"] === undefined);
+      await กดสรุป(w);
+      var s = ร้าน(w)["students/uReal"];
+      ตรวจ("กดแล้วไม่มีข้อความเตือน", ซ่อน(w, "กล่องเตือนสรุป"), w.document.getElementById("กล่องเตือนสรุป").textContent);
+      ตรวจ("สร้างเอกสาร students/uReal พร้อม aiSummary", s && s.aiSummary === "สรุปจาก AI ปลอม: ทำงานสม่ำเสมอ");
+      ตรวจ("มี aiSummaryUpdatedAt", s && !!s.aiSummaryUpdatedAt);
+      var ล็อก = Object.keys(ร้าน(w)).filter(function (k) { return k.indexOf("students/uReal/aiLog/") === 0; });
+      ตรวจ("จด aiLog 1 รายการ", ล็อก.length === 1, ล็อก.length + " รายการ");
+      ตรวจ("แสดงสรุปบนหน้า", !ซ่อน(w, "กล่องข้อความสรุป") && /AI ปลอม/.test(w.document.getElementById("กล่องข้อความสรุป").textContent));
+      var ส่ง = w.__ข้อความที่ส่งให้AI || "";
+      ตรวจ("ส่งให้ AI ครบ 2 ชุดที่ตรวจแล้ว", /ใบงานผีเสื้อ/.test(ส่ง) && /บวกเลข/.test(ส่ง), ส่ง.replace(/\n/g, " | "));
+      ตรวจ("ส่งความเห็นครูจาก reviews ไปด้วย", /วาดสวย อธิบายครบ/.test(ส่ง));
+      ตรวจ("ไม่ส่งงานของนักเรียนคนอื่น", !/ชุดของเพื่อน/.test(ส่ง));
+      ตรวจ("ปุ่มกลับมากดได้และข้อความปุ่มคืนค่า", !w.document.getElementById("ปุ่มสรุปนักเรียน").disabled &&
+        /ให้ AI สรุปภาพรวม/.test(w.document.getElementById("ปุ่มสรุปนักเรียน").textContent));
+      await กดสรุป(w);
+      var ล็อก2 = Object.keys(ร้าน(w)).filter(function (k) { return k.indexOf("students/uReal/aiLog/") === 0; });
+      ตรวจ("กดครั้งที่ 2 ได้ ไม่พัง (aiLog เพิ่มเป็น 2)", ล็อก2.length === 2 && ซ่อน(w, "กล่องเตือนสรุป"), ล็อก2.length + " รายการ");
+
+      // 2) มีเอกสารจาก seed อยู่แล้ว → merge ไม่ทับฟิลด์เดิม
+      var w2 = await เปิด("scene=hasDoc&id=a1");
+      await กดสรุป(w2);
+      var s2 = ร้าน(w2)["students/uReal"];
+      ตรวจ("มีเอกสารเดิม: เพิ่ม aiSummary", s2 && /AI ปลอม/.test(s2.aiSummary));
+      ตรวจ("มีเอกสารเดิม: nickname/classroom ยังอยู่", s2 && s2.nickname === "น้องจริง" && s2.classroom === "ป.3/1");
+
+      // 3) มีสรุปเก็บไว้แล้ว → เปิดหน้าเห็นสรุปเดิม
+      var w3 = await เปิด("scene=saved&id=a1");
+      await รอ(100);
+      ตรวจ("เปิดหน้าแสดงสรุปที่เก็บไว้", !ซ่อน(w3, "กล่องข้อความสรุป") && /สรุปเก่า/.test(w3.document.getElementById("กล่องข้อความสรุป").textContent));
+
+      // 4) ยังไม่มีงานที่ตรวจแล้ว
+      var w4 = await เปิด("scene=noGraded&id=a1");
+      await กดสรุป(w4);
+      ตรวจ("ไม่มีงานตรวจแล้ว: เตือน ไม่เรียก AI", !ซ่อน(w4, "กล่องเตือนสรุป") && w4.__ข้อความที่ส่งให้AI === null,
+        w4.document.getElementById("กล่องเตือนสรุป").textContent);
+      ตรวจ("ไม่มีงานตรวจแล้ว: ไม่สร้างเอกสาร students", ร้าน(w4)["students/uReal"] === undefined);
+
+      // 5) AI ล่ม → เตือน ไม่เขียนอะไร ปุ่มกดใหม่ได้
+      var w5 = await เปิด("scene=noDoc&aiFail=1&id=a1");
+      await กดสรุป(w5);
+      ตรวจ("AI ล่ม: แสดงข้อความเตือน", !ซ่อน(w5, "กล่องเตือนสรุป") && /ไม่สำเร็จ/.test(w5.document.getElementById("กล่องเตือนสรุป").textContent));
+      ตรวจ("AI ล่ม: ไม่เขียน students", ร้าน(w5)["students/uReal"] === undefined);
+      ตรวจ("AI ล่ม: ปุ่มกดใหม่ได้", !w5.document.getElementById("ปุ่มสรุปนักเรียน").disabled);
+
+      // 6) นักเรียนเปิดงานตัวเอง → ไม่เห็นกล่องสรุป
+      var w6 = await เปิด("scene=saved&role=student&id=a1");
+      await รอ(100);
+      ตรวจ("นักเรียน: ไม่เห็นกล่องสรุป AI", ซ่อน(w6, "กล่องสรุปนักเรียน"));
+      ตรวจ("นักเรียน: สรุปเก่าไม่ถูกวาดลง DOM", !/สรุปเก่า/.test(w6.document.getElementById("ที่วาง").textContent));
+
+      // 7) รีวิวของงานนี้แสดงถูก (ยืนยัน mock subcollection หลังแก้)
+      ตรวจ("รีวิวของงาน a1 แสดง 1 รายการ", w.document.querySelectorAll("#รายการรีวิว .comment").length === 1,
+        w.document.querySelectorAll("#รายการรีวิว .comment").length + " รายการ");
+    })().catch(function (e) { ตรวจ("รันจบ", false, e.message); }).then(function () {
+      var ผ่าน = ผล.filter(function (r) { return r.ผ่าน; }).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ผล.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผล.length };
+    });
+  </script>
+</body>
+</html>

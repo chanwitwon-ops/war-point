@@ -231,10 +231,13 @@
       ]);
 
       // ③ เขียนกลับ — บันทึกสรุปลงเอกสารนักเรียน
-      await window.fsUpdateDoc(window.fsDoc(window.db, "students", งาน.studentId), {
+      // [แก้ 2026-11-11 W2/B1] นักเรียนที่สมัครจริงไม่มีเอกสาร students/{uid} (มีแต่ที่มาจาก seed)
+      // updateDoc จึงพังด้วย "No document to update" → ใช้ setDoc + merge ให้สร้างเอกสารถ้ายังไม่มี
+      // และไม่ทับฟิลด์อื่นถ้ามีอยู่แล้ว
+      await window.fsSetDoc(window.fsDoc(window.db, "students", งาน.studentId), {
         aiSummary: สรุป,
         aiSummaryUpdatedAt: เวลาตอนนี้()
-      });
+      }, { merge: true });
 
       // ④ จดบันทึก — เก็บทุกครั้งที่เรียก AI ไว้ใน aiLog ของนักเรียนคนนี้
       await window.fsSetDoc(

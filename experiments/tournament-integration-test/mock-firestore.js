@@ -30,8 +30,10 @@
 
   window.db = {};
 
-  window.fsCollection = function (db, path) {
-    return { __type: "collection", path: path };
+  // [แก้ 2026-11-11] รองรับ subcollection เช่น fsCollection(db, "quizAttempts", id, "reviews")
+  // เดิมเก็บแค่อาร์กิวเมนต์ที่ 2 ทำให้ reviews ไปอ่านจากคอลเลกชัน quizAttempts แทน
+  window.fsCollection = function (db) {
+    return { __type: "collection", path: Array.prototype.slice.call(arguments, 1).join("/") };
   };
 
   window.fsDoc = function (a, b) {

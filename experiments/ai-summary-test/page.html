@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>harness: AI สรุปภาพรวมนักเรียน (W2/B1)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness W2/B1 (เพิ่ม 2026-11-11) — ดึง markup ของ quiz-attempt-detail.html มาวาง แล้วโหลด js จริง
+       บน mock Firestore · เรียก AI ปลอม (ไม่ยิงเน็ต ไม่ใช้คีย์) · พารามิเตอร์:
+         scene=noDoc   นักเรียนสมัครจริง ไม่มีเอกสาร students/{uid} (กรณีที่พังเดิม)
+         scene=hasDoc  มีเอกสาร students/{uid} จาก seed อยู่แล้ว (ต้องไม่ทับฟิลด์เดิม)
+         scene=saved   มี aiSummary เก็บไว้แล้ว (เปิดหน้าต้องแสดงสรุปเดิม)
+         scene=noGraded ยังไม่มีงานที่ตรวจแล้ว
+         aiFail=1      AI ปลอมโยน error
+         role=teacher|student
+         id=...        รหัสงานที่หน้าจริงอ่านจาก URL -->
+  <div id="ที่วาง"></div>
+
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script src="../../js/util.js"></script>
+  <script>
+    (async function () {
+      var q = new URLSearchParams(location.search);
+      var scene = q.get("scene") || "noDoc";
+      var ครู = window.CURRENT_USER;
+      delete window.CURRENT_USER;
+
+      var D = window.db, set = window.fsSetDoc, doc = window.fsDoc;
+      await set(doc(D, "quizSets", "qsW"), { title: "ใบงานผีเสื้อ", format: "worksheet", fullScore: 20, maxAttempts: 1, instructions: "วาด", gradingMethod: "manual" });
+      await set(doc(D, "quizSets", "qsM"), { title: "บวกเลข", format: "mcq", fullScore: 10, maxAttempts: 3 });
+
+      var ตรวจแล้ว = scene !== "noGraded";
+      await set(doc(D, "quizAttempts", "a1"), {
+        studentId: "uReal", studentNickname: "น้องจริง", quizSetId: "qsW", quizSetTitle: "ใบงานผีเสื้อ",
+        attemptNo: 1, status: ตรวจแล้ว ? "graded" : "pending_review", scoreAwarded: ตรวจแล้ว ? 17 : null,
+        submittedText: "งานของหนู", submittedAt: "2026-11-10 09:00"
+      });
+      if (ตรวจแล้ว) {
+        await set(doc(D, "quizAttempts", "a1", "reviews", "r1"), { teacherName: "ครู", feedback: "วาดสวย อธิบายครบ", scoreGiven: 17, reviewedAt: "2026-11-10 10:00" });
+        await set(doc(D, "quizAttempts", "a2"), {
+          studentId: "uReal", studentNickname: "น้องจริง", quizSetId: "qsM", quizSetTitle: "บวกเลข",
+          attemptNo: 1, status: "graded", scoreAwarded: 8, submittedAt: "2026-11-10 08:00"
+        });
+      }
+      // งานของนักเรียนคนอื่น — ต้องไม่ถูกส่งให้ AI
+      await set(doc(D, "quizAttempts", "b1"), {
+        studentId: "uOther", studentNickname: "เพื่อน", quizSetId: "qsM", quizSetTitle: "ชุดของเพื่อน",
+        attemptNo: 1, status: "graded", scoreAwarded: 3
+      });
+
+      if (scene === "hasDoc") await set(doc(D, "students", "uReal"), { nickname: "น้องจริง", classroom: "ป.3/1" });
+      if (scene === "saved") await set(doc(D, "students", "uReal"), { aiSummary: "สรุปเก่าที่เคยเก็บไว้", aiSummaryUpdatedAt: "2026-11-09" });
+
+      var html = await (await fetch("../../quiz-attempt-detail.html")).text();
+      var หน้า = new DOMParser().parseFromString(html, "text/html");
+      document.getElementById("ที่วาง").innerHTML = หน้า.querySelector(".container").outerHTML;
+
+      window.CURRENT_USER = q.get("role") === "student"
+        ? { uid: "uReal", name: "น้องจริง", role: "student" }
+        : ครู;
+
+      var สคริปต์ = Array.prototype.map.call(หน้า.querySelectorAll("script[src]"), function (s) { return s.getAttribute("src"); })
+        .filter(function (s) { return !/firebase|nav\.js|auth-guard|util\.js|ai-config/.test(s); });
+      for (var i = 0; i < สคริปต์.length; i++) {
+        if (/quiz-attempt-detail\.js/.test(สคริปต์[i])) {
+          // AI ปลอม — ใส่ก่อนโหลดสคริปต์หน้า เพื่อทับของจริงใน js/ai.js
+          window.__ข้อความที่ส่งให้AI = null;
+          window.เรียกโมเดลAI = async function (messages) {
+            window.__ข้อความที่ส่งให้AI = messages[messages.length - 1].content;
+            if (q.get("aiFail") === "1") throw new Error("AI ปลอมล่ม");
+            return "สรุปจาก AI ปลอม: ทำงานสม่ำเสมอ";
+          };
+        }
+        await new Promise(function (ok, fail) {
+          var el = document.createElement("script");
+          el.src = "../../" + สคริปต์[i];
+          el.onload = ok;
+          el.onerror = function () { fail(new Error("โหลดไม่ได้: " + el.src)); };
+          document.body.appendChild(el);
+        });
+      }
+      window.dispatchEvent(new Event("auth-ready"));
+      setTimeout(function () { window.__พร้อม = true; }, 200);
+    })().catch(function (e) { window.__ข้อผิดพลาด = e.message; console.error(e); });
+  </script>
+</body>
+</html>
