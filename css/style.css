@@ -254,6 +254,8 @@ input[type="text"] {
 }
 
 .hint a { color: var(--deep-teal); }
+/* ลิงก์ในกล่องแจ้งเตือน (เช่น "ดูรายการชุดข้อสอบ →" หลังบันทึก — B2 2026-11-11) ใช้สีเดียวกับข้อความกล่อง ไม่ใช่น้ำเงินของเบราว์เซอร์ */
+.alert a { color: inherit; font-weight: 600; }
 
 .hidden { display: none !important; }
 

@@ -110,6 +110,26 @@
           ใหม่.instructions === "วาดภาพผีเสื้อ แล้วระบายสี ส่งในคาบหน้า" && ใหม่.gradingMethod === "manual" && !("questions" in ใหม่),
           JSON.stringify(ใหม่));
 
+        // ── B2 (2026-11-11): บันทึกแล้วล้างฟอร์ม กดซ้ำต้องไม่ได้ชุดซ้ำ ──
+        var ด = w.document;
+        ตรวจ("B2 หลังบันทึกใบงาน: ล้างชื่อ/คะแนนเต็ม/คำสั่งงาน ตัวนับกลับเป็น 0",
+          ด.getElementById("ชื่อชุด").value === "" && ด.getElementById("คะแนนเต็ม").value === "" &&
+          ด.getElementById("คำสั่งงาน").value === "" && /^0 \/ 2,000/.test(ด.getElementById("ตัวนับคำสั่งงาน").textContent));
+        ตรวจ("B2 หลังบันทึกใบงาน: ยังเป็นประเภทใบงาน จำนวนครั้งกลับเป็น 1",
+          ด.querySelector('input[name="ประเภท"]:checked').value === "worksheet" && ด.getElementById("จำนวนครั้ง").value === "1",
+          ด.getElementById("จำนวนครั้ง").value);
+        ตรวจ("B2 ข้อความสำเร็จบอกว่าล้างฟอร์มแล้ว + ลิงก์ไปรายการชุด",
+          มองเห็น(w, "กล่องสำเร็จ") && /ล้างฟอร์มแล้ว/.test(ด.getElementById("กล่องสำเร็จ").textContent) &&
+          !!ด.querySelector('#กล่องสำเร็จ a[href="quiz-sets.html"]') && /ใบงานทดสอบ/.test(ด.getElementById("กล่องสำเร็จ").textContent));
+        var จำนวนชุดก่อนกดซ้ำ = ชุดทั้งหมด(w).length;
+        ด.getElementById("ปุ่มบันทึกชุด").click();
+        await รอ(150);
+        ตรวจ("B2 กดบันทึกซ้ำทันที → ไม่ได้ชุดใหม่ เตือนให้พิมพ์ชื่อ",
+          ชุดทั้งหมด(w).length === จำนวนชุดก่อนกดซ้ำ && มองเห็น(w, "กล่องเตือนบันทึก") &&
+          /ชื่อชุด/.test(ด.getElementById("กล่องเตือนบันทึก").textContent),
+          ชุดทั้งหมด(w).length + " ชุด (ก่อนกด " + จำนวนชุดก่อนกดซ้ำ + ")");
+        ตรวจ("B2 กดซ้ำแล้วข้อความสำเร็จเก่าหายไป", !มองเห็น(w, "กล่องสำเร็จ"));
+
         // ครูแก้จำนวนครั้งเองแล้ว → สลับประเภทต้องไม่ทับค่า
         ใส่(w, "จำนวนครั้ง", "5");
         เลือกประเภท(w, "attachment");
@@ -119,6 +139,7 @@
         เลือกประเภท(w, "mcq");
         ตรวจ("กลับเป็นปรนัย: ซ่อนคำสั่งงาน เห็นปุ่มเพิ่มข้อ", !มองเห็น(w, "ส่วนคำสั่งงาน") && มองเห็น(w, "ปุ่มเพิ่มข้อเอง"));
         ใส่(w, "ชื่อชุด", "ปรนัยใหม่");
+        ใส่(w, "คะแนนเต็ม", "20"); // [แก้ 2026-11-11] หลัง B2 ฟอร์มล้างแล้ว ต้องกรอกคะแนนเต็มใหม่
         w.document.getElementById("ปุ่มเพิ่มข้อเอง").click();
         await รอ(30);
         var q = w.document.querySelector(".q-text");
@@ -132,6 +153,45 @@
         ตรวจ("ปรนัยยังบันทึกได้ — format mcq, gradingMethod auto, มีคำถาม 1 ข้อ ไม่มี instructions",
           mcq && mcq.format === "mcq" && mcq.gradingMethod === "auto" && mcq.questions.length === 1 && !("instructions" in mcq),
           JSON.stringify(mcq && { format: mcq.format, n: mcq.questions && mcq.questions.length }));
+        ตรวจ("B2 หลังบันทึกปรนัย: คำถามในฟอร์มหายหมด", w.document.querySelectorAll(".q-text").length === 0);
+
+        // B2: ประวัติ AI ของชุดก่อนต้องไม่ติดไปกับชุดถัดไป
+        w.เรียกโมเดลAI = async function () {
+          return JSON.stringify([{ questionText: "ผีเสื้อมีกี่ขา", choices: [
+            { choiceText: "6", isCorrect: true }, { choiceText: "4", isCorrect: false },
+            { choiceText: "8", isCorrect: false }, { choiceText: "2", isCorrect: false }] }]);
+        };
+        ใส่(w, "เนื้อหาบทเรียน", "แมลงมี 6 ขา");
+        ใส่(w, "จำนวนข้อ", "1");
+        w.document.getElementById("ปุ่มAIออกข้อสอบ").click();
+        await รอ(100);
+        ใส่(w, "ชื่อชุด", "ชุดจาก AI");
+        ใส่(w, "คะแนนเต็ม", "10");
+        w.document.getElementById("ปุ่มบันทึกชุด").click();
+        await รอ(150);
+        var ชุดAI = ชุดทั้งหมด(w).filter(function (c) { return c.title === "ชุดจาก AI"; })[0];
+        var ล็อกของ = function (id) {
+          return Object.keys(w.__MOCK_STORE__).filter(function (k) { return k.indexOf("quizSets/" + id + "/aiLog/") === 0; }).length;
+        };
+        ตรวจ("B2 ชุดจาก AI: creationSource ai + aiLog 1 รายการ", ชุดAI && ชุดAI.creationSource === "ai" && ล็อกของ(ชุดAI.id) === 1,
+          ชุดAI && (ชุดAI.creationSource + " / aiLog " + ล็อกของ(ชุดAI.id)));
+        ตรวจ("B2 หลังบันทึก: ช่องเนื้อหาบทเรียนว่าง จำนวนข้อกลับเป็น 5",
+          w.document.getElementById("เนื้อหาบทเรียน").value === "" && w.document.getElementById("จำนวนข้อ").value === "5");
+        ใส่(w, "ชื่อชุด", "ชุดถัดไปพิมพ์เอง");
+        ใส่(w, "คะแนนเต็ม", "10");
+        w.document.getElementById("ปุ่มเพิ่มข้อเอง").click();
+        await รอ(30);
+        var q2 = w.document.querySelector(".q-text");
+        q2.value = "3+3 เท่ากับ"; q2.dispatchEvent(new w.Event("input", { bubbles: true }));
+        w.document.querySelectorAll(".choice-text").forEach(function (c, i) {
+          c.value = String(i + 6); c.dispatchEvent(new w.Event("input", { bubbles: true }));
+        });
+        w.document.getElementById("ปุ่มบันทึกชุด").click();
+        await รอ(150);
+        var ชุดถัดไป = ชุดทั้งหมด(w).filter(function (c) { return c.title === "ชุดถัดไปพิมพ์เอง"; })[0];
+        ตรวจ("B2 ชุดถัดไปที่ครูพิมพ์เอง: creationSource teacher ไม่มี aiLog ติดมา",
+          ชุดถัดไป && ชุดถัดไป.creationSource === "teacher" && ล็อกของ(ชุดถัดไป.id) === 0,
+          ชุดถัดไป && (ชุดถัดไป.creationSource + " / aiLog " + ล็อกของ(ชุดถัดไป.id)));
 
         // ── หน้าสร้าง: เบราว์เซอร์ไม่รองรับไมค์ ──
         w = await เปิด("p=new&mic=0");
