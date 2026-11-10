@@ -140,7 +140,7 @@
 
     document.getElementById("การ์ดชุดข้อสอบ").innerHTML =
       '<div class="btn-row">' +
-      '<a class="btn-ghost" href="quiz-set-new.html">สร้างชุดข้อสอบด้วย AI →</a>' +
+      '<a class="btn-ghost" href="quiz-set-new.html">สร้างชุดข้อสอบ →</a>' +
       '<a class="btn-ghost" href="quiz-sets.html">รายการชุดข้อสอบทั้งหมด →</a>' +
       "</div>";
 

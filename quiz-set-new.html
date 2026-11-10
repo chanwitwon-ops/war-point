@@ -12,14 +12,15 @@
   <script src="js/auth-guard.js" defer></script>
   <script src="js/ai-config.js" defer></script>
   <script src="js/ai.js" defer></script>
+  <script src="js/speech-input.js" defer></script>
   <script src="js/quiz-set-new.js" defer></script>
 </head>
 <body>
   <div id="nav"></div>
 
   <div class="container">
-    <h1>🤖 สร้างชุดข้อสอบจากบทเรียน</h1>
-    <p class="subtitle">พิมพ์เนื้อหาบทเรียน แล้วให้ AI ช่วยออกข้อสอบปรนัยให้ — ตรวจสอบและแก้ไขได้ก่อนบันทึกเสมอ</p>
+    <h1>สร้างชุดข้อสอบ</h1>
+    <p class="subtitle">ปรนัย: ให้ AI ช่วยออกข้อสอบจากบทเรียน ระบบตรวจให้คะแนนอัตโนมัติ · ใบงาน/แนบไฟล์: นักเรียนส่งงาน แล้วครูตรวจให้คะแนนเอง — ตรวจสอบและแก้ไขได้ก่อนบันทึกเสมอ</p>
 
     <div id="กล่องไม่มีสิทธิ์" class="card hidden">
       <p>หน้านี้สำหรับครูเท่านั้น</p>
@@ -27,15 +28,34 @@
 
     <div id="กล่องหลัก" class="hidden">
       <div class="card">
+        <label id="ป้ายประเภท">ประเภทชุดข้อสอบ (เปลี่ยนภายหลังไม่ได้)</label>
+        <div role="radiogroup" aria-labelledby="ป้ายประเภท">
+          <label class="choice-row"><input type="radio" name="ประเภท" value="mcq" checked><span>ปรนัย — ตรวจให้คะแนนอัตโนมัติ</span></label>
+          <label class="choice-row"><input type="radio" name="ประเภท" value="worksheet"><span>ใบงาน — นักเรียนพิมพ์คำตอบ ครูตรวจเอง</span></label>
+          <label class="choice-row"><input type="radio" name="ประเภท" value="attachment"><span>แนบไฟล์ — นักเรียนส่งลิงก์ชิ้นงาน ครูตรวจเอง</span></label>
+        </div>
+
         <label for="ชื่อชุด">ชื่อชุดข้อสอบ</label>
         <input type="text" id="ชื่อชุด" placeholder="เช่น แบบทดสอบหน่วยที่ 3 — เศษส่วน">
 
         <label for="คะแนนเต็ม">คะแนนเต็ม</label>
         <input type="text" id="คะแนนเต็ม" placeholder="เช่น 50">
 
-        <label for="จำนวนครั้ง">นักเรียนทำได้กี่ครั้ง (1–10 · นับคะแนนรอบดีที่สุด)</label>
+        <label for="จำนวนครั้ง" id="ป้ายจำนวนครั้ง">นักเรียนทำได้กี่ครั้ง (1–10 · นับคะแนนรอบดีที่สุด)</label>
         <input type="text" id="จำนวนครั้ง" inputmode="numeric" value="3">
 
+        <div id="ส่วนคำสั่งงาน" class="hidden">
+          <label for="คำสั่งงาน">คำสั่งงาน — บอกนักเรียนว่าต้องทำอะไร (จำเป็น · ไม่เกิน 2,000 ตัวอักษร)</label>
+          <textarea id="คำสั่งงาน" rows="6" maxlength="2000" placeholder="เช่น วาดวงจรชีวิตของผีเสื้อลงสมุด แล้วพิมพ์อธิบายแต่ละขั้นสั้นๆ"></textarea>
+          <div class="btn-row">
+            <button type="button" class="btn-ghost hidden" id="ปุ่มไมค์คำสั่งงาน" aria-pressed="false">🎤 พูดแทนพิมพ์</button>
+            <span class="hint" id="ตัวนับคำสั่งงาน">0 / 2,000 ตัวอักษร</span>
+          </div>
+          <div id="กล่องสถานะไมค์" class="alert alert-ai hidden" role="status"></div>
+        </div>
+      </div>
+
+      <div class="card" id="ส่วนปรนัยAI">
         <label for="เนื้อหาบทเรียน">เนื้อหาบทเรียน (พิมพ์หรือวางข้อความ)</label>
         <textarea id="เนื้อหาบทเรียน" rows="8" placeholder="วางเนื้อหาที่สอนในคาบนี้ลงตรงนี้"></textarea>
 

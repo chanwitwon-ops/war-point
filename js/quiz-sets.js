@@ -21,7 +21,7 @@
   }
 
   function เริ่มหลังรู้บทบาท() {
-    // ลิงก์ "+ สร้างชุดข้อสอบใหม่ (AI)" ซ่อนไว้ตั้งแต่ต้นใน HTML แล้ว (class="hidden")
+    // ลิงก์ "+ สร้างชุดข้อสอบใหม่" ซ่อนไว้ตั้งแต่ต้นใน HTML แล้ว (class="hidden")
     // โชว์เฉพาะ teacher เท่านั้น — student กดเข้าไปก็โดนกันที่หน้า quiz-set-new.html
     // อยู่แล้ว (ตรวจสิทธิ์() ใน quiz-set-new.js) แต่ไม่ควรมีลิงก์ให้กดตั้งแต่แรก
     if (window.CURRENT_USER.role === "teacher") {
@@ -105,6 +105,12 @@
   }
 
   function วาดคำถาม(q) {
+    // ชุดตรวจมือ (ใบงาน/แนบไฟล์) ไม่มีคำถาม — แสดงคำสั่งงานแทน (เพิ่ม 2026-11-10)
+    if (เป็นชุดตรวจมือ(q.format)) {
+      return q.instructions
+        ? '<p><strong>คำสั่งงาน:</strong></p><p class="instructions-text">' + esc(q.instructions) + "</p>"
+        : "<p>ชุดนี้ยังไม่มีคำสั่งงาน</p>";
+    }
     if (!Array.isArray(q.questions) || q.questions.length === 0) {
       return "<p>ชุดนี้ยังไม่มีคำถาม</p>";
     }

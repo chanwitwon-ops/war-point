@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ทดสอบ: ครูสร้างชุดตรวจมือ</title>
+  <link rel="stylesheet" href="../../css/style.css">
+  <style>
+    .ok { color: var(--state-success-on-learn, inherit); }
+    .ng { color: var(--state-danger-on-learn, inherit); font-weight: 700; }
+    iframe { width: 100%; height: 420px; border: 1px solid var(--border-learn); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ทดสอบ: ครูสร้าง/แก้ชุดตรวจมือ (สเปก 01 หัวข้อ ฉ.)</h1>
+    <p id="สรุป">กำลังทดสอบ…</p>
+    <ol id="ผล"></ol>
+    <iframe id="จอ" title="หน้าที่กำลังทดสอบ"></iframe>
+  </div>
+
+  <script>
+    var ผลทั้งหมด = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผลทั้งหมด.push({ ชื่อ: ชื่อ, ผ่าน: !!ผ่าน });
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "ng";
+      li.textContent = (ผ่าน ? "ผ่าน · " : "ไม่ผ่าน · ") + ชื่อ + (รายละเอียด ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function รอ(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
+
+    async function เปิด(query) {
+      var จอ = document.getElementById("จอ");
+      จอ.src = "page.html?" + query;
+      await new Promise(function (ok) { จอ.onload = ok; });
+      var w = จอ.contentWindow;
+      for (var i = 0; i < 100 && !w.__พร้อม && !w.__ข้อผิดพลาด; i++) await รอ(50);
+      if (w.__ข้อผิดพลาด) throw new Error(w.__ข้อผิดพลาด);
+      return w;
+    }
+    function มองเห็น(w, id) {
+      var el = w.document.getElementById(id);
+      return !!el && el.offsetParent !== null;
+    }
+    function ใส่(w, id, ค่า) {
+      var el = w.document.getElementById(id);
+      el.value = ค่า;
+      el.dispatchEvent(new w.Event("input", { bubbles: true }));
+    }
+    function เลือกประเภท(w, ค่า) {
+      var r = w.document.querySelector('input[name="ประเภท"][value="' + ค่า + '"]');
+      r.checked = true;
+      r.dispatchEvent(new w.Event("change", { bubbles: true }));
+    }
+    function ชุดทั้งหมด(w) {
+      return Object.keys(w.__MOCK_STORE__).filter(function (k) { return /^quizSets\/[^/]+$/.test(k); })
+        .map(function (k) { return Object.assign({ id: k.split("/")[1] }, w.__MOCK_STORE__[k]); });
+    }
+
+    (async function () {
+      try {
+        // ── หน้าสร้าง (ครู, ไมค์ปลอม) ──
+        var w = await เปิด("p=new&mic=1");
+        ตรวจ("ค่าเริ่มเป็นปรนัย: ซ่อนคำสั่งงาน เห็นส่วน AI จำนวนครั้ง 3",
+          !มองเห็น(w, "ส่วนคำสั่งงาน") && มองเห็น(w, "ส่วนปรนัยAI") && w.document.getElementById("จำนวนครั้ง").value === "3");
+        เลือกประเภท(w, "worksheet");
+        ตรวจ("เลือกใบงาน: เห็นคำสั่งงาน ซ่อนส่วน AI/คำถาม/ปุ่มเพิ่มข้อ จำนวนครั้งเป็น 1",
+          มองเห็น(w, "ส่วนคำสั่งงาน") && !มองเห็น(w, "ส่วนปรนัยAI") && !มองเห็น(w, "ปุ่มเพิ่มข้อเอง") &&
+          w.document.getElementById("จำนวนครั้ง").value === "1",
+          "จำนวนครั้ง=" + w.document.getElementById("จำนวนครั้ง").value);
+        ตรวจ("ป้ายจำนวนครั้งบอกว่าเป็นงานที่ครูต้องตรวจ", /ครูต้องตรวจ/.test(w.document.getElementById("ป้ายจำนวนครั้ง").textContent));
+        ตรวจ("ปุ่มไมค์แสดงเมื่อเบราว์เซอร์รองรับ", มองเห็น(w, "ปุ่มไมค์คำสั่งงาน"));
+        ตรวจ("ช่องคำสั่งงานจำกัด 2,000 ตัวอักษร", w.document.getElementById("คำสั่งงาน").maxLength === 2000);
+
+        ใส่(w, "ชื่อชุด", "ใบงานทดสอบ");
+        ใส่(w, "คะแนนเต็ม", "20");
+        w.document.getElementById("ปุ่มบันทึกชุด").click();
+        await รอ(100);
+        ตรวจ("คำสั่งงานว่าง → บันทึกไม่ได้ และไม่มีชุดใหม่",
+          /คำสั่งงาน/.test(w.document.getElementById("กล่องเตือนบันทึก").textContent) && ชุดทั้งหมด(w).length === 3);
+
+        ใส่(w, "คำสั่งงาน", "x".repeat(2001));
+        w.document.getElementById("ปุ่มบันทึกชุด").click();
+        await รอ(100);
+        ตรวจ("คำสั่งงานยาว 2,001 ตัว → บันทึกไม่ได้",
+          /ยาวเกิน/.test(w.document.getElementById("กล่องเตือนบันทึก").textContent) && ชุดทั้งหมด(w).length === 3);
+
+        ใส่(w, "คำสั่งงาน", "");
+        w.document.getElementById("ปุ่มไมค์คำสั่งงาน").click();
+        await รอ(80);
+        var ช่อง = w.document.getElementById("คำสั่งงาน");
+        ตรวจ("กดไมค์ → ข้อความจากเสียงขึ้นในช่อง (ภาษา th-TH)",
+          ช่อง.value === "วาดภาพผีเสื้อ แล้วระบายสี" && w.__ภาษาที่ขอ === "th-TH", "ได้: " + ช่อง.value + " · lang=" + w.__ภาษาที่ขอ);
+        ตรวจ("ปุ่มเปลี่ยนเป็น \"หยุดฟัง\" ระหว่างฟัง", /หยุดฟัง/.test(w.document.getElementById("ปุ่มไมค์คำสั่งงาน").textContent));
+        ตรวจ("ตัวนับตัวอักษรอัปเดตตามข้อความจากเสียง",
+          w.document.getElementById("ตัวนับคำสั่งงาน").textContent.indexOf(ช่อง.value.length + " / 2,000") === 0 && ช่อง.value.length > 0,
+          w.document.getElementById("ตัวนับคำสั่งงาน").textContent);
+        w.document.getElementById("ปุ่มไมค์คำสั่งงาน").click();
+        await รอ(30);
+        ตรวจ("กดหยุด → ปุ่มกลับเป็น \"พูดแทนพิมพ์\" และข้อความแก้ต่อได้",
+          /พูดแทนพิมพ์/.test(w.document.getElementById("ปุ่มไมค์คำสั่งงาน").textContent) && !ช่อง.disabled && !ช่อง.readOnly);
+        ใส่(w, "คำสั่งงาน", ช่อง.value + " ส่งในคาบหน้า");
+
+        w.document.getElementById("ปุ่มบันทึกชุด").click();
+        await รอ(150);
+        var ใหม่ = ชุดทั้งหมด(w).filter(function (c) { return c.title === "ใบงานทดสอบ"; })[0];
+        ตรวจ("บันทึกใบงานได้ — format worksheet, maxAttempts 1, instructions, gradingMethod manual, ไม่มี questions",
+          ใหม่ && ใหม่.format === "worksheet" && ใหม่.maxAttempts === 1 && ใหม่.fullScore === 20 &&
+          ใหม่.instructions === "วาดภาพผีเสื้อ แล้วระบายสี ส่งในคาบหน้า" && ใหม่.gradingMethod === "manual" && !("questions" in ใหม่),
+          JSON.stringify(ใหม่));
+
+        // ครูแก้จำนวนครั้งเองแล้ว → สลับประเภทต้องไม่ทับค่า
+        ใส่(w, "จำนวนครั้ง", "5");
+        เลือกประเภท(w, "attachment");
+        ตรวจ("ครูพิมพ์จำนวนครั้งเองแล้ว สลับประเภทไม่ทับค่า", w.document.getElementById("จำนวนครั้ง").value === "5");
+
+        // ปรนัยยังบันทึกได้เหมือนเดิม (ไม่ถดถอย)
+        เลือกประเภท(w, "mcq");
+        ตรวจ("กลับเป็นปรนัย: ซ่อนคำสั่งงาน เห็นปุ่มเพิ่มข้อ", !มองเห็น(w, "ส่วนคำสั่งงาน") && มองเห็น(w, "ปุ่มเพิ่มข้อเอง"));
+        ใส่(w, "ชื่อชุด", "ปรนัยใหม่");
+        w.document.getElementById("ปุ่มเพิ่มข้อเอง").click();
+        await รอ(30);
+        var q = w.document.querySelector(".q-text");
+        q.value = "2+2 เท่ากับ"; q.dispatchEvent(new w.Event("input", { bubbles: true }));
+        w.document.querySelectorAll(".choice-text").forEach(function (c, i) {
+          c.value = String(i + 3); c.dispatchEvent(new w.Event("input", { bubbles: true }));
+        });
+        w.document.getElementById("ปุ่มบันทึกชุด").click();
+        await รอ(150);
+        var mcq = ชุดทั้งหมด(w).filter(function (c) { return c.title === "ปรนัยใหม่"; })[0];
+        ตรวจ("ปรนัยยังบันทึกได้ — format mcq, gradingMethod auto, มีคำถาม 1 ข้อ ไม่มี instructions",
+          mcq && mcq.format === "mcq" && mcq.gradingMethod === "auto" && mcq.questions.length === 1 && !("instructions" in mcq),
+          JSON.stringify(mcq && { format: mcq.format, n: mcq.questions && mcq.questions.length }));
+
+        // ── หน้าสร้าง: เบราว์เซอร์ไม่รองรับไมค์ ──
+        w = await เปิด("p=new&mic=0");
+        เลือกประเภท(w, "worksheet");
+        ตรวจ("เบราว์เซอร์ไม่รองรับ → ซ่อนปุ่มไมค์ แต่ช่องคำสั่งงานยังพิมพ์ได้",
+          !มองเห็น(w, "ปุ่มไมค์คำสั่งงาน") && มองเห็น(w, "คำสั่งงาน"));
+
+        // ── หน้าสร้าง: นักเรียนเข้าไม่ได้ ──
+        w = await เปิด("p=new&role=student");
+        ตรวจ("นักเรียนเปิดหน้าสร้าง → เห็น 'สำหรับครูเท่านั้น' ไม่เห็นฟอร์ม",
+          มองเห็น(w, "กล่องไม่มีสิทธิ์") && !มองเห็น(w, "กล่องหลัก"));
+
+        // ── หน้าแก้ไข: ใบงานที่ยังไม่มีใครส่ง ──
+        w = await เปิด("p=edit&id=qsW&mic=1");
+        ตรวจ("แก้ใบงาน: โหลดคำสั่งงานเดิม แสดงประเภทแบบเปลี่ยนไม่ได้ ซ่อนส่วนคำถาม",
+          w.document.getElementById("คำสั่งงาน").value === "วาดวงจรชีวิตผีเสื้อ\nแล้วอธิบายแต่ละขั้น" &&
+          /เปลี่ยนประเภทไม่ได้/.test(w.document.getElementById("ข้อความประเภท").textContent) &&
+          !มองเห็น(w, "ปุ่มเพิ่มข้อเอง") && !w.document.querySelector('input[name="ประเภท"]'));
+        ตรวจ("ยังไม่มีคนส่ง → แก้คะแนนเต็มได้", !w.document.getElementById("คะแนนเต็ม").disabled);
+        ใส่(w, "คะแนนเต็ม", "25");
+        ใส่(w, "คำสั่งงาน", "คำสั่งใหม่");
+        ใส่(w, "จำนวนครั้ง", "2");
+        w.document.getElementById("ปุ่มบันทึก").click();
+        await รอ(150);
+        var แก้ = w.__MOCK_STORE__["quizSets/qsW"];
+        ตรวจ("บันทึกการแก้ไขใบงาน: คะแนนเต็ม 25 / คำสั่งใหม่ / 2 ครั้ง / ประเภทยังเป็น worksheet",
+          แก้.fullScore === 25 && แก้.instructions === "คำสั่งใหม่" && แก้.maxAttempts === 2 && แก้.format === "worksheet", JSON.stringify(แก้));
+        ใส่(w, "คำสั่งงาน", "  ");
+        w.document.getElementById("ปุ่มบันทึก").click();
+        await รอ(100);
+        ตรวจ("แก้คำสั่งงานจนว่าง → บันทึกไม่ได้", w.__MOCK_STORE__["quizSets/qsW"].instructions === "คำสั่งใหม่" &&
+          /คำสั่งงาน/.test(w.document.getElementById("กล่องเตือนบันทึก").textContent));
+
+        // ── หน้าแก้ไข: ใบงานที่มีคนส่งแล้ว ──
+        w = await เปิด("p=edit&id=qsW&submitted=1");
+        ตรวจ("มีคนส่งแล้ว → ช่องคะแนนเต็มล็อก พร้อมบอกเหตุผล",
+          w.document.getElementById("คะแนนเต็ม").disabled && มองเห็น(w, "หมายเหตุคะแนนเต็ม") &&
+          /ล็อก/.test(w.document.getElementById("หมายเหตุคะแนนเต็ม").textContent));
+        ใส่(w, "คำสั่งงาน", "แก้ได้แม้มีคนส่ง");
+        w.document.getElementById("ปุ่มบันทึก").click();
+        await รอ(150);
+        var ล็อก = w.__MOCK_STORE__["quizSets/qsW"];
+        ตรวจ("มีคนส่งแล้ว → บันทึกคำสั่งงานได้ แต่คะแนนเต็มคงเดิม 20", ล็อก.instructions === "แก้ได้แม้มีคนส่ง" && ล็อก.fullScore === 20, JSON.stringify(ล็อก));
+        ใส่(w, "คะแนนเต็ม", "99"); // จำลองการแก้ผ่าน DevTools แม้ช่องถูกล็อก
+        w.document.getElementById("ปุ่มบันทึก").click();
+        await รอ(150);
+        ตรวจ("ฝืนแก้คะแนนเต็มขณะล็อก → ไม่บันทึก คืนค่าเดิม", w.__MOCK_STORE__["quizSets/qsW"].fullScore === 20 &&
+          w.document.getElementById("คะแนนเต็ม").value === "20");
+
+        // ── หน้าแก้ไข: ปรนัยเดิมยังแก้ได้ ──
+        w = await เปิด("p=edit&id=qsMcq");
+        ตรวจ("แก้ปรนัย: เห็นคำถามเดิม ซ่อนคำสั่งงาน", w.document.querySelectorAll(".q-text").length === 1 && !มองเห็น(w, "ส่วนคำสั่งงาน"));
+        ใส่(w, "ชื่อชุด", "ปรนัยแก้แล้ว");
+        w.document.getElementById("ปุ่มบันทึก").click();
+        await รอ(150);
+        ตรวจ("บันทึกปรนัยได้เหมือนเดิม", w.__MOCK_STORE__["quizSets/qsMcq"].title === "ปรนัยแก้แล้ว" &&
+          w.__MOCK_STORE__["quizSets/qsMcq"].questions.length === 1);
+
+        // ── หน้าส่งงาน (นักเรียน) ──
+        w = await เปิด("p=attempt&role=student&quizSetId=qsW");
+        var คำสั่ง = w.document.querySelector(".instructions-text");
+        ตรวจ("นักเรียนเห็นคำสั่งงานก่อนส่ง (ขึ้นบรรทัดตามที่ครูพิมพ์)",
+          คำสั่ง && คำสั่ง.textContent === "วาดวงจรชีวิตผีเสื้อ\nแล้วอธิบายแต่ละขั้น" && w.getComputedStyle(คำสั่ง).whiteSpace === "pre-wrap" &&
+          !!w.document.getElementById("ช่องคำตอบ"));
+
+        // ── หน้ารายการชุด (ครู) ──
+        w = await เปิด("p=sets");
+        var แถว = w.document.querySelector('tr.clickable-row[data-id="qsA"]');
+        ตรวจ("รายการชุด: ป้ายประเภท 'แนบไฟล์'", แถว && /แนบไฟล์/.test(แถว.textContent));
+        แถว.click();
+        ตรวจ("กดแถวชุดตรวจมือ → เห็นคำสั่งงานแทนคำถาม", /ส่งลิงก์ไฟล์งาน/.test(w.document.getElementById("แถวกาง-qsA").textContent) &&
+          มองเห็น(w, "แถวกาง-qsA"));
+        ตรวจ("ลิงก์บนหน้ารายการไม่มี '(AI)' แล้ว", /\+ สร้างชุดข้อสอบใหม่$/.test(w.document.querySelector("#ลิงก์สร้างชุดใหม่ a").textContent.trim()));
+      } catch (e) {
+        ตรวจ("ทดสอบพังกลางทาง", false, e.message);
+      }
+
+      var ผ่าน = ผลทั้งหมด.filter(function (r) { return r.ผ่าน; }).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + " / " + ผลทั้งหมด.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผลทั้งหมด.length, ไม่ผ่าน: ผลทั้งหมด.filter(function (r) { return !r.ผ่าน; }).map(function (r) { return r.ชื่อ; }) };
+    })();
+  </script>
+</body>
+</html>

@@ -302,6 +302,9 @@ textarea {
 
 .question-card { margin-top: 16px; }
 
+/* คำสั่งงานของชุดตรวจมือ — คงการขึ้นบรรทัดที่ครูพิมพ์/พูดไว้ (เพิ่ม 2026-11-10) */
+.instructions-text { white-space: pre-wrap; }
+
 .question-card .btn-row { margin-top: 12px; }
 
 .field-row {

@@ -10,7 +10,7 @@
     { href: "home.html", ชื่อ: "หน้าหลัก" },
     { href: "quiz-attempts.html", ชื่อ: "รายการส่งงาน" },
     { href: "quiz-sets.html", ชื่อ: "รายการชุดข้อสอบ" },
-    { href: "quiz-set-new.html", ชื่อ: "สร้างชุดข้อสอบ (AI)", teacherOnly: true },
+    { href: "quiz-set-new.html", ชื่อ: "สร้างชุดข้อสอบ", teacherOnly: true },
     { href: "tournament.html", ชื่อ: "ทัวนาเมนต์" },
     { href: "pet.html", ชื่อ: "สัตว์เลี้ยงของฉัน", studentOnly: true }
   ];
@@ -31,7 +31,7 @@
   var ที่วาง = document.getElementById("nav");
   if (ที่วาง) ที่วาง.innerHTML = html;
 
-  // เมนูเฉพาะ teacher (เช่น "สร้างชุดข้อสอบ (AI)") ต้องรอรู้บทบาทก่อนถึงจะซ่อนได้
+  // เมนูเฉพาะ teacher (เช่น "สร้างชุดข้อสอบ") ต้องรอรู้บทบาทก่อนถึงจะซ่อนได้
   // (ตอน render ครั้งแรกยังไม่รู้ role — ใช้ auth-ready ที่ auth-guard.js ยิงมาทีหลัง)
   // ต้อง render เมนูทันทีแบบไม่รอ เพราะ auth-guard.js เองก็ต้องการ #navUser
   // อยู่แล้วตอนมันทำงาน (ถ้ารอ auth-ready ก่อน จะทำให้ #navUser ยังไม่มีตอนนั้น)

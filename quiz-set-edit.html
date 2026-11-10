@@ -10,6 +10,7 @@
   <script type="module" src="js/firebase.js"></script>
   <script src="js/nav.js" defer></script>
   <script src="js/auth-guard.js" defer></script>
+  <script src="js/speech-input.js" defer></script>
   <script src="js/quiz-set-edit.js" defer></script>
 </head>
 <body>
@@ -34,14 +35,27 @@
 
     <div id="กล่องหลัก" class="hidden">
       <div class="card">
+        <p id="ข้อความประเภท"></p>
+
         <label for="ชื่อชุด">ชื่อชุดข้อสอบ</label>
         <input type="text" id="ชื่อชุด" placeholder="เช่น แบบทดสอบหน่วยที่ 3 — เศษส่วน">
 
         <label for="คะแนนเต็ม">คะแนนเต็ม</label>
         <input type="text" id="คะแนนเต็ม" placeholder="เช่น 50">
+        <p class="hint hidden" id="หมายเหตุคะแนนเต็ม"></p>
 
-        <label for="จำนวนครั้ง">นักเรียนทำได้กี่ครั้ง (1–10 · นับคะแนนรอบดีที่สุด)</label>
+        <label for="จำนวนครั้ง" id="ป้ายจำนวนครั้ง">นักเรียนทำได้กี่ครั้ง (1–10 · นับคะแนนรอบดีที่สุด)</label>
         <input type="text" id="จำนวนครั้ง" inputmode="numeric" value="3">
+
+        <div id="ส่วนคำสั่งงาน" class="hidden">
+          <label for="คำสั่งงาน">คำสั่งงาน — บอกนักเรียนว่าต้องทำอะไร (จำเป็น · ไม่เกิน 2,000 ตัวอักษร)</label>
+          <textarea id="คำสั่งงาน" rows="6" maxlength="2000"></textarea>
+          <div class="btn-row">
+            <button type="button" class="btn-ghost hidden" id="ปุ่มไมค์คำสั่งงาน" aria-pressed="false">🎤 พูดแทนพิมพ์</button>
+            <span class="hint" id="ตัวนับคำสั่งงาน">0 / 2,000 ตัวอักษร</span>
+          </div>
+          <div id="กล่องสถานะไมค์" class="alert alert-ai hidden" role="status"></div>
+        </div>
       </div>
 
       <div id="กล่องคำถาม"></div>

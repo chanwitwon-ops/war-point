@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>harness: หน้าจริง + mock Firestore (ชุดตรวจมือ)</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness สเปก 01 หัวข้อ ฉ. (เพิ่ม 2026-11-10) — ดึง markup ของหน้าจริงมาวาง แล้วโหลด js ของหน้าจริง
+       ทำงานบน mock Firestore · พารามิเตอร์:
+         p=new|edit|attempt|sets   หน้าที่จะเปิด
+         role=teacher|student      (ค่าเริ่ม teacher)
+         mic=1 → ใส่ตัวแปลงเสียงปลอม · mic=0 → ทำเหมือนเบราว์เซอร์ไม่รองรับ · ไม่ใส่ = ของจริงในเบราว์เซอร์
+         submitted=1 → มีงานที่นักเรียนส่งชุด qsW แล้ว 1 ชิ้น
+         id / quizSetId → ส่งต่อให้หน้าจริงอ่านจาก URL -->
+  <div id="ที่วาง"></div>
+
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script src="../../js/util.js"></script>
+  <script>
+    (async function () {
+      var q = new URLSearchParams(location.search);
+      var p = q.get("p");
+      var ครู = window.CURRENT_USER;
+      delete window.CURRENT_USER;
+
+      if (q.get("mic") === "1") {
+        function ตัวแปลงปลอม() { this.lang = ""; }
+        ตัวแปลงปลอม.prototype.start = function () {
+          var self = this;
+          window.__ตัวฟังปลอม = self;
+          window.__ภาษาที่ขอ = self.lang;
+          setTimeout(function () {
+            self.onresult({ results: [[{ transcript: "วาดภาพผีเสื้อ" }], [{ transcript: "แล้วระบายสี" }]] });
+          }, 10);
+        };
+        ตัวแปลงปลอม.prototype.stop = function () { if (this.onend) this.onend(); };
+        window.SpeechRecognition = ตัวแปลงปลอม;
+        window.webkitSpeechRecognition = ตัวแปลงปลอม;
+      } else if (q.get("mic") === "0") {
+        window.SpeechRecognition = undefined;
+        window.webkitSpeechRecognition = undefined;
+      }
+
+      var D = window.db, set = window.fsSetDoc, doc = window.fsDoc;
+      await set(doc(D, "quizSets", "qsMcq"), {
+        title: "ปรนัยเดิม", format: "mcq", fullScore: 10, maxAttempts: 3, creationSource: "teacher",
+        questions: [{ questionText: "1+1 เท่ากับ", choices: [{ choiceText: "2", isCorrect: true }, { choiceText: "3", isCorrect: false }] }]
+      });
+      await set(doc(D, "quizSets", "qsW"), {
+        title: "ใบงานผีเสื้อ", format: "worksheet", fullScore: 20, maxAttempts: 1,
+        instructions: "วาดวงจรชีวิตผีเสื้อ\nแล้วอธิบายแต่ละขั้น", creationSource: "teacher", gradingMethod: "manual"
+      });
+      await set(doc(D, "quizSets", "qsA"), {
+        title: "งานแนบลิงก์", format: "attachment", fullScore: 15, maxAttempts: 2,
+        instructions: "ส่งลิงก์ไฟล์งาน", creationSource: "teacher", gradingMethod: "manual"
+      });
+      if (q.get("submitted") === "1") {
+        await set(doc(D, "quizAttempts", "qsW_s1_1"), {
+          studentId: "s1", studentNickname: "นักเรียนหนึ่ง", quizSetId: "qsW", quizSetTitle: "ใบงานผีเสื้อ",
+          attemptNo: 1, status: "pending_review", scoreAwarded: null, submittedText: "x"
+        });
+      }
+
+      var ไฟล์ = { "new": "quiz-set-new.html", edit: "quiz-set-edit.html", attempt: "quiz-attempt-new.html", sets: "quiz-sets.html" }[p];
+      var html = await (await fetch("../../" + ไฟล์)).text();
+      var หน้า = new DOMParser().parseFromString(html, "text/html");
+      document.getElementById("ที่วาง").innerHTML = หน้า.querySelector(".container").outerHTML;
+
+      window.CURRENT_USER = q.get("role") === "student"
+        ? { uid: "s1", name: "นักเรียนหนึ่ง", role: "student" }
+        : ครู;
+
+      var สคริปต์ = Array.prototype.map.call(หน้า.querySelectorAll("script[src]"), function (s) { return s.getAttribute("src"); })
+        .filter(function (s) { return !/firebase|nav\.js|auth-guard|util\.js|ai-config/.test(s); });
+      for (var i = 0; i < สคริปต์.length; i++) {
+        await new Promise(function (ok, fail) {
+          var el = document.createElement("script");
+          el.src = "../../" + สคริปต์[i];
+          el.onload = ok;
+          el.onerror = function () { fail(new Error("โหลดไม่ได้: " + el.src)); };
+          document.body.appendChild(el);
+        });
+      }
+      window.dispatchEvent(new Event("auth-ready"));
+      setTimeout(function () { window.__พร้อม = true; }, 150);
+    })().catch(function (e) { window.__ข้อผิดพลาด = e.message; console.error(e); });
+  </script>
+</body>
+</html>
