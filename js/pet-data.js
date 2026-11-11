@@ -83,7 +83,8 @@
       var totalPointsEarned = แต้มจากคะแนนดีที่สุดต่อชุด(รายการงาน);
 
       var ข้อมูลสัตว์เลี้ยง = await อ่านเอกสารดิบ(uid);
-      var pointsAvailable = totalPointsEarned - (ข้อมูลสัตว์เลี้ยง.pet ? ข้อมูลสัตว์เลี้ยง.pet.pointsSpent : 0);
+      // [แก้ 2026-11-11 B5] ใช้ได้เฉพาะส่วนจำนวนเต็ม — เศษจากคะแนนทศนิยมรอสะสมให้ครบ 1 ก่อน (js/util.js)
+      var pointsAvailable = แต้มที่ใช้ได้จากแต้มสะสม(totalPointsEarned, ข้อมูลสัตว์เลี้ยง.pet ? ข้อมูลสัตว์เลี้ยง.pet.pointsSpent : 0);
 
       return {
         totalPointsEarned: totalPointsEarned,

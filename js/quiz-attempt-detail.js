@@ -97,7 +97,7 @@
       var คะแนนเต็มป้าย = ชุดข้อสอบ ? esc(ชุดข้อสอบ.fullScore) : "?";
       html +=
         "<label>ให้คะแนน (เต็ม " + คะแนนเต็มป้าย + ")</label>" +
-        '<input type="text" id="ช่องคะแนน" placeholder="เช่น 15">' +
+        '<input type="text" id="ช่องคะแนน" inputmode="decimal" placeholder="เช่น 15 หรือ 7.5">' +
         "<label>ความเห็น/feedback ถึงนักเรียน</label>" +
         '<textarea id="ช่องความเห็น" rows="3" placeholder="พิมพ์ความเห็นถึงนักเรียน"></textarea>' +
         '<div id="กล่องเตือนให้คะแนน" class="alert alert-error hidden"></div>' +
@@ -119,14 +119,18 @@
     var เตือน = document.getElementById("กล่องเตือนให้คะแนน");
     var ปุ่ม = document.getElementById("ปุ่มให้คะแนน");
 
-    var คะแนน = parseFloat(ช่องคะแนน.value);
+    // [แก้ 2026-11-11 B5] ทศนิยมได้ 1 ตำแหน่ง (ครึ่งคะแนน 7.5 ได้ — ผู้ใช้ตัดสิน)
+    // เดิม parseFloat รับ "10abc" เป็น 10 และ "1e1" เป็น 10 — ตอนนี้ต้องเป็นตัวเลขล้วนเท่านั้น
+    var ข้อความคะแนน = ช่องคะแนน.value.trim();
+    var คะแนน = /^\d+(\.\d)?$/.test(ข้อความคะแนน) ? Number(ข้อความคะแนน) : NaN;
     var ความเห็น = ช่องความเห็น.value.trim();
     var คะแนนเต็ม = ชุดข้อสอบ ? ชุดข้อสอบ.fullScore : null;
 
     เตือน.classList.add("hidden");
 
     if (isNaN(คะแนน) || คะแนน < 0 || (คะแนนเต็ม != null && คะแนน > คะแนนเต็ม)) {
-      เตือน.textContent = "⚠️ คะแนนต้องอยู่ระหว่าง 0 ถึง " + (คะแนนเต็ม != null ? คะแนนเต็ม : "คะแนนเต็ม");
+      เตือน.textContent = "⚠️ คะแนนต้องเป็นตัวเลขระหว่าง 0 ถึง " + (คะแนนเต็ม != null ? คะแนนเต็ม : "คะแนนเต็ม") +
+        " (ทศนิยมได้ 1 ตำแหน่ง เช่น 7.5)";
       เตือน.classList.remove("hidden");
       return;
     }

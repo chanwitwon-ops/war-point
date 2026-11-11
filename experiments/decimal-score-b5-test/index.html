@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบ B5 — คะแนนทศนิยม แต้มใช้ได้เฉพาะจำนวนเต็ม</title>
+  <style>body{font-family:sans-serif;padding:16px} .ok{color:#0F7A3D} .ng{color:#B3231C} iframe{width:420px;height:120px}</style>
+</head>
+<body>
+  <h1>ทดสอบ B5 (2026-11-11)</h1>
+  <p>ผู้ใช้ตัดสิน: ครูให้คะแนนทศนิยมได้ (เช่น 7.5) แต้มสะสมเก็บเศษไว้ แต่ซื้อของได้เฉพาะส่วนจำนวนเต็ม</p>
+  <p id="สรุป">กำลังรัน…</p>
+  <ol id="ผล"></ol>
+  <div id="เฟรม"></div>
+
+  <script src="../../js/util.js"></script>
+  <script src="../../js/pet-config.js"></script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script src="../../js/pet-data.js"></script>
+  <script>
+    var ผล = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผล.push(!!ผ่าน);
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "ng";
+      li.textContent = (ผ่าน ? "✓ " : "✗ ") + ชื่อ + (รายละเอียด !== undefined ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function รอ(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function เปิด(qs) {
+      var f = document.createElement("iframe");
+      f.src = "page.html?" + qs;
+      document.getElementById("เฟรม").appendChild(f);
+      for (var i = 0; i < 100; i++) {
+        await รอ(50);
+        var w = f.contentWindow;
+        if (w.__ข้อผิดพลาด) throw new Error(w.__ข้อผิดพลาด);
+        if (w.__พร้อม) return w;
+      }
+      throw new Error("หน้าไม่พร้อม: " + qs);
+    }
+    // ครูกรอกคะแนนในหน้าตรวจงานจริง → คืน { บันทึก: scoreAwarded ที่ลง mock, เตือน: ข้อความเตือน }
+    async function ให้คะแนน(w, ค่า) {
+      var d = w.document;
+      d.getElementById("ช่องคะแนน").value = ค่า;
+      d.getElementById("ช่องความเห็น").value = "ทำได้ดี";
+      d.getElementById("ปุ่มให้คะแนน").click();
+      await รอ(150);
+      var เตือน = d.getElementById("กล่องเตือนให้คะแนน");
+      return {
+        บันทึก: w.__MOCK_STORE__["quizAttempts/a1"].scoreAwarded,
+        เตือน: เตือน && !เตือน.classList.contains("hidden") ? เตือน.textContent : ""
+      };
+    }
+    async function ตั้งงาน(uid, คะแนนทั้งหมด) {
+      for (var i = 0; i < คะแนนทั้งหมด.length; i++) {
+        await window.fsSetDoc(window.fsDoc(window.db, "quizAttempts", uid + "_" + i),
+          { studentId: uid, quizSetId: "ชุด" + i, status: "graded", scoreAwarded: คะแนนทั้งหมด[i] });
+      }
+    }
+
+    (async function () {
+      // ── 1) ตัวช่วยใน util.js ──
+      ตรวจ("ผลรวม 0.7 + 0.1 + 0.2 = 1 (ไม่เพี้ยนเป็น 0.999…)",
+        แต้มจากคะแนนดีที่สุดต่อชุด([{ quizSetId: "a", scoreAwarded: 0.7 }, { quizSetId: "b", scoreAwarded: 0.1 }, { quizSetId: "c", scoreAwarded: 0.2 }]) === 1);
+      ตรวจ("แต้มใช้ได้จากสะสม 7.5 = 7", แต้มที่ใช้ได้จากแต้มสะสม(7.5, 0) === 7);
+      ตรวจ("แต้มใช้ได้จากสะสม 7.5 จ่ายไป 5 = 2", แต้มที่ใช้ได้จากแต้มสะสม(7.5, 5) === 2);
+      ตรวจ("เศษของ 7.5 = 0.5 · เศษของ 8 = 0 · เศษของ 2.3 = 0.3",
+        เศษแต้มสะสม(7.5) === 0.5 && เศษแต้มสะสม(8) === 0 && เศษแต้มสะสม(2.3) === 0.3);
+
+      // ── 2) pet-data: แต้มใช้ได้ตัดเศษ, เศษสองชุดรวมกันครบ 1 ใช้ได้ ──
+      var ไข่ = window.PET_STAGE_COST[0];
+      await ตั้งงาน("u1", [ไข่ - 0.5]);
+      var ส = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง("u1");
+      ตรวจ("สะสม " + (ไข่ - 0.5) + " → แสดงสะสมตามจริง, ใช้ได้ " + (ไข่ - 1),
+        ส.totalPointsEarned === ไข่ - 0.5 && ส.pointsAvailable === ไข่ - 1, ส.totalPointsEarned + " / " + ส.pointsAvailable);
+      var ซื้อไม่ได้ = false;
+      try { await window.ซื้อไข่("u1", "pixie"); } catch (e) { ซื้อไม่ได้ = true; }
+      ตรวจ("ไข่ราคา " + ไข่ + " แต่มี " + (ไข่ - 0.5) + " → ซื้อไม่ได้", ซื้อไม่ได้);
+      await window.fsSetDoc(window.fsDoc(window.db, "quizAttempts", "u1_x"), { studentId: "u1", quizSetId: "ชุดเพิ่ม", status: "graded", scoreAwarded: 0.5 });
+      ส = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง("u1");
+      ตรวจ("ได้อีก 0.5 → สะสม " + ไข่ + " ใช้ได้ " + ไข่, ส.totalPointsEarned === ไข่ && ส.pointsAvailable === ไข่);
+      var ซื้อได้ = true;
+      try { await window.ซื้อไข่("u1", "pixie"); } catch (e) { ซื้อได้ = false; }
+      ส = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง("u1");
+      ตรวจ("เศษครบ 1 แล้ว → ซื้อไข่ได้ แต้มใช้ได้เหลือ 0", ซื้อได้ && ส.pet && ส.pointsAvailable === 0, ส.pointsAvailable);
+      await ตั้งงาน("u2", [3.5, 2.5]);
+      ส = await window.โหลดข้อมูลแต้มและสัตว์เลี้ยง("u2");
+      ตรวจ("ชุดปรนัย/จำนวนเต็มไม่กระทบ: 3.5 + 2.5 = 6 ใช้ได้ 6", ส.totalPointsEarned === 6 && ส.pointsAvailable === 6);
+
+      // ── 3) หน้าตรวจงานจริง: รับทศนิยม 1 ตำแหน่ง (ผู้ใช้กำหนด) ปฏิเสธค่าแปลก ──
+      var w = await เปิด("page=quiz-attempt-detail.html&id=a1");
+      var ช่อง = w.document.getElementById("ช่องคะแนน");
+      ตรวจ("ช่องคะแนนมีตัวอย่าง 7.5 และเปิดคีย์บอร์ดตัวเลขบนมือถือ",
+        ช่อง && /7\.5/.test(ช่อง.placeholder) && ช่อง.getAttribute("inputmode") === "decimal");
+      var ค่าที่ต้องปฏิเสธ = ["10abc", "1e1", "7.55", "12.25", "7.", "-1", "20.5", "7,5", "", " . "];
+      for (var i = 0; i < ค่าที่ต้องปฏิเสธ.length; i++) {
+        var r = await ให้คะแนน(w, ค่าที่ต้องปฏิเสธ[i]);
+        ตรวจ("ปฏิเสธ \"" + ค่าที่ต้องปฏิเสธ[i] + "\" (ไม่บันทึก + ขึ้นเตือน)", r.บันทึก === null && /ทศนิยมได้ 1 ตำแหน่ง/.test(r.เตือน), r.เตือน || ("บันทึก " + r.บันทึก));
+      }
+      var ผ่านทั้งหมด = [["7.5", 7.5], ["0", 0], ["20", 20], ["12.3", 12.3], [" 9.5 ", 9.5]];
+      for (var j = 0; j < ผ่านทั้งหมด.length; j++) {
+        w = await เปิด("page=quiz-attempt-detail.html&id=a1&n=" + j);
+        var r2 = await ให้คะแนน(w, ผ่านทั้งหมด[j][0]);
+        ตรวจ("รับ \"" + ผ่านทั้งหมด[j][0] + "\" → บันทึก " + ผ่านทั้งหมด[j][1], r2.บันทึก === ผ่านทั้งหมด[j][1] && !r2.เตือน, String(r2.บันทึก));
+      }
+
+      // ── 4) หน้าสัตว์เลี้ยง/หน้าหลักจริง: บอกเศษที่ยังใช้ไม่ได้ ──
+      w = await เปิด("page=pet.html&scores=7.5");
+      var ข้อความ = w.document.getElementById("ที่วางสัตว์เลี้ยง").textContent;
+      ตรวจ("หน้าสัตว์เลี้ยง: ใช้ได้ 7 / สะสมรวม 7.5", /แต้มที่ใช้ได้\s*7\s*\/\s*สะสมรวม 7\.5/.test(ข้อความ), ข้อความ.slice(0, 80));
+      ตรวจ("หน้าสัตว์เลี้ยง: บอกเศษ 0.5 รออีก 0.5", /มีเศษ 0\.5 แต้มรอสะสม/.test(ข้อความ) && /อีก 0\.5 แต้ม/.test(ข้อความ));
+      w = await เปิด("page=pet.html&scores=7,3");
+      ตรวจ("หน้าสัตว์เลี้ยง: แต้มจำนวนเต็มไม่มีข้อความเศษ", !/มีเศษ/.test(w.document.getElementById("ที่วางสัตว์เลี้ยง").textContent));
+      w = await เปิด("page=home.html&scores=7.5");
+      ข้อความ = w.document.getElementById("เนื้อหาหน้าหลัก").textContent;
+      ตรวจ("หน้าหลัก: ใช้ได้ 7 แต้ม + เศษ 0.5 รอสะสม", /ใช้ได้\s*7\s*แต้ม/.test(ข้อความ) && /เศษ 0\.5 แต้มรอสะสม/.test(ข้อความ), ข้อความ.slice(0, 120));
+    })().catch(function (e) { ตรวจ("รันจบ", false, e.message); }).then(function () {
+      var ผ่าน = ผล.filter(Boolean).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ผล.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผล.length };
+    });
+  </script>
+</body>
+</html>

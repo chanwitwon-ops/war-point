@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>harness B5: คะแนนทศนิยม / แต้มใช้ได้เฉพาะจำนวนเต็ม</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness B5 (เพิ่ม 2026-11-11) — ดึง markup ของหน้าจริงมาวาง แล้วโหลด js จริงบน mock Firestore
+       พารามิเตอร์:
+         page=quiz-attempt-detail.html|pet.html|home.html
+         scores=7.5,0.5   คะแนนงานที่ตรวจแล้วของนักเรียน uS (คนละชุด) — ใช้กับ pet/home
+       หน้า quiz-attempt-detail: งาน a1 (ใบงาน เต็ม 20) สถานะรอตรวจ เปิดด้วยบัญชีครู -->
+  <div id="ที่วาง"></div>
+
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script src="../../js/util.js"></script>
+  <script>
+    (async function () {
+      var q = new URLSearchParams(location.search);
+      var หน้าจริง = q.get("page") || "quiz-attempt-detail.html";
+      var ครู = window.CURRENT_USER;
+      delete window.CURRENT_USER;
+      var D = window.db, set = window.fsSetDoc, doc = window.fsDoc;
+
+      await set(doc(D, "users", "uS"), { name: "น้องทดสอบ", role: "student" });
+      await set(doc(D, "quizSets", "qsW"), { title: "ใบงาน", format: "worksheet", fullScore: 20, maxAttempts: 1, instructions: "เขียน" });
+      await set(doc(D, "quizAttempts", "a1"), {
+        studentId: "uS", studentNickname: "น้องทดสอบ", quizSetId: "qsW", quizSetTitle: "ใบงาน",
+        attemptNo: 1, status: "pending_review", scoreAwarded: null, submittedText: "งาน", submittedAt: "2026-11-11 09:00"
+      });
+      (q.get("scores") || "").split(",").filter(Boolean).forEach(function (s, i) {
+        set(doc(D, "quizAttempts", "g" + i), {
+          studentId: "uS", quizSetId: "ชุด" + i, quizSetTitle: "ชุด " + i, attemptNo: 1,
+          status: "graded", scoreAwarded: Number(s), submittedAt: "2026-11-10 09:00"
+        });
+      });
+
+      var html = await (await fetch("../../" + หน้าจริง)).text();
+      var หน้า = new DOMParser().parseFromString(html, "text/html");
+      document.getElementById("ที่วาง").innerHTML = หน้า.querySelector(".container").outerHTML;
+
+      window.CURRENT_USER = หน้าจริง === "quiz-attempt-detail.html" ? ครู : { uid: "uS", name: "น้องทดสอบ", role: "student" };
+
+      var สคริปต์ = Array.prototype.map.call(หน้า.querySelectorAll("script[src]"), function (s) { return s.getAttribute("src"); })
+        .filter(function (s) { return !/firebase|nav\.js|auth-guard|util\.js|ai-config/.test(s); });
+      for (var i = 0; i < สคริปต์.length; i++) {
+        await new Promise(function (ok, fail) {
+          var el = document.createElement("script");
+          el.src = "../../" + สคริปต์[i];
+          el.onload = ok;
+          el.onerror = function () { fail(new Error("โหลดไม่ได้: " + el.src)); };
+          document.body.appendChild(el);
+        });
+      }
+      window.dispatchEvent(new Event("auth-ready"));
+      setTimeout(function () { window.__พร้อม = true; }, 300);
+    })().catch(function (e) { window.__ข้อผิดพลาด = e.message; console.error(e); });
+  </script>
+</body>
+</html>
