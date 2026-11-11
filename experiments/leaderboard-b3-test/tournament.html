@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>harness B3: ครูเปิดหน้าไหนก็อัปเดตกระดาน</title>
+</head>
+<body>
+  <!-- harness B3 (เพิ่ม 2026-11-11) — รัน js/auth-guard.js ของจริง บน mock Firestore + Auth ปลอม
+       ไฟล์ tournament.html ในโฟลเดอร์นี้คือสำเนาไฟล์นี้ (ใช้ทดสอบว่าหน้าทัวนาเมนต์ถูกข้าม)
+       พารามิเตอร์:
+         role=teacher|student
+         board=none|fresh|stale   สถานะเอกสาร leaderboard/scores ก่อนเปิดหน้า
+         countFail=1              นับพัง (ต้องไม่ขวางหน้า) -->
+  <div class="container"><div id="navUser"></div><p id="เนื้อหา">หน้าทดสอบ</p></div>
+
+  <script src="../../js/util.js"></script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script>
+    (async function () {
+      var q = new URLSearchParams(location.search);
+      var D = window.db, set = window.fsSetDoc, doc = window.fsDoc;
+      delete window.CURRENT_USER; // ให้ auth-guard ตั้งเอง
+
+      await set(doc(D, "users", "t1"), { name: "ครูทดสอบ", role: "teacher" });
+      await set(doc(D, "users", "s1"), { name: "หนึ่ง", role: "student" });
+      await set(doc(D, "users", "s2"), { name: "สอง", role: "student" });
+      await set(doc(D, "users", "s3"), { name: "สาม", role: "student" });
+      await set(doc(D, "users", "s4"), { name: "สี่", role: "student" });
+      await set(doc(D, "quizAttempts", "qa_s1_1"), { studentId: "s1", quizSetId: "qa", status: "graded", scoreAwarded: 40 });
+      await set(doc(D, "quizAttempts", "qa_s2_1"), { studentId: "s2", quizSetId: "qa", status: "graded", scoreAwarded: 30 });
+      await set(doc(D, "quizAttempts", "qa_s3_1"), { studentId: "s3", quizSetId: "qa", status: "pending_review", scoreAwarded: null });
+      // งานปรนัยที่ s4 เพิ่งทำเสร็จ (ตรวจอัตโนมัติ) — ทำให้ผลรวมเปลี่ยน: s4 = 45 ขึ้นอันดับ 1
+      await set(doc(D, "quizAttempts", "qa_s4_1"), { studentId: "s4", quizSetId: "qa", status: "graded", scoreAwarded: 45 });
+
+      var board = q.get("board") || "none";
+      if (board === "fresh") {
+        await set(doc(D, "leaderboard", "scores"), { entries: [{ nickname: "ของเดิม" }], classSize: 4, gradedCount: 3, computedAt: "เก่า" });
+      } else if (board === "stale") {
+        await set(doc(D, "leaderboard", "scores"), { entries: [{ nickname: "ของเดิม" }], classSize: 4, gradedCount: 2, computedAt: "เก่า" });
+      }
+      if (q.get("countFail") === "1") {
+        window.fsGetCount = function () { return Promise.reject(new Error("นับพังจำลอง")); };
+      }
+      window.__จำนวนครั้งนับ = 0;
+      window.__จำนวนครั้งอ่านรายการ = 0;
+
+      // Auth ปลอม
+      var uid = q.get("role") === "student" ? "s1" : "t1";
+      window.auth = {};
+      window.fbOnAuthStateChanged = function (a, cb) { setTimeout(function () { cb({ uid: uid, email: uid + "@test" }); }, 0); };
+      window.fbSignOut = function () { return Promise.resolve(); };
+      window.addEventListener("auth-ready", function () { window.__authReady = true; });
+
+      var el = document.createElement("script");
+      el.src = "../../js/auth-guard.js";
+      document.body.appendChild(el);
+
+      // รอให้งานเบื้องหลังจบ
+      setTimeout(function () { window.__พร้อม = true; }, 400);
+    })().catch(function (e) { window.__ข้อผิดพลาด = e.message; console.error(e); });
+  </script>
+</body>
+</html>

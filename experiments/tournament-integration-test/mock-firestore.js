@@ -76,6 +76,7 @@
     return { __type: "query", collectionPath: collectionRef.path, clauses: clauses };
   };
   window.fsGetDocs = function (collectionRefOrQuery) {
+    window.__จำนวนครั้งอ่านรายการ = (window.__จำนวนครั้งอ่านรายการ || 0) + 1;
     var collectionPath = collectionRefOrQuery.collectionPath || collectionRefOrQuery.path;
     var wheres = (collectionRefOrQuery.clauses || []).filter(function (c) { return c.__type === "where"; });
     var orderBys = (collectionRefOrQuery.clauses || []).filter(function (c) { return c.__type === "orderBy"; });
@@ -98,6 +99,17 @@
       forEach: function (fn) { ผลลัพธ์.forEach(function (d) { fn({ id: d.id, data: function () { return clone(d.data); } }); }); },
       docs: ผลลัพธ์.map(function (d) { return { id: d.id, data: function () { return clone(d.data); } }; }),
       size: ผลลัพธ์.length
+    });
+  };
+
+  // [เพิ่ม 2026-11-11 B3] จำลอง getCountFromServer — นับจากผล fsGetDocs · นับจำนวนครั้งที่ถูกเรียกไว้ให้เทสต์ตรวจ
+  window.__จำนวนครั้งนับ = 0;
+  window.__จำนวนครั้งอ่านรายการ = 0;
+  window.fsGetCount = function (q) {
+    window.__จำนวนครั้งนับ++;
+    window.__จำนวนครั้งอ่านรายการ--; // ไม่นับเป็นการอ่านรายการ (fsGetDocs ข้างล่างจะ +1 คืน)
+    return window.fsGetDocs(q).then(function (s) {
+      return { data: function () { return { count: s.size }; } };
     });
   };
 

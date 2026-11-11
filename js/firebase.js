@@ -18,7 +18,8 @@ import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import {
   getAuth,
@@ -44,6 +45,8 @@ window.fsUpdateDoc = updateDoc;
 window.fsDeleteDoc = deleteDoc;
 window.fsLimit = limit;
 window.fsStartAfter = startAfter;
+// นับจำนวนเอกสารโดยไม่ดึงเนื้อหา (คิด 1 read ต่อ 1,000 รายการ) — ใช้เช็คว่ากระดานคะแนนต้องคำนวณใหม่ไหม (B3)
+window.fsGetCount = getCountFromServer;
 
 window.auth = getAuth(app);
 window.fbOnAuthStateChanged = onAuthStateChanged;

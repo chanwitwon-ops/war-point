@@ -12,7 +12,10 @@
 //     เก็บ **เฉพาะคนที่ขึ้นโชว์** — คนครึ่งล่างไม่มีชื่อ/คะแนนในเอกสารนี้เลย จึงไม่หลุดผ่าน DevTools
 //     แต่ละคนเก็บ attemptIds ไว้ ตรวจย้อนได้ว่าคะแนนมาจากผลสอบชุดไหน
 //   - ผลสรุปอัปเดตเมื่อครูเปิดหน้าแรกทัวนาเมนต์ และหลังครูตรวจงาน (quiz-attempt-detail.js)
-//     แบบทดสอบปรนัยที่ตรวจอัตโนมัติตอนนักเรียนส่ง จะขึ้นกระดานเมื่อครูเปิดหน้าใดหน้าหนึ่งข้างต้นครั้งถัดไป
+//     [แก้ 2026-11-11 B3] + ครูเปิดหน้าอื่นใดก็ตาม js/auth-guard.js เรียก อัปเดตกระดานถ้ามีงานใหม่() เบื้องหลัง
+//     แบบทดสอบปรนัยที่ตรวจอัตโนมัติตอนนักเรียนส่ง จึงขึ้นกระดานเมื่อครูเปิดหน้าใดก็ได้ครั้งถัดไป
+//     (นักเรียนเขียนกระดานเองไม่ได้ — กันปลอมอันดับ · คำนวณอัตโนมัติฝั่งเซิร์ฟเวอร์ต้องใช้ Blaze)
+//     ข้อจำกัด: ถ้าไม่มีงาน/นักเรียนเพิ่ม แต่นักเรียนเปลี่ยนชื่อ ชื่อบนกระดานจะเปลี่ยนเมื่อครูเปิดหน้าทัวนาเมนต์
 //
 // ส่วนที่ 2 — แชมป์รายสัปดาห์: อ่านจาก tournaments (อ่านได้ทุกคนที่ล็อกอินอยู่แล้ว) ไม่เก็บซ้ำ
 //
@@ -20,6 +23,7 @@
 // window.เลือกครึ่งบน([{uid, nickname, totalScore, attemptIds}]) → [{rank, uid, nickname, totalScore, attemptIds}]
 //      ฟังก์ชันบริสุทธิ์ (ไม่แตะ Firestore) — แยกออกมาให้ทดสอบกฎขอบได้ตรงๆ
 // window.คำนวณและบันทึกกระดานคะแนน() → Promise<{entries, classSize, computedAt}>   (ครูเท่านั้น)
+// window.อัปเดตกระดานถ้ามีงานใหม่() → Promise<{updated}>   (ครูเท่านั้น · นักเรียนได้ {updated:false})
 // window.โหลดกระดานคะแนน() → Promise<{entries, classSize, computedAt} | null>
 // window.โหลดทำเนียบแชมป์() → Promise<[{weekStart, weekLabel, champions:[{tournamentId, createdAt,
 //      championName, speciesKey, stage, decidedByTeacher}]}]> เรียงสัปดาห์ใหม่สุดก่อน
@@ -97,6 +101,7 @@
       var ผลสรุป = {
         entries: window.เลือกครึ่งบน(ทั้งห้อง),
         classSize: ทั้งห้อง.length,
+        gradedCount: งาน.size, // [เพิ่ม 2026-11-11 B3] ไว้เทียบว่ามีงานตรวจแล้วเพิ่มหรือยัง
         computedAt: เวลาตอนนี้(),
         computedByTeacherName: window.CURRENT_USER.name || null
       };
@@ -106,6 +111,32 @@
       console.error(err);
       throw new Error("อัปเดตกระดานคะแนนไม่สำเร็จ: " + err.message);
     }
+  };
+
+  // ── [เพิ่ม 2026-11-11 B3] ครูเปิดหน้าไหนก็อัปเดตกระดาน (เรียกจาก js/auth-guard.js เบื้องหลัง) ──
+  // นับก่อนว่าจำนวนนักเรียน / งานที่ตรวจแล้ว เปลี่ยนจากตอนคำนวณครั้งล่าสุดไหม (นับ = ~1 read ต่อคำถาม)
+  // เปลี่ยน → คำนวณใหม่ทั้งหมด · ไม่เปลี่ยน → ไม่ทำอะไร — กันโควตา Spark หมดเพราะครูกดเปลี่ยนหน้าบ่อย
+  // งานตรวจแล้วเปลี่ยนสถานะกลับไม่ได้ และการให้คะแนนมือคำนวณใหม่เองอยู่แล้ว จึงดูแค่จำนวนก็พอ
+  // คืน { updated: true|false }
+  window.อัปเดตกระดานถ้ามีงานใหม่ = async function () {
+    if (!window.CURRENT_USER || window.CURRENT_USER.role !== "teacher") return { updated: false };
+    if (typeof window.fsGetCount !== "function") {
+      await window.คำนวณและบันทึกกระดานคะแนน();
+      return { updated: true };
+    }
+    var ผลนับ = await Promise.all([
+      window.fsGetCount(window.fsQuery(window.fsCollection(window.db, "users"), window.fsWhere("role", "==", "student"))),
+      window.fsGetCount(window.fsQuery(window.fsCollection(window.db, "quizAttempts"), window.fsWhere("status", "==", "graded"))),
+      window.fsGetDoc(เอกสารกระดาน())
+    ]);
+    var จำนวนนักเรียน = ผลนับ[0].data().count;
+    var จำนวนงานตรวจแล้ว = ผลนับ[1].data().count;
+    var เดิม = ผลนับ[2].exists() ? ผลนับ[2].data() : null;
+    if (เดิม && เดิม.classSize === จำนวนนักเรียน && เดิม.gradedCount === จำนวนงานตรวจแล้ว) {
+      return { updated: false };
+    }
+    await window.คำนวณและบันทึกกระดานคะแนน();
+    return { updated: true };
   };
 
   window.โหลดกระดานคะแนน = async function () {

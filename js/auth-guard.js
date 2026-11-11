@@ -5,6 +5,9 @@
 // ─────────────────────────────────────────────────────────────
 
 (function () {
+  // ที่อยู่ของไฟล์นี้เอง — ใช้หา js/leaderboard-data.js ข้างๆ (document.currentScript มีค่าเฉพาะตอนสคริปต์กำลังรัน)
+  var ที่อยู่ไฟล์นี้ = document.currentScript ? document.currentScript.src : location.href;
+
   ถ้าพร้อมแล้วให้ตรวจ();
 
   // js/firebase.js เป็น module โหลดแยกจากไฟล์นี้ ต้องรอให้มันเชื่อมต่อเสร็จก่อน
@@ -47,7 +50,30 @@
 
       แสดงผู้ใช้ในนำทาง();
       window.dispatchEvent(new Event("auth-ready"));
+      อัปเดตกระดานเบื้องหลังถ้าเป็นครู();
     });
+  }
+
+  // ── [เพิ่ม 2026-11-11 B3] ครูเปิดหน้าไหนก็อัปเดตกระดานเกียรติยศ ──
+  // นักเรียนทำปรนัยแล้วระบบตรวจทันที แต่นักเรียนเขียนกระดานเองไม่ได้ (กันปลอมอันดับ) — ให้ครูเป็นคนอัปเดต
+  // ทุกครั้งที่เปิดหน้าใดก็ได้ เบื้องหลัง ไม่ขวางหน้า · หน้าทัวนาเมนต์คำนวณเองอยู่แล้วจึงข้าม
+  // หน้าที่ไม่ได้โหลด leaderboard-data.js ไว้ จะโหลดให้เฉพาะตอนเป็นครู (นักเรียนไม่ต้องโหลดไฟล์เพิ่ม)
+  function อัปเดตกระดานเบื้องหลังถ้าเป็นครู() {
+    if (!window.CURRENT_USER || window.CURRENT_USER.role !== "teacher") return;
+    if ((location.pathname.split("/").pop() || "") === "tournament.html") return;
+
+    var ทำงาน = function () {
+      window.อัปเดตกระดานถ้ามีงานใหม่().catch(function (err) { console.warn("อัปเดตกระดานเบื้องหลังไม่สำเร็จ:", err); });
+    };
+    if (typeof window.อัปเดตกระดานถ้ามีงานใหม่ === "function") {
+      ทำงาน();
+      return;
+    }
+    var สคริปต์ = document.createElement("script");
+    สคริปต์.src = new URL("leaderboard-data.js", ที่อยู่ไฟล์นี้).href;
+    สคริปต์.onload = ทำงาน;
+    สคริปต์.onerror = function () { console.warn("โหลด leaderboard-data.js ไม่ได้ — ข้ามการอัปเดตกระดาน"); };
+    document.head.appendChild(สคริปต์);
   }
 
   function แสดงเชื่อมต่อไม่สำเร็จ() {

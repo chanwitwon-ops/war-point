@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบ B3 — ครูเปิดหน้าไหนก็อัปเดตกระดาน</title>
+  <style>body{font-family:sans-serif;padding:16px} .ok{color:#0F7A3D} .ng{color:#B3231C} iframe{width:400px;height:80px}</style>
+</head>
+<body>
+  <h1>ทดสอบ B3 (2026-11-11)</h1>
+  <p id="สรุป">กำลังรัน…</p>
+  <ol id="ผล"></ol>
+  <div id="เฟรม"></div>
+  <script>
+    var ผล = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผล.push(!!ผ่าน);
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "ng";
+      li.textContent = (ผ่าน ? "✓ " : "✗ ") + ชื่อ + (รายละเอียด !== undefined ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function รอ(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function เปิด(ไฟล์, qs) {
+      var f = document.createElement("iframe");
+      f.src = ไฟล์ + "?" + qs;
+      document.getElementById("เฟรม").appendChild(f);
+      for (var i = 0; i < 100; i++) {
+        await รอ(50);
+        var w = f.contentWindow;
+        if (w.__ข้อผิดพลาด) throw new Error(w.__ข้อผิดพลาด);
+        if (w.__พร้อม) return w;
+      }
+      throw new Error("หน้าไม่พร้อม: " + ไฟล์ + "?" + qs);
+    }
+    function กระดาน(w) { return w.__MOCK_STORE__["leaderboard/scores"]; }
+    function มีสคริปต์กระดาน(w) {
+      return Array.prototype.some.call(w.document.querySelectorAll("script"), function (s) { return /leaderboard-data\.js/.test(s.src); });
+    }
+
+    (async function () {
+      // 1) ครูเปิดหน้าทั่วไป ยังไม่เคยมีกระดาน → สร้างใหม่
+      var w = await เปิด("page.html", "role=teacher&board=none");
+      var g = กระดาน(w);
+      ตรวจ("ครู + ยังไม่มีกระดาน: auth-ready ยิงตามปกติ", w.__authReady === true);
+      ตรวจ("ครู + ยังไม่มีกระดาน: โหลด leaderboard-data.js ให้เอง", มีสคริปต์กระดาน(w));
+      ตรวจ("ครู + ยังไม่มีกระดาน: สร้าง leaderboard/scores", !!g);
+      ตรวจ("บันทึก classSize 4 / gradedCount 3", g && g.classSize === 4 && g.gradedCount === 3, g && (g.classSize + " / " + g.gradedCount));
+      ตรวจ("อันดับ 1 คือคนที่เพิ่งทำปรนัย (สี่ 45)", g && g.entries[0] && g.entries[0].nickname === "สี่" && g.entries[0].totalScore === 45,
+        g && JSON.stringify(g.entries.map(function (e) { return e.nickname + ":" + e.totalScore; })));
+      ตรวจ("ครึ่งบนของ 4 คน = 2 คน (สี่, หนึ่ง)", g && g.entries.length === 2 && g.entries[1].nickname === "หนึ่ง");
+
+      // 2) กระดานยังตรงกับข้อมูล → ไม่คำนวณใหม่ (ประหยัดโควตา)
+      w = await เปิด("page.html", "role=teacher&board=fresh");
+      g = กระดาน(w);
+      ตรวจ("กระดานล่าสุดแล้ว: ไม่เขียนทับ (computedAt ยังเป็น 'เก่า')", g && g.computedAt === "เก่า");
+      ตรวจ("กระดานล่าสุดแล้ว: นับ 2 ครั้ง ไม่ดึงรายการงานเลย", w.__จำนวนครั้งนับ === 2 && w.__จำนวนครั้งอ่านรายการ === 0,
+        "นับ " + w.__จำนวนครั้งนับ + " / อ่านรายการ " + w.__จำนวนครั้งอ่านรายการ);
+
+      // 3) มีงานตรวจแล้วเพิ่ม (กรณี B3 จริง) → คำนวณใหม่
+      w = await เปิด("page.html", "role=teacher&board=stale");
+      g = กระดาน(w);
+      ตรวจ("มีงานใหม่ (gradedCount 2 → 3): คำนวณใหม่", g && g.computedAt !== "เก่า" && g.gradedCount === 3);
+      ตรวจ("มีงานใหม่: คนที่เพิ่งทำขึ้นกระดาน", g && g.entries.some(function (e) { return e.nickname === "สี่"; }));
+
+      // 4) นักเรียนเปิดหน้า → ไม่โหลดไฟล์เพิ่ม ไม่นับ ไม่เขียน
+      w = await เปิด("page.html", "role=student&board=stale");
+      g = กระดาน(w);
+      ตรวจ("นักเรียน: ไม่โหลด leaderboard-data.js", !มีสคริปต์กระดาน(w));
+      ตรวจ("นักเรียน: ไม่นับ ไม่เขียนกระดาน", w.__จำนวนครั้งนับ === 0 && g.computedAt === "เก่า");
+      ตรวจ("นักเรียน: auth-ready ยิงตามปกติ", w.__authReady === true);
+
+      // 5) ครูเปิดหน้าทัวนาเมนต์ → auth-guard ข้าม (tournament.js คำนวณเองอยู่แล้ว)
+      w = await เปิด("tournament.html", "role=teacher&board=stale");
+      ตรวจ("หน้าทัวนาเมนต์: auth-guard ไม่ทำซ้ำ", w.__จำนวนครั้งนับ === 0 && กระดาน(w).computedAt === "เก่า" && !มีสคริปต์กระดาน(w));
+
+      // 6) นับพัง → หน้าไม่พัง
+      w = await เปิด("page.html", "role=teacher&board=stale&countFail=1");
+      ตรวจ("นับพัง: หน้ายังใช้ได้ (auth-ready ยิง) และไม่เขียนกระดาน", w.__authReady === true && กระดาน(w).computedAt === "เก่า");
+    })().catch(function (e) { ตรวจ("รันจบ", false, e.message); }).then(function () {
+      var ผ่าน = ผล.filter(Boolean).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ผล.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผล.length };
+    });
+  </script>
+</body>
+</html>
