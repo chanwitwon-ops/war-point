@@ -76,6 +76,9 @@ sequenceDiagram
          insert POINTS_LEDGER_ENTRY(entry_type='quiz_score_conversion', points_delta_available=delta, points_delta_total=delta, related_entity_id=quizId)
          update POINTS_ACCOUNT: available_points += delta, total_earned_points += delta   (BR-04: total_earned_points เพิ่มได้จากจุดนี้เท่านั้นในบรรดา 8 flow นี้)
          isNewBest = true, pointsEarnedThisAttempt = delta
+         (หมายเหตุ 2026-11-11 กฎคะแนนทศนิยม B5: ชุดปรนัยได้คะแนนเป็นจำนวนเต็มเสมอ delta จึงเป็นจำนวนเต็ม และ `+= delta` เท่ากับสูตร
+          floor(สะสมใหม่) - floor(สะสมเดิม) แม้ยอดสะสมเดิมจะมีเศษทศนิยม เช่น สะสม 0.5 + ปรนัย 3 = 3.5 ใช้ได้ +3
+          ส่วนงานตรวจมือ (API-28) แต้มที่ใช้ได้เพิ่มตามสูตร floor ใน api-spec.md API-28 ไม่ใช่ `+= คะแนน` — ไม่อยู่ในขอบเขต flow นี้)
       ไม่ดีกว่าเดิม (BR-16 — AC-FE-41-2):
          update STUDENT_QUIZ_RESULT: attempts_used=attemptNumber เท่านั้น
          **ห้ามแก้ best_score / points_awarded_total / POINTS_ACCOUNT ใดๆ**

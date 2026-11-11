@@ -19,8 +19,8 @@ sequenceDiagram
     C->>PET: "ส่งคำขอรีเซ็ต (confirm=true)"
     PET->>D: "โหลด PET ที่ is_active=true ของนักเรียน"
     D-->>PET: "PET เดิม (สายพันธุ์ + ขั้นปัจจุบัน)"
-    PET->>PTS: "คำนวณยอดแต้มที่ต้องคืนเต็มจำนวน (total_earned_points - available_points ปัจจุบัน)"
-    PTS->>D: "ล็อกแถว POINTS_ACCOUNT แล้วตั้ง available_points = total_earned_points"
+    PET->>PTS: "คำนวณยอดแต้มที่ต้องคืนเต็มจำนวน (floor(total_earned_points) - available_points ปัจจุบัน)"
+    PTS->>D: "ล็อกแถว POINTS_ACCOUNT แล้วตั้ง available_points = floor(total_earned_points)"
     D-->>PTS: "คืนแต้มสำเร็จ"
     PTS-->>PET: "ยืนยันคืนแต้มแล้ว"
     PET->>D: "update PET เดิม is_active=false, disabled_at=now()"
@@ -50,12 +50,14 @@ sequenceDiagram
 4. เริ่ม transaction เดียว ครอบทุกขั้นตอนที่เหลือ — พลาดข้อใดให้ rollback ทั้งหมด:
    a. ล็อกแถว PET เดิม, แถว POINTS_ACCOUNT และแถว STUDENT_ITEM_INVENTORY ทั้งหมดของนักเรียนคนนี้
 
-   b. คำนวณ refundAmount = total_earned_points - available_points (ยอดปัจจุบันของนักเรียนคนนี้)
+   b. คำนวณ refundAmount = floor(total_earned_points) - available_points (ยอดปัจจุบันของนักเรียนคนนี้)
       (ตาม BR-09: คืนแต้มทั้งหมดที่เคยใช้ไปกับสัตว์เลี้ยงตัวนี้เต็มจำนวน รวมแต้มที่เคยใช้ซื้อไอเทมด้วย
-      ไม่ใช่คำนวณเฉพาะค่าไข่+ค่าขั้นตามตาราง BR-01 อีกต่อไป)
+      ไม่ใช่คำนวณเฉพาะค่าไข่+ค่าขั้นตามตาราง BR-01 อีกต่อไป — total_earned_points เป็นทศนิยม 1 ตำแหน่งได้
+      แต่ available_points เป็นจำนวนเต็มเสมอ จึงคืนได้สูงสุดถึงส่วนจำนวนเต็มของยอดสะสม ตาม database-schema.md ENT-10/ENT-11)
 
-   c. ตั้ง available_points = total_earned_points (ไม่แตะ total_earned_points ตาม BR-04)
-      ผลลัพธ์: available_points เท่ากับ total_earned_points พอดีเสมอหลังรีเซ็ต ไม่มีข้อยกเว้น
+   c. ตั้ง available_points = floor(total_earned_points) (ไม่แตะ total_earned_points ตาม BR-04)
+      ผลลัพธ์: available_points เท่ากับ floor(total_earned_points) พอดีเสมอหลังรีเซ็ต ไม่มีข้อยกเว้น
+      ตัวอย่าง (AC-FE-23-6): ยอดสะสม 7.5 และเคยใช้แต้มจนยอดที่ใช้ได้ < 7 -> หลังรีเซ็ต available_points = 7 (ไม่ใช่ 7.5) และ total_earned_points ยังเป็น 7.5
 
    d. insert POINTS_LEDGER_ENTRY(entry_type='pet_reset_refund', points_delta_available=+refundAmount,
       points_delta_total=0, related_entity_type='pet', related_entity_id=PET เดิม.id)
@@ -74,7 +76,7 @@ sequenceDiagram
 
    h. commit transaction
 
-5. คืนค่า { previousPetId, availablePoints: ยอดใหม่ (เท่ากับ totalEarnedPoints), totalEarnedPoints: ค่าเดิมไม่เปลี่ยน }
+5. คืนค่า { previousPetId, availablePoints: ยอดใหม่ (เท่ากับ floor(totalEarnedPoints)), totalEarnedPoints: ค่าเดิมไม่เปลี่ยน (อาจมีทศนิยม 1 ตำแหน่ง) }
 ```
 
 ## 4. กฎธุรกิจและการตรวจสอบ (Business Rules & Validation)
@@ -84,7 +86,7 @@ sequenceDiagram
 | BR-04 | `total_earned_points` ต้องไม่เปลี่ยนแปลงจากการรีเซ็ตเลย | ค่าคงที่เสมอ | ถือเป็นบั๊กร้ายแรง |
 | BR-06/BR-07 | PET เดิมต้อง `is_active=false` เท่านั้น ไม่ใช่ถูกลบ และไม่มี PET ใหม่ถูกสร้างในขั้นตอนนี้ | มี PET ที่ `is_active=true` = 0 ตัวทันทีหลังรีเซ็ต จนกว่าจะทำ DD-01 | ผิดกฎ BR-07 ถ้ามี PET active มากกว่า 1 ตัวพร้อมกัน |
 | BR-08 | จำนวนรายการในอัลบั้มบันทึกเส้นทางการเติบโตต้องเพิ่มขึ้นทีละ 1 ต่อการรีเซ็ต 1 ครั้งเท่านั้น ห้ามลด | `count(PET WHERE student_id=X) หลังรีเซ็ต = count ก่อนรีเซ็ต + 1` | ผิด AC-FE-73-2 |
-| BR-09 | refundAmount = `total_earned_points - available_points` ปัจจุบัน (คืนเต็มจำนวน รวมแต้มที่เคยใช้ซื้อไอเทมด้วย) ทำให้ `available_points = total_earned_points` พอดีหลังรีเซ็ตเสมอ ไม่มีข้อยกเว้น | `available_points` หลังรีเซ็ต ต้อง `=` `total_earned_points` เป๊ะ (ไม่ใช่ `<=`) | ถ้า `available_points != total_earned_points` หลัง commit = บั๊กร้ายแรง (ผิดกฎเดิมข้อ ข.3) |
+| BR-09 | refundAmount = `floor(total_earned_points) - available_points` ปัจจุบัน (คืนเต็มจำนวน รวมแต้มที่เคยใช้ซื้อไอเทมด้วย) ทำให้ `available_points = floor(total_earned_points)` พอดีหลังรีเซ็ตเสมอ ไม่มีข้อยกเว้น (แก้ 2026-11-11 ตาม AC-FE-23-6: เดิมเขียน `= total_earned_points` ซึ่งใช้ไม่ได้เมื่อยอดสะสมมีเศษทศนิยม) | `available_points` หลังรีเซ็ต ต้อง `=` `floor(total_earned_points)` เป๊ะ (ไม่ใช่ `<=`) เช่น สะสม 7.5 -> ใช้ได้ 7 | ถ้า `available_points != floor(total_earned_points)` หลัง commit = บั๊กร้ายแรง (ผิดกฎเดิมข้อ ข.3 + ข.5 และ AC-FE-23-6) |
 | BR-09 (ต่อเนื่อง) | ไอเทมทั้งหมดใน `STUDENT_ITEM_INVENTORY` ของนักเรียนคนนี้ต้องถูกตั้ง `quantity=0` ในธุรกรรมเดียวกับการคืนแต้ม ห้ามเหลือไอเทมที่ `quantity > 0` หลังรีเซ็ต | ทุกแถวของนักเรียนคนนี้ต้อง `quantity = 0` ทันทีหลัง commit | เปิดช่องโหว่ "ได้ทั้งไอเทมและแต้มคืนพร้อมกัน" ที่กฎนี้มีไว้ปิด |
 
 ## 5. กรณีผิดพลาดและการรับมือ (Edge Case & Error Handling)
