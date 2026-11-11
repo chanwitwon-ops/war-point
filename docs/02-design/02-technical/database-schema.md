@@ -1,6 +1,7 @@
 # Database Schema — war-point
 
-- **อัปเดตล่าสุด:** 2026-08-25 — เพิ่ม ENT-27 (PET_CARE_STATE) สำหรับ FE-82/FE-83 (CMP-21 Pet Care and Bonding Module) ไม่มี ENT เดิมถูกแก้ไข
+- **อัปเดตล่าสุด:** 2026-11-11 — กฎ B5 (คะแนนงานตรวจมือทศนิยม 1 ตำแหน่ง / ยอดสะสมมีเศษ / ยอดใช้ได้เป็นส่วนจำนวนเต็ม): แก้ชนิดข้อมูล ENT-08/09/10/11 และ CHECK ที่เกี่ยวข้อง ไม่เพิ่ม/ลบ ENT, ไม่แก้ ER Diagram — ปิด Gap B5 ฝั่ง database-schema แล้ว (ดู G-DB-12)
+- **อัปเดตก่อนหน้า:** 2026-08-25 — เพิ่ม ENT-27 (PET_CARE_STATE) สำหรับ FE-82/FE-83 (CMP-21 Pet Care and Bonding Module) ไม่มี ENT เดิมถูกแก้ไข
 - **ชนิดฐานข้อมูล:** Relational — สืบทอดจาก [[architecture#3-ตาราง-component|architecture.md CMP-16]] เหตุผลหลักคือต้องมี atomic transaction กันการหักแต้มซ้ำ/แต้มติดลบตอนซื้อไข่ ปลดล็อกขั้น และซื้อไอเทม ซึ่งเป็นจุดที่นักเรียนอาจกดพร้อมกันจากหลายอุปกรณ์ (ดู DF-01 ของ architecture.md)
 - **ระดับความละเอียด:** Conceptual + Logical (ยังไม่ผูกกับเทคโนโลยี — ชนิดข้อมูลใช้ชื่อกลาง เช่น "ข้อความสั้น", "จำนวนเต็ม"; Physical จะระบุเมื่อผู้ใช้เลือก stack แล้ว)
 - **นโยบายลบข้อมูล:** **soft delete เป็นค่าเริ่มต้นของทุกตาราง** — ทุกตารางมีคอลัมน์ `is_active` (บูลีน) และ `disabled_at` (วันที่-เวลา, null ได้) แทนการลบแถวจริง ยกเว้นระบุไว้เป็นอย่างอื่นชัดเจนในตารางนั้น (ไม่มีข้อยกเว้นในเอกสารนี้ — ทุก ENT ใช้ pattern เดียวกัน)
@@ -256,7 +257,7 @@ erDiagram
 | attempt_number | จำนวนเต็ม | - | ไม่ | - | ลำดับรอบของนักเรียนคนนี้ต่อชุดนี้ ≤ `QUIZ_SET.max_attempts` |
 | client_request_id | ข้อความสั้น | Unique ร่วมกับ (quiz_set_id, student_id) | ได้ | null | กัน retry ซ้ำจากเครือข่ายหลุด (idempotency ตาม DF-01 ของ architecture.md) |
 | status | ข้อความสั้น (enum) | - | ไม่ | `submitted` | ค่า: `submitted`, `pending_review`(worksheet/attachment รอครูตรวจ), `graded` |
-| score_awarded | ทศนิยม | - | ได้ | null | คะแนนของรอบนี้ (auto สำหรับ mcq ตรวจทันที, manual รอครูกรอก) |
+| score_awarded | ทศนิยม (ไม่เกิน 1 ตำแหน่ง) | - | ได้ | null | คะแนนของรอบนี้ (auto สำหรับ mcq ตรวจทันที ได้จำนวนเต็มเสมอ, manual รอครูกรอก — ทศนิยมได้ไม่เกิน 1 ตำแหน่ง เช่น 7.5, ช่องรับเฉพาะตัวเลขล้วน; AC-FE-17-3/4/5) |
 | work_attachment_ref | ข้อความสั้น | - | ได้ | null | รหัสอ้างอิงไฟล์งานที่นักเรียนแนบ (format=attachment) ผ่าน Object Storage |
 | graded_by_teacher_id | รหัสอ้างอิง | FK → TEACHER | ได้ | null | ใช้เมื่อ grading_method=manual |
 | graded_at | วันที่-เวลา | - | ได้ | null | - |
@@ -266,7 +267,7 @@ erDiagram
 
 - **ความสัมพันธ์:** many-to-1 กับ QUIZ_SET และ STUDENT
 - **Index ที่ควรมี:** unique `(quiz_set_id, student_id, client_request_id)` (idempotency), `(quiz_set_id, student_id, attempt_number)` (นับจำนวนรอบ), `status` (รายการรอครูตรวจของ FE-17)
-- **กฎความถูกต้องระดับข้อมูล:** CHECK `score_awarded BETWEEN 0 AND (QUIZ_SET.full_score)` (AC-FE-17-2), CHECK `attempt_number <= QUIZ_SET.max_attempts` ที่ระดับ transaction ตอน insert
+- **กฎความถูกต้องระดับข้อมูล:** CHECK `score_awarded BETWEEN 0 AND (QUIZ_SET.full_score)` (AC-FE-17-2), CHECK `score_awarded IS NULL OR (score_awarded * 10) = FLOOR(score_awarded * 10)` คือทศนิยมไม่เกิน 1 ตำแหน่ง (AC-FE-17-3/4 — 7.5 ผ่าน, 7.55 ไม่ผ่าน; การปฏิเสธค่าที่ไม่ใช่ตัวเลขล้วนเช่น `10abc` ตาม AC-FE-17-5 ทำที่ชั้น API ก่อนถึงฐานข้อมูล), CHECK `attempt_number <= QUIZ_SET.max_attempts` ที่ระดับ transaction ตอน insert
 
 ### ENT-09 — STUDENT_QUIZ_RESULT
 - **หน้าที่:** cache คะแนนรอบที่ดีที่สุดต่อ (นักเรียน, ชุด) และแต้มที่เคยจ่ายให้แล้วจากชุดนี้ เพื่อคำนวณ delta แต้มถูกต้องเมื่อทำซ้ำได้คะแนนดีขึ้น
@@ -278,8 +279,8 @@ erDiagram
 | student_id | รหัสอ้างอิง | FK → STUDENT | ไม่ | - | - |
 | quiz_set_id | รหัสอ้างอิง | FK → QUIZ_SET | ไม่ | - | - |
 | best_attempt_id | รหัสอ้างอิง | FK → QUIZ_ATTEMPT | ไม่ | - | รอบที่มีคะแนนสูงสุด (เท่ากันให้ยึดรอบแรกที่ทำได้คะแนนนั้น) |
-| best_score | ทศนิยม | - | ไม่ | 0 | คะแนนของ best_attempt_id |
-| points_awarded_total | จำนวนเต็ม | - | ไม่ | 0 | ผลรวมแต้มที่เคยส่งให้ POINTS_LEDGER_ENTRY จากชุดนี้แล้ว ใช้คำนวณ delta รอบถัดไป |
+| best_score | ทศนิยม (ไม่เกิน 1 ตำแหน่ง) | - | ไม่ | 0 | คะแนนของ best_attempt_id (สืบจาก `QUIZ_ATTEMPT.score_awarded` จึงมีเศษได้) |
+| points_awarded_total | ทศนิยม (1 ตำแหน่ง) | - | ไม่ | 0 | ผลรวมแต้ม (1 คะแนน = 1 แต้ม จึงมีเศษได้) ที่เคยส่งให้ POINTS_LEDGER_ENTRY จากชุดนี้แล้ว ใช้คำนวณ delta รอบถัดไป = `points_delta_total` สะสมของชุดนี้ |
 | attempts_used | จำนวนเต็ม | - | ไม่ | 0 | จำนวนรอบที่ทำไปแล้ว |
 | updated_at | วันที่-เวลา | - | ไม่ | now() | - |
 
@@ -295,13 +296,14 @@ erDiagram
 |---|---|---|---|---|---|
 | id | รหัสอ้างอิง | PK | ไม่ | - | - |
 | student_id | รหัสอ้างอิง | FK → STUDENT, Unique | ไม่ | - | 1:1 กับ STUDENT |
-| total_earned_points | จำนวนเต็ม | - | ไม่ | 0 | ยอดสะสมรวม **ไม่ลดวันไหน** (FE-22) เพิ่มขึ้นอย่างเดียว |
-| available_points | จำนวนเต็ม | - | ไม่ | 0 | ยอดใช้ได้ หักออกได้เมื่อซื้อไข่/ปลดล็อกขั้น/ซื้อไอเทม (FE-23) |
+| total_earned_points | ทศนิยม (1 ตำแหน่ง) | - | ไม่ | 0 | ยอดสะสมรวม **ไม่ลดวันไหน** (FE-22) เพิ่มขึ้นอย่างเดียว มีเศษได้ เช่น 17.5 และแสดงตามจริง (AC-FE-22-3) |
+| available_points | จำนวนเต็ม | - | ไม่ | 0 | ยอดใช้ได้ หักออกได้เมื่อซื้อไข่/ปลดล็อกขั้น/ซื้อไอเทม (FE-23) **คงเป็นจำนวนเต็ม** — นิยาม `available_points = floor(total_earned_points) − แต้มที่ใช้ไปทั้งหมด` (แต้มที่ใช้ไปเป็นจำนวนเต็มเสมอเพราะราคาทุกอย่างเป็นจำนวนเต็ม) เศษใช้ซื้ออะไรไม่ได้ (AC-FE-23-3/4/5) |
 | updated_at | วันที่-เวลา | - | ไม่ | now() | - |
 
 - **ความสัมพันธ์:** 1:1 กับ STUDENT, ทุกการเปลี่ยนแปลงต้องมี `POINTS_LEDGER_ENTRY` คู่กันเสมอ (audit trail)
+- **เศษแต้มที่รอสะสม:** ไม่มีคอลัมน์เก็บ — คำนวณเป็น `total_earned_points − floor(total_earned_points)` (ตัดสินใจ 2026-11-11 ไม่เพิ่มคอลัมน์ `pending_fraction`); หน้าสัตว์เลี้ยง/หน้าหลักใช้ค่านี้แสดง "เศษ 0.5 แต้มรอสะสม" (AC-FE-23-3)
 - **Index ที่ควรมี:** unique `student_id`
-- **กฎความถูกต้องระดับข้อมูล:** CHECK `available_points >= 0`, CHECK `total_earned_points >= 0`, CHECK `total_earned_points >= available_points` (จะเท่ากันพอดีตอนรีเซ็ต ตาม FE-26/AC ข้อ ข.3 ของ spec 02) — ทุก UPDATE ต้องอยู่ใน transaction เดียวกับ INSERT ของ `POINTS_LEDGER_ENTRY` ที่สอดคล้องกัน เพื่อกัน race condition ตาม DF-01
+- **กฎความถูกต้องระดับข้อมูล:** CHECK `available_points >= 0`, CHECK `total_earned_points >= 0`, CHECK `total_earned_points >= available_points` (คงไว้ — ยังใช้ได้เพราะ `available_points` ≤ `floor(total_earned_points)` ≤ `total_earned_points`; หลังรีเซ็ต `available_points = floor(total_earned_points)` ไม่ใช่เท่ากับ `total_earned_points` เมื่อยอดสะสมมีเศษ — AC-FE-23-6, ตาม FE-26/AC ข้อ ข.3 + ข.5 ของ spec 02), CHECK `(total_earned_points * 10) = FLOOR(total_earned_points * 10)` (ทศนิยมไม่เกิน 1 ตำแหน่ง) — ทุก UPDATE ต้องอยู่ใน transaction เดียวกับ INSERT ของ `POINTS_LEDGER_ENTRY` ที่สอดคล้องกัน เพื่อกัน race condition ตาม DF-01
 
 ### ENT-11 — POINTS_LEDGER_ENTRY
 - **หน้าที่:** ประวัติทุกรายการที่กระทบแต้ม (immutable, ไม่มีการแก้ไขย้อนหลัง) ใช้ตรวจสอบ/กันการหักซ้ำ
@@ -312,8 +314,8 @@ erDiagram
 | id | รหัสอ้างอิง | PK | ไม่ | - | - |
 | student_id | รหัสอ้างอิง | FK → STUDENT | ไม่ | - | - |
 | entry_type | ข้อความสั้น (enum) | - | ไม่ | - | ค่า: `quiz_score_conversion`(FE-21), `egg_purchase`(FE-75), `stage_unlock`(FE-24), `item_purchase`(FE-78), `pet_reset_refund`(FE-26) |
-| points_delta_available | จำนวนเต็ม | - | ไม่ | - | ค่าบวก/ลบที่กระทบ `available_points` |
-| points_delta_total | จำนวนเต็ม | - | ไม่ | 0 | ค่าที่กระทบ `total_earned_points` (มีค่า > 0 เฉพาะ `quiz_score_conversion`, เป็น 0 เสมอสำหรับรายการอื่นตามกฎ "สะสมรวมไม่ลด") |
+| points_delta_available | จำนวนเต็ม | - | ไม่ | - | ค่าบวก/ลบที่กระทบ `available_points` — สำหรับ `quiz_score_conversion` = `floor(ยอดสะสมใหม่) − floor(ยอดสะสมเดิม)` (เช่น สะสม 10 → 17.5 ได้ +7; สะสม 0.5 → 1 ได้ +1); สำหรับ `pet_reset_refund` คืนจนยอดใช้ได้ = `floor(total_earned_points)` (AC-FE-23-6) |
+| points_delta_total | ทศนิยม (1 ตำแหน่ง) | - | ไม่ | 0 | ค่าที่กระทบ `total_earned_points` (มีค่า > 0 เฉพาะ `quiz_score_conversion` และมีเศษได้ เช่น 7.5, เป็น 0 เสมอสำหรับรายการอื่นตามกฎ "สะสมรวมไม่ลด") |
 | related_entity_type | ข้อความสั้น (enum) | - | ได้ | null | ค่า: `quiz_set`, `pet`, `shop_item` — ใช้คู่กับ related_entity_id |
 | related_entity_id | รหัสอ้างอิง | - | ได้ | null | อ้างอิงแบบยืดหยุ่นไปยัง entity ที่เกี่ยวข้อง |
 | created_at | วันที่-เวลา | - | ไม่ | now() | - |
@@ -388,7 +390,7 @@ erDiagram
 
 - **ความสัมพันธ์:** many-to-1 กับ STUDENT และ SPECIES, 1 PET มีหลาย PET_STAT
 - **Index ที่ควรมี:** **unique partial index** บน `student_id` โดยกรองเฉพาะ `is_active = true` (บังคับ FE-74 — มีสัตว์เลี้ยงที่ใช้งานอยู่ได้เพียงตัวเดียว), `(student_id, created_at)` (query อัลบั้มบันทึกเส้นทางการเติบโตเรียงตามเวลา — FE-72)
-- **กฎความถูกต้องระดับข้อมูล:** CHECK `stat_total IN (50,100,150,200,250)`; การรีเซ็ต (FE-26, API-38) เป็น transaction เดียวที่ทำแค่: (1) UPDATE แถว `PET` ปัจจุบัน `is_active=false, disabled_at=now()`, (2) INSERT `POINTS_LEDGER_ENTRY` ชนิด `pet_reset_refund` ให้ `available_points` กลับมาเท่ากับ `total_earned_points` พอดี — คืนแต้มเต็มจำนวน **รวมแต้มที่เคยใช้ซื้อไอเทมด้วย** (ปิด Open Question ข้อ 6 ของ spec 06 แล้วเมื่อ 2026-08-23 ตาม spec 02 ข้อ ซ.6), และ (3) เคลียร์ `STUDENT_ITEM_INVENTORY` ของนักเรียนคนนั้นทั้งหมด — ตั้ง `quantity=0` ทุกแถว (ไม่ลบแถวจริง ดู ENT-18 และหัวข้อ 5) เพื่อปิดช่องโหว่ไม่ให้ได้ทั้งไอเทมและแต้มคืนพร้อมกัน — **transaction นี้ไม่ insert แถว `PET` ใหม่** นักเรียนต้องเรียก API-36 (ซื้อไข่) แยกต่างหากอีกครั้งเพื่อสร้าง `PET` ใหม่ เลือกสายพันธุ์ใหม่ และจ่าย 1 แต้ม
+- **กฎความถูกต้องระดับข้อมูล:** CHECK `stat_total IN (50,100,150,200,250)`; การรีเซ็ต (FE-26, API-38) เป็น transaction เดียวที่ทำแค่: (1) UPDATE แถว `PET` ปัจจุบัน `is_active=false, disabled_at=now()`, (2) INSERT `POINTS_LEDGER_ENTRY` ชนิด `pet_reset_refund` ให้ `available_points` กลับมาเท่ากับ `floor(total_earned_points)` (ส่วนจำนวนเต็มของยอดสะสม ตามกฎเศษแต้ม B5 / AC-FE-23-6 — ถ้ายอดสะสมไม่มีเศษก็เท่ากับ `total_earned_points` พอดี) — คืนแต้มเต็มจำนวน **รวมแต้มที่เคยใช้ซื้อไอเทมด้วย** (ปิด Open Question ข้อ 6 ของ spec 06 แล้วเมื่อ 2026-08-23 ตาม spec 02 ข้อ ซ.6), และ (3) เคลียร์ `STUDENT_ITEM_INVENTORY` ของนักเรียนคนนั้นทั้งหมด — ตั้ง `quantity=0` ทุกแถว (ไม่ลบแถวจริง ดู ENT-18 และหัวข้อ 5) เพื่อปิดช่องโหว่ไม่ให้ได้ทั้งไอเทมและแต้มคืนพร้อมกัน — **transaction นี้ไม่ insert แถว `PET` ใหม่** นักเรียนต้องเรียก API-36 (ซื้อไข่) แยกต่างหากอีกครั้งเพื่อสร้าง `PET` ใหม่ เลือกสายพันธุ์ใหม่ และจ่าย 1 แต้ม
 
 ### ENT-16 — PET_STAT
 - **หน้าที่:** ค่าสเตตัสรายตัวของ PET แต่ละแถว (เช่น ความเร็ว/พละกำลัง/ความแม่นยำ) สะสมตามสัดส่วนสายพันธุ์ทุกครั้งที่ปลดล็อกขั้น
@@ -653,7 +655,7 @@ erDiagram
 - **Soft delete เป็นค่าเริ่มต้นทุกตาราง** (ดูข้อ 0) — การ "ลบ" ในระบบนี้ทั้งหมดคือการตั้ง `is_active=false` เท่านั้น ไม่มีคำสั่งลบถาวรที่ผู้ใช้เข้าถึงได้
   - `STUDENT`: ปิดใช้งานเมื่อย้ายออก (FE-56) — ไม่ปรากฏในรายการที่ครูใช้ประจำวัน แต่ query ประวัติ/ตรวจสอบยังเห็นได้
   - `PET`: ปิดใช้งานเมื่อรีเซ็ต/เปลี่ยนสายพันธุ์ (FE-26, API-38) — แถวเก่ากลายเป็นรายการในอัลบั้มบันทึกเส้นทางการเติบโตโดยอัตโนมัติ (FE-72/FE-73) **ไม่มีทางลบแถว PET ได้เลยในระบบนี้** — การรีเซ็ตเองไม่ insert แถว `PET` ใหม่ในจังหวะเดียวกัน นักเรียนต้องเรียกซื้อไข่แยกต่างหากอีกครั้ง (API-36) เพื่อสร้าง `PET` ใหม่ เลือกสายพันธุ์ใหม่ และจ่าย 1 แต้ม
-  - `STUDENT_ITEM_INVENTORY` (ENT-18): เคลียร์ทั้งหมดในจังหวะเดียวกับที่รีเซ็ต `PET` (API-38) — ตั้ง `quantity=0` ทุกแถวของนักเรียนคนนั้น (ไม่ลบแถวจริง ใช้ pattern soft delete เดียวกับทั้งเอกสาร) **กฎใหม่ (ปิด Open Question ข้อ 6 ของ spec 06 แล้วเมื่อ 2026-08-23):** การรีเซ็ตคืนแต้มทั้งหมดที่เคยใช้ไปกับสัตว์เลี้ยงตัวนั้นเต็มจำนวน รวมแต้มค่าไอเทมด้วย (`available_points` กลับมาเท่ากับ `total_earned_points` พอดี) แต่ต้องเคลียร์ไอเทมในคลังพร้อมกันเสมอ เพื่อปิดช่องโหว่ไม่ให้ได้ทั้งไอเทมและแต้มคืนพร้อมกัน
+  - `STUDENT_ITEM_INVENTORY` (ENT-18): เคลียร์ทั้งหมดในจังหวะเดียวกับที่รีเซ็ต `PET` (API-38) — ตั้ง `quantity=0` ทุกแถวของนักเรียนคนนั้น (ไม่ลบแถวจริง ใช้ pattern soft delete เดียวกับทั้งเอกสาร) **กฎใหม่ (ปิด Open Question ข้อ 6 ของ spec 06 แล้วเมื่อ 2026-08-23):** การรีเซ็ตคืนแต้มทั้งหมดที่เคยใช้ไปกับสัตว์เลี้ยงตัวนั้นเต็มจำนวน รวมแต้มค่าไอเทมด้วย (`available_points` กลับมาเท่ากับ `floor(total_earned_points)` — ส่วนจำนวนเต็มของยอดสะสม ตามกฎเศษแต้ม B5 2026-11-11; เดิมเขียนว่าเท่ากับ `total_earned_points` ซึ่งใช้ได้เมื่อยอดสะสมไม่มีเศษ) แต่ต้องเคลียร์ไอเทมในคลังพร้อมกันเสมอ เพื่อปิดช่องโหว่ไม่ให้ได้ทั้งไอเทมและแต้มคืนพร้อมกัน
   - `LESSON` (ai_clip ที่ไม่อนุมัติ): ปิดใช้งานทันที เทียบเท่า "ไม่มีทางเห็นได้อีก" จากมุมนักเรียน (AC-FE-39-3) แต่ยังอยู่ในฐานข้อมูลเพื่อ audit
   - `POINTS_LEDGER_ENTRY`: เป็นข้อยกเว้นในทางปฏิบัติ — เป็น append-only log ที่ไม่ถูกปิดใช้งานเลยตลอดอายุระบบ เพราะเป็นหลักฐานทางบัญชี ไม่ใช่ข้อมูลที่มีสถานะ "ใช้งาน/ไม่ใช้งาน"
 - **ข้อมูลที่ครูห้ามเข้าถึงไม่ว่ากรณีใด** (ต้องกรองที่ query/service layer ก่อนส่ง response ให้ CMP-02 ไม่ใช่กรองที่ client): `POINTS_ACCOUNT`, `POINTS_LEDGER_ENTRY`, `PET`, `PET_STAT`, `PET_CARE_STATE`, `STUDENT_ITEM_INVENTORY`, `ARENA_MATCH_PARTICIPANT`, `MATCH_ITEM_USAGE` ของนักเรียนทุกคน — รายละเอียดการบังคับใช้อยู่ที่ [[api-spec|api-spec]]
@@ -673,4 +675,5 @@ erDiagram
 - **G-DB-09 (สืบทอดจาก AC G-05 ข้อ 1):** นโยบายส่งคะแนนซ้ำรอบสองเข้า Google Sheets (เขียนทับ/เพิ่มคอลัมน์ใหม่/ถามครูก่อน) ยังไม่ล็อก — `SCORE_EXPORT_JOB` ปัจจุบันออกแบบเป็น "งานใหม่ทุกครั้ง" (ไม่มี versioning/ผูกกับงานก่อนหน้า) ต้องทบทวน schema เพิ่มถ้าตัดสินใจว่าต้องอ้างอิงงานเดิม
 - **G-DB-10 (สืบทอดจาก AC G-05 ข้อ 3):** รูปแบบไฟล์ดาวน์โหลดคะแนน (`SCORE_EXPORT_JOB.file_format`) ยังไม่ล็อกค่า enum ที่แน่นอน (prototype ใช้ CSV/XLSX เป็นตัวอย่าง ไม่ใช่ข้อกำหนด)
 - **G-DB-11 (พบใหม่ในรอบนี้):** ยังไม่มี requirement ที่นิยามว่าคะแนนที่ส่งออก (`SCORE_EXPORT_JOB_ITEM` อ้างถึง `QUIZ_SET`) ใช้คะแนนดิบ (`score_awarded`) หรือคะแนนที่ปรับสัดส่วนแล้ว และยังไม่ตัดสินว่าจะรวมคะแนนจากงานที่ครูตรวจเอง (worksheet/attachment) เข้าไปด้วยหรือไม่ — ตรงกับ Gap ที่บันทึกไว้แล้วใน feature-list.md (กระทบ FE-64/FE-65)
+- **G-DB-12 — ปิดแล้ว (2026-11-11, Gap B5 ฝั่ง database-schema):** กฎคะแนนทศนิยม 1 ตำแหน่ง + "ยอดสะสมมีเศษ / ยอดใช้ได้ = ส่วนจำนวนเต็ม" ตาม spec 01 หัวข้อ ง. และ spec 02 ข.4–6 บันทึกลง ENT-08 (`score_awarded` + CHECK), ENT-09 (`best_score`, `points_awarded_total`), ENT-10 (`total_earned_points` เป็นทศนิยม, `available_points` คงจำนวนเต็ม), ENT-11 (`points_delta_total` ทศนิยม) แล้ว — ผู้ใช้เลือกทาง "ยอดสะสมเป็นทศนิยม ยอดใช้ได้เป็นจำนวนเต็ม" ไม่เพิ่มคอลัมน์ `pending_fraction` ข้อความ "available_points = total_earned_points" ใน G-DB-07 ด้านบนเป็นบันทึกประวัติของ 2026-08-23 ใช้ได้เฉพาะกรณียอดสะสมไม่มีเศษ ปัจจุบันยึด `floor(total_earned_points)`
 - **ไม่มีช่องว่างเชิงโครงสร้างอื่นนอกเหนือจากที่ระบุข้างต้น** — ทุก entity ใน schema นี้ trace กลับไปหา FE ได้ครบ ไม่มีตารางใดที่ไม่มีต้นทาง

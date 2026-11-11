@@ -1,6 +1,7 @@
 # API Spec — war-point
 
-- **อัปเดตล่าสุด:** 2026-08-25 — เพิ่ม API-62/API-63 สำหรับ FE-82/FE-83 (CMP-21 Pet Care and Bonding Module, ผูก ENT-27) ไม่มี endpoint เดิมถูกแก้ไข
+- **อัปเดตล่าสุด:** 2026-11-11 — กฎ B5 (คะแนนทศนิยม 1 ตำแหน่ง / ยอดสะสมมีเศษ): แก้ API-28 (ตรวจทศนิยม/ตัวเลขล้วน), API-33 (เพิ่ม `pendingFraction`, ตัวอย่างมีเศษ), หมายเหตุที่ API-36 (เศษไม่นับ) และ API-38 (คืนส่วนจำนวนเต็ม), ตัวอย่าง API-31/32 — ไม่เพิ่ม/ลบ endpoint, ไม่เปลี่ยนเงื่อนไข `available_points` ของ endpoint ซื้อ/ปลดล็อก — ปิด Gap B5 ฝั่ง api-spec แล้ว (ดู G-API-13)
+- **อัปเดตก่อนหน้า:** 2026-08-25 — เพิ่ม API-62/API-63 สำหรับ FE-82/FE-83 (CMP-21 Pet Care and Bonding Module, ผูก ENT-27) ไม่มี endpoint เดิมถูกแก้ไข
 - **รูปแบบ:** REST over HTTP, ข้อมูล JSON, Authentication แบบ Session-based (stateful) ตามที่ล็อกไว้ใน [[architecture#7-authentication--authorization|architecture.md ข้อ 7]]
 - **ระดับความละเอียด:** Conceptual + Contract-level (ระบุ HTTP method/path/JSON shape ตามที่ [[architecture#7-authentication--authorization|architecture.md ข้อ 7]] ตัดสินใจไปแล้ว ไม่ผูกกับ framework ที่ implement จริง)
 - **Base path:** `/api/v1`
@@ -881,26 +882,30 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 
 | ส่วน | ชื่อ | ชนิด | บังคับ | กฎตรวจสอบ |
 |---|---|---|---|---|
-| body | score | ทศนิยม | ใช่ | `0 <= score <= fullScore` ของชุดนั้น (AC-FE-17-2) |
+| body | score | ทศนิยม (ไม่เกิน 1 ตำแหน่ง) | ใช่ | ต้องเป็น**ตัวเลขล้วน** (JSON number หรือสตริงตัวเลขล้วนรูป `^\d+(\.\d)?$` — ไม่รับ `10abc`, `1e1`, `7.`), ทศนิยมไม่เกิน 1 ตำแหน่ง (7.5 ผ่าน, 7.55 ไม่ผ่าน — AC-FE-17-3/4/5) และ `0 <= score <= fullScore` ของชุดนั้น (AC-FE-17-2) |
 
 ```json
-{ "score": 8 }
+{ "score": 7.5 }
 ```
 
 **Response สำเร็จ** — `200 OK`
 
 ```json
-{ "data": { "attemptId": "a-01", "status": "graded", "score": 8 } }
+{ "data": { "attemptId": "a-01", "status": "graded", "score": 7.5 } }
 ```
 
 **Response ผิดพลาด**
 
 | Status | เมื่อไหร่ | รหัสข้อผิดพลาด | ข้อความถึงผู้ใช้ |
 |---|---|---|---|
-| 400 | score นอกช่วง 0–fullScore | VALIDATION_ERROR | "กรุณากรอกคะแนนระหว่าง 0 ถึง {fullScore}" |
+| 400 | score นอกช่วง 0–fullScore (AC-FE-17-2) | VALIDATION_ERROR | "กรุณากรอกคะแนนระหว่าง 0 ถึง {fullScore}" |
+| 400 | score มีทศนิยมเกิน 1 ตำแหน่ง เช่น 7.55 (AC-FE-17-4) | VALIDATION_ERROR | "ทศนิยมได้ 1 ตำแหน่ง เช่น 7.5" |
+| 400 | score ไม่ใช่ตัวเลขล้วน เช่น `10abc` (AC-FE-17-5) — ห้ามตีความเป็น 10 | VALIDATION_ERROR | "ทศนิยมได้ 1 ตำแหน่ง เช่น 7.5" |
 | 404 | ไม่พบ attemptId | NOT_FOUND | "ไม่พบงานที่ต้องการตรวจ" |
 
-- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** การบันทึกคะแนนต้อง trigger การอัปเดต `STUDENT_QUIZ_RESULT` + สร้าง `POINTS_LEDGER_ENTRY(entry_type='quiz_score_conversion')` เฉพาะส่วน delta ถ้าคะแนนนี้ดีกว่ารอบก่อนหน้า (เหตุผลเดียวกับ FE-41 แม้ grading_method จะเป็น manual)
+เมื่อตอบ 400 ทุกกรณี **ไม่บันทึกคะแนน** และ `status` ของงานยังเป็น `pending_review` (AC-FE-17-4/5)
+
+- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** ผลรวมแต้มจากคะแนนนี้มีเศษได้ (1 คะแนน = 1 แต้ม): `POINTS_LEDGER_ENTRY.points_delta_total` เป็นทศนิยม 1 ตำแหน่ง ส่วน `points_delta_available = floor(ยอดสะสมใหม่) − floor(ยอดสะสมเดิม)` (เช่น สะสม 10 → 17.5 ใช้ได้ +7) ; การบันทึกคะแนนต้อง trigger การอัปเดต `STUDENT_QUIZ_RESULT` + สร้าง `POINTS_LEDGER_ENTRY(entry_type='quiz_score_conversion')` เฉพาะส่วน delta ถ้าคะแนนนี้ดีกว่ารอบก่อนหน้า (เหตุผลเดียวกับ FE-41 แม้ grading_method จะเป็น manual)
 
 ---
 
@@ -991,7 +996,7 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 **Response สำเร็จ** — `200 OK`
 
 ```json
-{ "data": { "bestScore": 18, "fullScore": 20, "attemptsUsed": 2, "maxAttempts": 3 } }
+{ "data": { "bestScore": 17.5, "fullScore": 20, "attemptsUsed": 2, "maxAttempts": 3 } }
 ```
 
 **Response ผิดพลาด**
@@ -1012,8 +1017,14 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 **Response สำเร็จ** — `200 OK`
 
 ```json
-{ "data": { "totalEarnedPoints": 56, "availablePoints": 20 } }
+{ "data": { "totalEarnedPoints": 17.5, "availablePoints": 17, "pendingFraction": 0.5 } }
 ```
+
+| ฟิลด์ | ชนิด | ความหมาย |
+|---|---|---|
+| totalEarnedPoints | ทศนิยม (1 ตำแหน่ง) | ยอดสะสมรวม มีเศษได้ แสดงตามจริง (AC-FE-22-3) |
+| availablePoints | จำนวนเต็ม | ยอดที่ใช้ได้ = `floor(totalEarnedPoints) − แต้มที่ใช้ไปทั้งหมด` (AC-FE-23-3) |
+| pendingFraction | ทศนิยม (1 ตำแหน่ง, 0 ≤ ค่า < 1) | เศษที่ยังใช้ไม่ได้ = `totalEarnedPoints − floor(totalEarnedPoints)` — client ใช้แสดง "เศษ 0.5 แต้มรอสะสม" และ "ต้องได้อีก {1 − pendingFraction} แต้มจึงครบ 1" (spec 02 ข.6, AC-FE-23-3); ไม่ใช่คอลัมน์ในฐานข้อมูล คำนวณตอนตอบ |
 
 **Response ผิดพลาด**
 
@@ -1021,7 +1032,7 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 |---|---|---|---|
 | 401 | ไม่มี session | UNAUTHENTICATED | "กรุณาเข้าสู่ระบบใหม่อีกครั้ง" |
 
-- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** `totalEarnedPoints` เป็นค่าที่ไม่มีวันลดจากการกระทำใดๆ (FE-22) — endpoint นี้ไม่มี parameter ให้แก้ไขค่าตรงๆ เลย (อ่านอย่างเดียว)
+- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** `totalEarnedPoints` เป็นค่าที่ไม่มีวันลดจากการกระทำใดๆ (FE-22) — endpoint นี้ไม่มี parameter ให้แก้ไขค่าตรงๆ เลย (อ่านอย่างเดียว); `availablePoints` เป็นจำนวนเต็มเสมอ เศษไม่นับเป็นแต้มที่ใช้ได้ (spec 02 ข.5)
 
 ---
 
@@ -1103,7 +1114,7 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 | 409 | นักเรียนมีสัตว์เลี้ยงที่ใช้งานอยู่แล้ว | ACTIVE_PET_EXISTS | "มีสัตว์เลี้ยงที่ใช้งานอยู่แล้ว — ใช้เมนูรีเซ็ตถ้าต้องการเปลี่ยนสายพันธุ์" |
 | 422 | `available_points < 1` | INSUFFICIENT_POINTS | "ยังสะสมแต้มที่ใช้ได้ไม่พอ ต้องมีอย่างน้อย 1 แต้ม (ตอนนี้มี {available} แต้ม)" |
 
-- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** เงื่อนไขใช้ `available_points >= 1` (ตาม AC-FE-75-2/3 — ทดสอบค่าขอบ `>=` ไม่ใช่ `>`); ทั้งหมดอยู่ใน 1 transaction: หักแต้ม → insert `POINTS_LEDGER_ENTRY(entry_type='egg_purchase')` → insert `PET` → insert `PET_STAT` ตามสัดส่วน (ตัวเลขสัดส่วนจริงยังไม่ล็อก — ดู Gap) → ยอดรวมของ `PET_STAT` ต้อง = 50 พอดี (AC-FE-77-2)
+- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** เงื่อนไขใช้ `available_points >= 1` (ตาม AC-FE-75-2/3 — ทดสอบค่าขอบ `>=` ไม่ใช่ `>`); **เศษแต้มไม่นับ** — `available_points` เป็นจำนวนเต็ม (= floor ยอดสะสม − ที่ใช้ไป) ดังนั้นยอดสะสม 0.5 ได้ `available_points=0` จึงตอบ 422 `INSUFFICIENT_POINTS` ด้วยข้อความเป็นกลาง และเมื่อได้เศษอีก 0.5 รวมเป็น 1 ซื้อได้ (AC-FE-23-4/5); ทั้งหมดอยู่ใน 1 transaction: หักแต้ม → insert `POINTS_LEDGER_ENTRY(entry_type='egg_purchase')` → insert `PET` → insert `PET_STAT` ตามสัดส่วน (ตัวเลขสัดส่วนจริงยังไม่ล็อก — ดู Gap) → ยอดรวมของ `PET_STAT` ต้อง = 50 พอดี (AC-FE-77-2)
 
 ---
 
@@ -1160,7 +1171,7 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 | 400 | `confirm` ไม่ใช่ `true` | VALIDATION_ERROR | "กรุณายืนยันการรีเซ็ต" |
 | 404 | ไม่มีสัตว์เลี้ยงที่ใช้งานอยู่ | NO_ACTIVE_PET | "ยังไม่มีสัตว์เลี้ยงให้รีเซ็ต" |
 
-- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** ตาม [[../../01-requirements/01-spec/20260823-06-battle-support-items|spec 06]] Open Question ข้อ 6 (ปิดแล้ว 2026-08-23) — (1) หลังรีเซ็ต `available_points = total_earned_points` เสมอ (spec 02 ข้อ ข.3) โดยยอดที่คืนนับรวมแต้มที่เคยใช้ซื้อไอเทมช่วย (API-41) ด้วยเต็มจำนวน ไม่ใช่เฉพาะค่าไข่/ค่าขั้น; (2) **ไม่ insert `PET` ใหม่ทันทีในจังหวะเดียวกับการรีเซ็ต** — `PET` เดิมถูกตั้ง `is_active=false` เท่านั้น (กลายเป็นรายการในอัลบั้ม FE-72/73 อัตโนมัติ) นักเรียนต้องเรียก API-36 (ซื้อไข่) แยกต่างหากอีกครั้งเพื่อสร้าง `PET` ใหม่; (3) `STUDENT_ITEM_INVENTORY` ทั้งหมดของนักเรียนคนนี้ถูกเคลียร์ทิ้งพร้อมกัน (`quantity=0`) ในธุรกรรมเดียวกัน — นี่คือกลไกที่ปิดช่องโหว่ "รีเซ็ตแล้วได้แต้มค่าไอเทมคืนวนซ้ำ" (ได้แต้มคืนเต็มแต่ต้องเสียไอเทมทั้งหมดที่ถือครองอยู่)
+- **กฎทางธุรกิจที่ endpoint นี้บังคับ:** ตาม [[../../01-requirements/01-spec/20260823-06-battle-support-items|spec 06]] Open Question ข้อ 6 (ปิดแล้ว 2026-08-23) — (1) หลังรีเซ็ต `available_points = floor(total_earned_points)` เสมอ — **คืนเป็นส่วนจำนวนเต็มของยอดสะสม** (spec 02 ข้อ ข.3 + ข.5, AC-FE-23-6: สะสม 7.5 → ใช้ได้กลับเป็น 7 และ `totalEarnedPoints` ยังเป็น 7.5; ถ้ายอดสะสมไม่มีเศษก็เท่ากับ `total_earned_points` พอดีเหมือนเดิม) โดยยอดที่คืนนับรวมแต้มที่เคยใช้ซื้อไอเทมช่วย (API-41) ด้วยเต็มจำนวน ไม่ใช่เฉพาะค่าไข่/ค่าขั้น; ตัวอย่าง response ด้านบนใช้ยอดสะสมจำนวนเต็ม (56) จึงได้ค่าเท่ากัน; (2) **ไม่ insert `PET` ใหม่ทันทีในจังหวะเดียวกับการรีเซ็ต** — `PET` เดิมถูกตั้ง `is_active=false` เท่านั้น (กลายเป็นรายการในอัลบั้ม FE-72/73 อัตโนมัติ) นักเรียนต้องเรียก API-36 (ซื้อไข่) แยกต่างหากอีกครั้งเพื่อสร้าง `PET` ใหม่; (3) `STUDENT_ITEM_INVENTORY` ทั้งหมดของนักเรียนคนนี้ถูกเคลียร์ทิ้งพร้อมกัน (`quantity=0`) ในธุรกรรมเดียวกัน — นี่คือกลไกที่ปิดช่องโหว่ "รีเซ็ตแล้วได้แต้มค่าไอเทมคืนวนซ้ำ" (ได้แต้มคืนเต็มแต่ต้องเสียไอเทมทั้งหมดที่ถือครองอยู่)
 
 ---
 
@@ -1828,4 +1839,5 @@ Response ตั้ง `Set-Cookie: war_point_session=...; HttpOnly; Secure` แ�
 - **G-API-10:** ยังไม่ตัดสินว่าคะแนนที่ API-56 ส่งออกใช้คะแนนดิบ (`score_awarded`) หรือคะแนนที่ปรับสัดส่วนแล้ว และยังไม่ตัดสินว่ารวมคะแนนจากงานที่ครูตรวจเอง (worksheet/attachment) ด้วยหรือไม่
 - **G-API-11:** โหมดฉายผลในห้อง (API-52, FE-43) ต้องเป็น real-time push หรือครูรีเฟรชเองพอ ยังไม่ตัดสิน — กระทบว่าต้องมี WebSocket/SSE gateway เพิ่มหรือไม่ (Open Decision ของ architecture.md ข้อ 8)
 - **G-API-12 (พบใหม่ 2026-08-25):** สเปก FE-82/FE-83 (`20260825-07-pet-care-and-bonding.md`) และ AC-FE-82/AC-FE-83 ไม่มีข้อทดสอบกรณีที่ "ความหิวเต็ม" (`hunger_today=3`) กับ "เพดานรวม 10/วัน" (`daily_bonding_quota_used=10`) เกิดพร้อมกันตอนกด `feed` (เช่น กด `feed` ครั้งที่ 3 ของวันในจังหวะที่เพดานรวมเต็มพอดีจากการกด action อื่นมาก่อน) — API-63 ในเอกสารนี้เลือกลำดับตรวจ "เช็คความหิวเต็มก่อนสำหรับ `feed` เท่านั้น แล้วจึงเช็คเพดานรวมทีหลัง" เป็นการตีความที่สอดคล้องกับข้อความสเปกที่มีอยู่ (ไม่ใช่ตัวเลขใหม่) แต่ยังไม่ผ่านการยืนยันจาก requirement โดยตรง — ถ้าต้องการล็อกลำดับนี้อย่างเป็นทางการ ควรเปิด requirement เพิ่มเติมหรือเพิ่ม AC ทดสอบเคสนี้ชัดเจน
+- **G-API-13 — ปิดแล้ว (2026-11-11, Gap B5 ฝั่ง api-spec):** กฎคะแนนทศนิยม 1 ตำแหน่งและกฎ "ยอดที่ใช้ได้ = ส่วนจำนวนเต็มของยอดสะสม" (spec 01 ง. / spec 02 ข.4–6, AC-FE-17-3/4/5, AC-FE-22-3, AC-FE-23-3/4/5/6) บันทึกลง API-28, API-31 (ตัวอย่าง), API-32 (ตัวอย่าง), API-33, API-36, API-38 แล้ว — endpoint ที่เช็ค `available_points` (API-36/37/41) ไม่เปลี่ยนเงื่อนไข เพราะ `available_points` ยังเป็นจำนวนเต็ม
 - **ไม่มีช่องว่างอื่นที่กระทบโครงสร้าง endpoint ระดับนี้นอกเหนือจากที่ระบุข้างต้น** — ทุก endpoint ใน spec นี้ trace กลับไปหา FE ได้ครบ ไม่มี endpoint ใดที่ไม่มีต้นทาง
