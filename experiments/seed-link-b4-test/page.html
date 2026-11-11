@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>harness B4: ลิงก์ seed โชว์เฉพาะในเครื่อง</title>
+  <link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+  <!-- harness B4 (เพิ่ม 2026-11-11) — รัน js/quiz-attempts.js ของจริงบน mock Firestore
+       พารามิเตอร์: role=teacher|student, host=<hostname จำลอง> (ไม่ใส่ = ใช้ location จริง)
+       host จำลองทำโดยส่ง location ปลอมเข้าไปเป็นตัวแปรชื่อ location ของสคริปต์ -->
+  <div class="container">
+    <div class="top-links hidden" id="ลิงก์ใส่ข้อมูลตัวอย่าง"><a href="seed.html">ใส่ข้อมูลตัวอย่าง →</a></div>
+    <div id="ผลลัพธ์"></div>
+  </div>
+
+  <script src="../../js/util.js"></script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script>
+    (async function () {
+      var q = new URLSearchParams(location.search);
+      window.CURRENT_USER = { uid: "u1", name: "ทดสอบ", role: q.get("role") || "teacher" };
+      var ที่อยู่ = q.get("host") ? { hostname: q.get("host"), search: "", href: "https://" + q.get("host") + "/" } : location;
+      var โค้ด = await (await fetch("../../js/quiz-attempts.js")).text();
+      new Function("location", โค้ด)(ที่อยู่);
+      setTimeout(function () { window.__พร้อม = true; }, 200);
+    })().catch(function (e) { window.__ข้อผิดพลาด = e.message; console.error(e); });
+  </script>
+</body>
+</html>

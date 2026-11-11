@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบ B4 — ลิงก์ seed โชว์เฉพาะในเครื่อง</title>
+  <style>body{font-family:sans-serif;padding:16px} .ok{color:#0F7A3D} .ng{color:#B3231C} iframe{width:400px;height:80px}</style>
+</head>
+<body>
+  <h1>ทดสอบ B4 (2026-11-11)</h1>
+  <p id="สรุป">กำลังรัน…</p>
+  <ol id="ผล"></ol>
+  <div id="เฟรม"></div>
+  <script>
+    var ผล = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผล.push(!!ผ่าน);
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "ng";
+      li.textContent = (ผ่าน ? "✓ " : "✗ ") + ชื่อ + (รายละเอียด !== undefined ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function รอ(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function เปิด(qs) {
+      var f = document.createElement("iframe");
+      f.src = "page.html?" + qs;
+      document.getElementById("เฟรม").appendChild(f);
+      for (var i = 0; i < 100; i++) {
+        await รอ(50);
+        var w = f.contentWindow;
+        if (w.__ข้อผิดพลาด) throw new Error(w.__ข้อผิดพลาด);
+        if (w.__พร้อม) return w;
+      }
+      throw new Error("หน้าไม่พร้อม: " + qs);
+    }
+    function ลิงก์โชว์(w) {
+      var el = w.document.getElementById("ลิงก์ใส่ข้อมูลตัวอย่าง");
+      return !!el && !el.classList.contains("hidden") && w.getComputedStyle(el).display !== "none";
+    }
+
+    (async function () {
+      var w = await เปิด("role=teacher");
+      ตรวจ("ครู + เปิดในเครื่อง (" + location.hostname + "): เห็นลิงก์ seed", ลิงก์โชว์(w));
+      w = await เปิด("role=teacher&host=127.0.0.1");
+      ตรวจ("ครู + 127.0.0.1: เห็นลิงก์ seed", ลิงก์โชว์(w));
+      w = await เปิด("role=teacher&host=warpoint-191be.web.app");
+      ตรวจ("ครู + เว็บจริง (web.app): ไม่เห็นลิงก์ seed", !ลิงก์โชว์(w));
+      w = await เปิด("role=teacher&host=warpoint-191be.firebaseapp.com");
+      ตรวจ("ครู + เว็บจริง (firebaseapp.com): ไม่เห็นลิงก์ seed", !ลิงก์โชว์(w));
+      w = await เปิด("role=student");
+      ตรวจ("นักเรียน + เปิดในเครื่อง: ไม่เห็นลิงก์ seed", !ลิงก์โชว์(w));
+    })().catch(function (e) { ตรวจ("รันจบ", false, e.message); }).then(function () {
+      var ผ่าน = ผล.filter(Boolean).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ผล.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผล.length };
+    });
+  </script>
+</body>
+</html>

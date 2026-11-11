@@ -33,7 +33,10 @@
   function เริ่มหลังรู้บทบาท() {
     // ลิงก์ "ใส่ข้อมูลตัวอย่าง" ซ่อนไว้ตั้งแต่ต้นใน HTML แล้ว (class="hidden")
     // โชว์เฉพาะ teacher ไว้ใช้เตรียมข้อมูลทดสอบ — student ไม่ควรเห็นเครื่องมือ dev นี้
-    if (window.CURRENT_USER.role === "teacher") {
+    // [แก้ 2026-11-11 B4] และเฉพาะตอนรันในเครื่อง — เว็บจริงไม่มี seed.html แล้ว (firebase.json ignore)
+    // กันครูเผลอกดแล้ว seed เขียนทับ quiz001 + สร้างนักเรียนปลอมลงฐานข้อมูลจริง
+    var รันในเครื่อง = ["localhost", "127.0.0.1", "[::1]"].indexOf(location.hostname) !== -1;
+    if (window.CURRENT_USER.role === "teacher" && รันในเครื่อง) {
       var ลิงก์ = document.getElementById("ลิงก์ใส่ข้อมูลตัวอย่าง");
       if (ลิงก์) ลิงก์.classList.remove("hidden");
     }

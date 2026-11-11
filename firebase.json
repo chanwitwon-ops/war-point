@@ -22,7 +22,10 @@
       "docs/**",
       "experiments/**",
       "functions/**",
-      "local-ai-proxy/**"
+      "local-ai-proxy/**",
+      "seed.html",
+      "js/seed.js",
+      "js/data.js"
     ]
   },
   "firestore": {
