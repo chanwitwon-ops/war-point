@@ -31,5 +31,6 @@
 - [[test-cases/student-learn-and-pet|test-cases/student-learn-and-pet]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
 - [[test-cases/teacher-class-overview|test-cases/teacher-class-overview]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
 - [[test-cases/score-export-gradebook|test-cases/score-export-gradebook]] **(เพิ่มใหม่ 2026-08-25 — ปิด Coverage Gap G-13)**
+- [[test-cases/tournament-announcement|test-cases/tournament-announcement]] **(เพิ่มใหม่ 2026-11-17 — FE-31 ส่วนทัวนาเมนต์ + FE-43, 19 TC, ดู Coverage Gap G-18)**
 
 **หมายเหตุ:** ช่อง Actual Result ในไฟล์ test case ทุกไฟล์ต้องเว้นว่างไว้เสมอ — ผลการทดสอบจริงและบั๊กที่พบให้บันทึกที่ [[../02-test-result/index|02-test-result]] เท่านั้น
