@@ -152,6 +152,27 @@
     return Promise.resolve();
   };
 
+  // [เพิ่ม 2026-11-17] จำลอง runTransaction: อ่านได้ตามจริง · เขียนเก็บไว้ก่อน แล้วค่อยลงพร้อมกันเมื่อ callback สำเร็จ
+  // callback throw = ไม่มีการเขียนใดลงเลย (เหมือน rollback) · ห้ามอ่านหลังเขียน (กติกาเดียวกับ Firestore จริง)
+  window.__จำนวนtransaction = 0;
+  window.fsRunTransaction = async function (db, fn) {
+    var รอเขียน = [];
+    var tx = {
+      get: function (ref) {
+        if (รอเขียน.length) throw new Error("mock: transaction ต้องอ่านทั้งหมดก่อนเขียน");
+        return window.fsGetDoc(ref);
+      },
+      set: function (ref, data, opts) { รอเขียน.push(function () { return window.fsSetDoc(ref, data, opts); }); return tx; },
+      update: function (ref, data) { รอเขียน.push(function () { return window.fsUpdateDoc(ref, data); }); return tx; },
+      delete: function (ref) { รอเขียน.push(function () { return window.fsDeleteDoc(ref); }); return tx; }
+    };
+    var ผล = await fn(tx);
+    if (window.__ทำให้transactionล้ม) { window.__ทำให้transactionล้ม = false; throw new Error("mock: commit ล้ม (จำลอง)"); }
+    for (var i = 0; i < รอเขียน.length; i++) await รอเขียน[i]();
+    window.__จำนวนtransaction++;
+    return ผล;
+  };
+
   window.CURRENT_USER = { uid: "teacher-test-uid", name: "ครูทดสอบ", role: "teacher" };
 
   window.__MOCK_STORE__ = store; // เปิดดูได้ตรงๆ เวลาดีบัก

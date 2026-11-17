@@ -19,7 +19,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  getCountFromServer
+  getCountFromServer,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import {
   getAuth,
@@ -47,6 +48,8 @@ window.fsLimit = limit;
 window.fsStartAfter = startAfter;
 // นับจำนวนเอกสารโดยไม่ดึงเนื้อหา (คิด 1 read ต่อ 1,000 รายการ) — ใช้เช็คว่ากระดานคะแนนต้องคำนวณใหม่ไหม (B3)
 window.fsGetCount = getCountFromServer;
+// [เพิ่ม 2026-11-17] ทัวนาเมนต์ประกาศผลทีละรอบ: ต่อสู้/ประกาศต้องเขียนหลายจุดพร้อมกัน (ครบหรือไม่เขียนเลย)
+window.fsRunTransaction = runTransaction;
 
 window.auth = getAuth(app);
 window.fbOnAuthStateChanged = onAuthStateChanged;

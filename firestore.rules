@@ -139,16 +139,40 @@ service cloud.firestore {
     // เป็นกิจกรรมสาธารณะของห้อง (ไม่ใช่ข้อมูลส่วนตัวของนักเรียนคนใดคนหนึ่งแบบ
     // quizAttempts) จึงอ่านได้ทุกคนที่ล็อกอิน — แต่เขียน/แก้ bracket หรือผลการ
     // แข่งขันได้เฉพาะ teacher เท่านั้น เพื่อกันไม่ให้ใครโกงผลทัวนาเมนต์วันเดโมจริง
+    // [แก้ 2026-11-17 — spec 08 ฌ. ครูประกาศผลทีละรอบ] ผลการต่อสู้เป็นความลับจนครูกดประกาศรอบนั้น
+    // (database-schema.md หัวข้อ 3.1, detailed-design DD-10~12) — ปิดที่ rules ไม่ใช่แค่ซ่อนบนจอ
+    // เพราะนักเรียนเปิด F12 ยิง Firestore SDK ตรงได้:
+    //   - เอกสารทัวนาเมนต์อ่านได้ทุกคน — ปลอดภัยโดยโครงสร้าง: winnerSlot ของคู่ปกติถูกเขียนตอนประกาศเท่านั้น
+    //   - results/{matchKey} = ผลลับ อ่าน/เขียนได้เฉพาะครู
+    //   - matches/{matchId} = battle log (มีผู้ชนะอยู่ข้างใน) นักเรียนอ่านได้เมื่อ round ของ log <= announcedRound
+    //     หรือทัวนาเมนต์เก่าที่ไม่มี announcedRound (= ประกาศครบแล้ว) · log ไม่มี round ในทัวนาเมนต์ใหม่ = ปฏิเสธ
+    //   - announcedRound ของครูเพิ่มได้ทีละ 1 เท่านั้น ลด/กระโดดไม่ได้ (BR-27 — ประกาศแล้วยกเลิกไม่ได้)
+    function logReadable(tid) {
+      let t = get(/databases/$(database)/documents/tournaments/$(tid)).data;
+      return !('announcedRound' in t) ||
+        (('round' in resource.data) && resource.data.round <= t.announcedRound);
+    }
+
     match /tournaments/{tournamentId} {
       allow read: if request.auth != null;
-      allow create, update: if isTeacher();
+      allow create: if isTeacher();
+      allow update: if isTeacher() &&
+        (!('announcedRound' in resource.data) ||
+          (('announcedRound' in request.resource.data) &&
+           request.resource.data.announcedRound in [resource.data.announcedRound, resource.data.announcedRound + 1]));
       // [เพิ่ม 2026-11-09] ครูลบทัวนาเมนต์ได้ (เช่นจำลองการต่อสู้ทุกวัน/ลบรอบซ้อม) — battle log
-      // ใน matches/ ลบได้ด้วย allow write ด้านล่างอยู่แล้ว
+      // ใน matches/ และผลลับใน results/ ลบได้ด้วย allow write ด้านล่าง
       allow delete: if isTeacher();
 
-      // battle log เต็มของแต่ละแมตช์ — อ่านได้ทุกคนที่ล็อกอิน เขียนได้เฉพาะ teacher
+      // ผลลับของแต่ละคู่ — ครูเท่านั้น (นักเรียนอ่านตรง = permission-denied, AC-FE-31-6)
+      match /results/{matchKey} {
+        allow read, write: if isTeacher();
+      }
+
+      // battle log เต็มของแต่ละแมตช์ — ครูอ่านได้เสมอ (ดูรีเพลย์ก่อนประกาศ AC-FE-43-1)
+      // นักเรียนอ่านได้เมื่อรอบของคู่นั้นประกาศแล้ว · เขียนได้เฉพาะ teacher
       match /matches/{matchId} {
-        allow read: if request.auth != null;
+        allow read: if isTeacher() || (request.auth != null && logReadable(tournamentId));
         allow write: if isTeacher();
       }
     }

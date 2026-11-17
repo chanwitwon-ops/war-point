@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <base href="/">
+  <title>harness: ผังทัวนาเมนต์ประกาศผลทีละรอบ</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- [เพิ่ม 2026-11-17 spec 08 ฌ.] รัน js/tournament.js ของจริงบน mock Firestore (ไม่ต้องล็อกอิน)
+       พารามิเตอร์:
+         role=teacher|student   บทบาทที่เปิดดูผัง (ครูเป็นคนสร้าง/สู้/ประกาศตอนเตรียมฉากเสมอ)
+         n=4                     จำนวนผู้เข้าแข่ง
+         steps=r1m1,r1m2,A1      ทำตามลำดับก่อนเปิดผัง: รหัสคู่ = ต่อสู้, A{N} = ประกาศรอบ N
+       ทัวนาเมนต์ใน mock ได้ id auto_1 เสมอ · window.confirm ตอบ true อัตโนมัติ
+       ใช้โดย experiments/tournament-announce-test/index.html -->
+  <div class="container">
+    <div id="กล่องกำลังโหลด" class="card"><p>กำลังเตรียม mock…</p></div>
+    <div id="ที่วางหลัก"></div>
+  </div>
+
+  <script src="js/util.js"></script>
+  <script src="js/pet-config.js"></script>
+  <script src="js/combat-engine.js"></script>
+  <script src="experiments/tournament-integration-test/mock-firestore.js"></script>
+  <script>
+    window.__ผู้ใช้ทดสอบ = window.CURRENT_USER;
+    delete window.CURRENT_USER;
+    window.confirm = function () { return true; };
+    history.replaceState(null, "", location.pathname + location.search.replace(/^\?/, "?tournamentId=auto_1&"));
+  </script>
+  <script src="js/tournament-data.js"></script>
+  <script src="js/leaderboard-data.js"></script>
+  <script src="js/tournament.js"></script>
+  <script>
+    (async function () {
+      var q = new URLSearchParams(location.search);
+      var n = Number(q.get("n") || 4);
+      var ผู้เล่น = [];
+      for (var i = 1; i <= n; i++) {
+        ผู้เล่น.push({ studentUid: "u" + i, studentName: "นักเรียน" + i, speciesKey: "pixie", stage: 4,
+          stats: { SPD: 50 + i, ATK: 30 + (i % 3) * 4, ACC: 40, EVA: 55 - i, DEF: 20, HP: 35 + (i % 2) * 5 } });
+      }
+      window.CURRENT_USER = window.__ผู้ใช้ทดสอบ;
+      var id = await window.สร้างทัวนาเมนต์(ผู้เล่น);
+      var steps = (q.get("steps") || "").split(",").filter(Boolean);
+      for (var s = 0; s < steps.length; s++) {
+        if (/^A\d+$/.test(steps[s])) await window.ประกาศผลรอบ(id, Number(steps[s].slice(1)));
+        else {
+          var ผล = await window.คำนวณแมตช์ของทัวนาเมนต์(id, steps[s]);
+          if (ผล.needsTeacherDecision) await window.ครูเลือกผู้ชนะ(id, steps[s], "slotA");
+        }
+      }
+      window.CURRENT_USER = q.get("role") === "student"
+        ? { uid: "u1", name: "นักเรียน1", role: "student" }
+        : { uid: "teacher-test-uid", name: "ครูทดสอบ", role: "teacher" };
+      window.dispatchEvent(new Event("auth-ready"));
+      setTimeout(function () { window.__พร้อม = true; }, 200);
+    })().catch(function (e) { window.__ข้อผิดพลาด = e.message; console.error(e); });
+  </script>
+</body>
+</html>

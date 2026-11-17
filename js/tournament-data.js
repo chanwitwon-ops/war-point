@@ -23,8 +23,19 @@
 //   ผู้ชนะคู่ r{R}m{M} เลื่อนไปที่ r{R+1}m{ceil(M/2)} ฝั่ง slotA ถ้า M คี่ / slotB ถ้า M คู่
 //   decidedByTeacher: true จะมีในคู่ที่ครูเลือกผู้ชนะเอง (window.ครูเลือกผู้ชนะ)
 //
-//   tournaments/{tournamentId}/matches/{matchId} = battle log เต็มก้อนจาก window.คำนวณผลการต่อสู้
+//   tournaments/{tournamentId}/matches/{matchId} = battle log เต็มก้อนจาก window.คำนวณผลการต่อสู้ + round
 //   matchId = tournamentId + "-" + matchKey (deterministic — seed ของ engine มาจาก matchId)
+//
+// [แก้ 2026-11-17 — spec 08 ฌ. ครูประกาศผลทีละรอบ] ตาม docs/02-design/02-technical/detailed-design/
+//   tournament-fight-match.md (DD-10), tournament-announce-round.md (DD-11), tournament-view-and-replay.md (DD-12)
+//   - เอกสารใหม่มี announcedRound (เริ่ม 0) และทุกคู่มี fought (เริ่ม false)
+//   - ต่อสู้ = เขียน battle log (+round) + ผลลับ results/{matchKey} + fought/matchId ใน transaction เดียว
+//     **ไม่เขียน winnerSlot และไม่เลื่อนผู้ชนะ** (ผลยังเป็นความลับ)
+//   - tournaments/{id}/results/{matchKey} = { matchId, winnerSlot ("slotA"|"slotB"|null=เสมอ), decidedByTeacher, foughtAt }
+//     ครูอ่าน/เขียนได้คนเดียว (firestore.rules) — ผู้ชนะของคู่ที่ยังไม่ประกาศอยู่ที่นี่และใน battle log เท่านั้น
+//   - ประกาศรอบ N = คัดลอกผู้ชนะทุกคู่ของรอบ N ลงเอกสารสาธารณะ + เลื่อนเข้ารอบ N+1 + announcedRound = N (transaction เดียว)
+//   - คู่บาย: winnerSlot = "slotA" และเติมช่องรอบถัดไปตั้งแต่ตอนสร้างเหมือนเดิม (ฌ. ข้อ 11)
+//   - เอกสารเก่าที่ไม่มี announcedRound = ประกาศครบทุกรอบแล้ว ดูผลได้อย่างเดียว (ฌ. ข้อ 9)
 //
 // เอกสารโครงเก่า (semifinal1/semifinal2/final) ยังอ่านแชมป์ได้ผ่าน แชมป์ของทัวนาเมนต์() ใน js/util.js
 // ─────────────────────────────────────────────────────────────
@@ -131,7 +142,7 @@
     for (var r = 1; r <= roundCount; r++) {
       var จำนวนคู่ = ขนาด / Math.pow(2, r);
       for (var i = 1; i <= จำนวนคู่; i++) {
-        matches[รหัสคู่(r, i)] = { round: r, index: i, slotA: null, slotB: null, matchId: null, winnerSlot: null, bye: false };
+        matches[รหัสคู่(r, i)] = { round: r, index: i, slotA: null, slotB: null, matchId: null, winnerSlot: null, bye: false, fought: false };
       }
     }
 
@@ -176,6 +187,7 @@
       participantCount: ผัง.participantCount,
       roundCount: ผัง.roundCount,
       finalKey: ผัง.finalKey,
+      announcedRound: 0, // [เพิ่ม 2026-11-17] ยังไม่ประกาศรอบใด — ผลทุกคู่เป็นความลับจนครูกดประกาศ
       matches: ผัง.matches
     };
 
@@ -188,115 +200,223 @@
     }
   };
 
-  async function อ่านทัวนาเมนต์(tournamentId) {
-    var เอกสารอ้างอิง = window.fsDoc(window.db, "tournaments", tournamentId);
-    var สแนปช็อต = await window.fsGetDoc(เอกสารอ้างอิง);
-    if (!สแนปช็อต.exists()) throw new Error("ไม่พบทัวนาเมนต์นี้ — รหัส: " + tournamentId);
+  // ── ตัวช่วยกติกาประกาศผลทีละรอบ (DD-10~12) ──
+  function เป็นเอกสารเก่า(ข้อมูล) { return typeof ข้อมูล.announcedRound !== "number"; }
+  // เอกสารเก่า (ไม่มี announcedRound) = ประกาศครบทุกรอบแล้ว (BR-31)
+  function ประกาศถึงรอบ(ข้อมูล) { return เป็นเอกสารเก่า(ข้อมูล) ? ข้อมูล.roundCount : ข้อมูล.announcedRound; }
+  function สู้แล้ว(คู่, เก่า) { return เก่า ? !!คู่.matchId : คู่.fought === true; }
+  function ผู้ใช้เป็นครู() { return !!window.CURRENT_USER && window.CURRENT_USER.role === "teacher"; }
+  function ผิดพลาด(code, ข้อความ) { var e = new Error(ข้อความ); e.code = code; return e; }
+  function เอกสารทัวนาเมนต์(tid) { return window.fsDoc(window.db, "tournaments", tid); }
+  function เอกสารผลลับ(tid, matchKey) { return window.fsDoc(window.db, "tournaments", tid, "results", matchKey); }
+  function เอกสารบันทึกต่อสู้(tid, matchId) { return window.fsDoc(window.db, "tournaments", tid, "matches", matchId); }
+
+  function ตรวจเอกสาร(สแนปช็อต, tid) {
+    if (!สแนปช็อต.exists()) throw ผิดพลาด("TOURNAMENT_NOT_FOUND", "ไม่พบทัวนาเมนต์นี้ (อาจถูกลบไปแล้ว) — รหัส: " + tid);
     var ข้อมูล = สแนปช็อต.data();
-    if (!ข้อมูล.matches) throw new Error("ทัวนาเมนต์นี้เป็นรูปแบบเก่า (4 คนตายตัว) — ดูผลได้อย่างเดียว");
-    return { ref: เอกสารอ้างอิง, ข้อมูล: ข้อมูล };
+    if (!ข้อมูล.matches) {
+      throw ผิดพลาด("TOURNAMENT_LEGACY_FORMAT", "ทัวนาเมนต์นี้สร้างด้วยระบบรุ่นเก่า (4 คนตายตัว) เปิดผังในระบบใหม่ไม่ได้");
+    }
+    return ข้อมูล;
   }
 
   function ตรวจรหัสคู่(ข้อมูล, matchKey) {
     if (!รูปแบบรหัสคู่.test(String(matchKey)) || !ข้อมูล.matches[matchKey]) {
-      throw new Error("ไม่พบคู่นี้ในทัวนาเมนต์ — รหัสคู่: " + matchKey);
+      throw ผิดพลาด("MATCH_NOT_FOUND", "ไม่พบคู่นี้ในทัวนาเมนต์ — รหัสคู่: " + matchKey);
     }
   }
 
-  // ── window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId, matchKey) ──
-  // คำนวณด้วย engine → บันทึก battle log → อัปเดต winnerSlot → เลื่อนผู้ชนะเข้ารอบถัดไปอัตโนมัติ
-  // คืน Promise<battle log>
+  function ห่อข้อผิดพลาด(คำนำ, err) {
+    console.error(err);
+    var e = new Error(คำนำ + err.message);
+    if (err.code) e.code = err.code;
+    return e;
+  }
+
+  // ── window.คำนวณแมตช์ของทัวนาเมนต์(tournamentId, matchKey) ── (ครูเท่านั้น — DD-10 / API-67)
+  // คำนวณด้วย engine แล้วเขียน 3 จุดใน transaction เดียว: battle log (+round), ผลลับ results/{matchKey},
+  // และ matches.{key}.fought/matchId — **ไม่เขียนผู้ชนะลงเอกสารสาธารณะ ไม่เลื่อนผู้ชนะ** (รอครูประกาศรอบ)
+  // คืน Promise<{ matchKey, matchId, needsTeacherDecision }> — ไม่มีผู้ชนะใน response (ครูอาจฉายจออยู่)
   window.คำนวณแมตช์ของทัวนาเมนต์ = async function (tournamentId, matchKey) {
-    var อ่าน = await อ่านทัวนาเมนต์(tournamentId);
-    var ข้อมูล = อ่าน.ข้อมูล;
-    ตรวจรหัสคู่(ข้อมูล, matchKey);
-    var คู่แข่งขัน = ข้อมูล.matches[matchKey];
-    if (คู่แข่งขัน.bye) throw new Error("คู่นี้ได้บาย ไม่ต้องต่อสู้");
-    if (คู่แข่งขัน.matchId) throw new Error("คู่นี้ต่อสู้ไปแล้ว");
-    if (!คู่แข่งขัน.slotA || !คู่แข่งขัน.slotB) {
-      throw new Error("คู่นี้ยังไม่พร้อม — ต้องรอผลของรอบก่อนหน้าให้ครบทั้งสองฝั่ง");
-    }
-
-    var matchId = tournamentId + "-" + matchKey;
+    if (!ผู้ใช้เป็นครู()) throw ผิดพลาด("FORBIDDEN_ROLE", "เฉพาะครูเท่านั้นที่กดต่อสู้ได้");
+    var อ้างอิง = เอกสารทัวนาเมนต์(tournamentId);
     try {
-      var บันทึกผล = window.คำนวณผลการต่อสู้({
-        matchId: matchId,
-        sideA: แปลงช่องเป็นฝ่ายต่อสู้(คู่แข่งขัน.slotA),
-        sideB: แปลงช่องเป็นฝ่ายต่อสู้(คู่แข่งขัน.slotB)
+      return await window.fsRunTransaction(window.db, async function (tx) {
+        var ข้อมูล = ตรวจเอกสาร(await tx.get(อ้างอิง), tournamentId);
+        if (เป็นเอกสารเก่า(ข้อมูล)) {
+          throw ผิดพลาด("TOURNAMENT_LEGACY", "ทัวนาเมนต์นี้สร้างก่อนมีระบบประกาศผล — ดูผลได้อย่างเดียว");
+        }
+        ตรวจรหัสคู่(ข้อมูล, matchKey);
+        var คู่ = ข้อมูล.matches[matchKey];
+        // ลำดับตรวจตาม API-67: บาย → สู้แล้ว → รอบยังไม่ปลดล็อก → ผู้เข้ารอบไม่ครบ
+        if (คู่.bye) throw ผิดพลาด("MATCH_IS_BYE", "คู่นี้ได้บาย ไม่ต้องต่อสู้");
+        if (คู่.fought === true) throw ผิดพลาด("MATCH_ALREADY_FOUGHT", "คู่นี้ต่อสู้ไปแล้ว");
+        if (!(ข้อมูล.announcedRound >= คู่.round - 1)) { // BR-25
+          throw ผิดพลาด("ROUND_NOT_UNLOCKED", "ต้องประกาศผล" + ชื่อรอบทัวนาเมนต์(คู่.round - 1, ข้อมูล.roundCount) + "ก่อน จึงจะต่อสู้รอบนี้ได้");
+        }
+        if (!คู่.slotA || !คู่.slotB) {
+          throw ผิดพลาด("MATCH_NOT_READY", "คู่นี้ยังไม่พร้อม — ต้องมีผู้เข้ารอบครบทั้งสองฝั่ง");
+        }
+
+        var matchId = tournamentId + "-" + matchKey;
+        var บันทึกผล = window.คำนวณผลการต่อสู้({
+          matchId: matchId,
+          sideA: แปลงช่องเป็นฝ่ายต่อสู้(คู่.slotA),
+          sideB: แปลงช่องเป็นฝ่ายต่อสู้(คู่.slotB)
+        });
+        var winnerSlot = null; // เสมอจริง (winner null) → รอครูชี้ขาด ไม่สุ่ม (BR-33)
+        if (บันทึกผล.result.winner === "A") winnerSlot = "slotA";
+        else if (บันทึกผล.result.winner === "B") winnerSlot = "slotB";
+
+        // round ใน battle log คือเงื่อนไขที่ rules ใช้ตัดสินว่านักเรียนอ่านได้หรือยัง (DD-12)
+        tx.set(เอกสารบันทึกต่อสู้(tournamentId, matchId), Object.assign({}, บันทึกผล, { round: คู่.round }));
+        tx.set(เอกสารผลลับ(tournamentId, matchKey), {
+          matchId: matchId, winnerSlot: winnerSlot, decidedByTeacher: false, foughtAt: เวลาตอนนี้()
+        });
+        var ค่าที่จะอัปเดต = {};
+        ค่าที่จะอัปเดต["matches." + matchKey + ".fought"] = true;
+        ค่าที่จะอัปเดต["matches." + matchKey + ".matchId"] = matchId;
+        tx.update(อ้างอิง, ค่าที่จะอัปเดต);
+        return { matchKey: matchKey, matchId: matchId, needsTeacherDecision: winnerSlot === null };
       });
-
-      await window.fsSetDoc(window.fsDoc(window.db, "tournaments", tournamentId, "matches", matchId), บันทึกผล);
-
-      var winnerSlotKey = null;
-      if (บันทึกผล.result.winner === "A") winnerSlotKey = "slotA";
-      else if (บันทึกผล.result.winner === "B") winnerSlotKey = "slotB";
-      // เสมอจริง (winner null) → รอครูชี้ขาดผ่าน window.ครูเลือกผู้ชนะ ไม่สุ่มผู้ชนะ
-
-      var ค่าที่จะอัปเดต = {};
-      ค่าที่จะอัปเดต["matches." + matchKey + ".matchId"] = matchId;
-      ค่าที่จะอัปเดต["matches." + matchKey + ".winnerSlot"] = winnerSlotKey;
-      if (winnerSlotKey) {
-        var ไป = ปลายทางของ(matchKey, ข้อมูล.roundCount);
-        if (ไป) ค่าที่จะอัปเดต["matches." + ไป.key + "." + ไป.side] = ตัดสำเนาช่อง(คู่แข่งขัน[winnerSlotKey]);
-      }
-      await window.fsUpdateDoc(อ่าน.ref, ค่าที่จะอัปเดต);
-      return บันทึกผล;
     } catch (err) {
-      console.error(err);
-      throw new Error("คำนวณผลแมตช์ไม่สำเร็จ: " + err.message);
+      throw ห่อข้อผิดพลาด("คำนวณผลแมตช์ไม่สำเร็จ: ", err);
     }
   };
 
-  // ── window.ครูเลือกผู้ชนะ(tournamentId, matchKey, winnerSlot) ──
-  // ใช้เมื่อแมตช์คำนวณแล้วแต่ result.winner === null (%เลือดเท่ากันเป๊ะ) เท่านั้น
+  // ── window.ครูเลือกผู้ชนะ(tournamentId, matchKey, winnerSlot) ── (ครูเท่านั้น — API-68)
+  // ใช้เมื่อคู่ต่อสู้แล้วแต่เสมอจริง (ผลลับ winnerSlot === null) · เขียนที่ผลลับเท่านั้น ยังไม่แตะเอกสารสาธารณะ
+  // (ผู้ชนะที่ครูเลือกจะปรากฏตอนประกาศรอบ) · เลือกได้ครั้งเดียว แก้ซ้ำไม่ได้
   window.ครูเลือกผู้ชนะ = async function (tournamentId, matchKey, winnerSlot) {
+    if (!ผู้ใช้เป็นครู()) throw ผิดพลาด("FORBIDDEN_ROLE", "เฉพาะครูเท่านั้นที่เลือกผู้ชนะได้");
     if (winnerSlot !== "slotA" && winnerSlot !== "slotB") {
-      throw new Error('winnerSlot ไม่ถูกต้อง — ต้องเป็น "slotA" หรือ "slotB" เท่านั้น');
+      throw ผิดพลาด("VALIDATION_ERROR", 'winnerSlot ไม่ถูกต้อง — ต้องเป็น "slotA" หรือ "slotB" เท่านั้น');
     }
-    var อ่าน = await อ่านทัวนาเมนต์(tournamentId);
-    var ข้อมูล = อ่าน.ข้อมูล;
-    ตรวจรหัสคู่(ข้อมูล, matchKey);
-    var คู่ = ข้อมูล.matches[matchKey];
-    if (!คู่.matchId) {
-      throw new Error("แมตช์นี้ยังไม่ได้คำนวณผล — ครูเลือกผู้ชนะได้เฉพาะแมตช์ที่เสมอจริงหลังคำนวณแล้ว");
-    }
-    var สแนปช็อตแมตช์ = await window.fsGetDoc(window.fsDoc(window.db, "tournaments", tournamentId, "matches", คู่.matchId));
-    if (!สแนปช็อตแมตช์.exists()) throw new Error("ไม่พบบันทึกผลแมตช์ — รหัส: " + คู่.matchId);
-    var ผล = สแนปช็อตแมตช์.data().result;
-    if (!ผล || ผล.winner !== null) throw new Error("แมตช์นี้มีผู้ชนะจากการคำนวณแล้ว ครูเลือกผู้ชนะเองไม่ได้");
-    if (คู่.winnerSlot) throw new Error("แมตช์นี้ครูเลือกผู้ชนะไปแล้ว แก้ซ้ำไม่ได้");
-
+    var อ้างอิง = เอกสารทัวนาเมนต์(tournamentId);
     try {
-      var ค่าที่จะอัปเดต = {};
-      ค่าที่จะอัปเดต["matches." + matchKey + ".winnerSlot"] = winnerSlot;
-      ค่าที่จะอัปเดต["matches." + matchKey + ".decidedByTeacher"] = true;
-      var ไป = ปลายทางของ(matchKey, ข้อมูล.roundCount);
-      if (ไป) ค่าที่จะอัปเดต["matches." + ไป.key + "." + ไป.side] = ตัดสำเนาช่อง(คู่[winnerSlot]);
-      await window.fsUpdateDoc(อ่าน.ref, ค่าที่จะอัปเดต);
+      await window.fsRunTransaction(window.db, async function (tx) {
+        var ข้อมูล = ตรวจเอกสาร(await tx.get(อ้างอิง), tournamentId);
+        if (เป็นเอกสารเก่า(ข้อมูล)) {
+          throw ผิดพลาด("TOURNAMENT_LEGACY", "ทัวนาเมนต์นี้สร้างก่อนมีระบบประกาศผล — ดูผลได้อย่างเดียว");
+        }
+        ตรวจรหัสคู่(ข้อมูล, matchKey);
+        var คู่ = ข้อมูล.matches[matchKey];
+        if (คู่.bye || คู่.fought !== true) {
+          throw ผิดพลาด("MATCH_NOT_READY", "คู่นี้ยังไม่ได้ต่อสู้ — ครูเลือกผู้ชนะได้เฉพาะคู่ที่เสมอหลังต่อสู้แล้ว");
+        }
+        if (คู่.round <= ข้อมูล.announcedRound) throw ผิดพลาด("ROUND_ALREADY_ANNOUNCED", "รอบนี้ประกาศผลไปแล้ว แก้ผู้ชนะไม่ได้");
+        var ผลลับ = await tx.get(เอกสารผลลับ(tournamentId, matchKey));
+        if (!ผลลับ.exists()) throw ผิดพลาด("INTERNAL_DATA_ERROR", "ไม่พบผลของคู่นี้ (ข้อมูลภายในผิดปกติ)");
+        var ผล = ผลลับ.data();
+        if (ผล.decidedByTeacher === true) throw ผิดพลาด("TIE_ALREADY_DECIDED", "คู่นี้ครูเลือกผู้ชนะไปแล้ว แก้ซ้ำไม่ได้");
+        if (ผล.winnerSlot != null) throw ผิดพลาด("MATCH_NOT_TIED", "คู่นี้มีผู้ชนะจากการต่อสู้แล้ว ครูเลือกผู้ชนะเองไม่ได้");
+        tx.update(เอกสารผลลับ(tournamentId, matchKey), { winnerSlot: winnerSlot, decidedByTeacher: true });
+      });
     } catch (err) {
-      console.error(err);
-      throw new Error("บันทึกผู้ชนะไม่สำเร็จ: " + err.message);
+      throw ห่อข้อผิดพลาด("บันทึกผู้ชนะไม่สำเร็จ: ", err);
     }
   };
 
-  // ── window.โหลดทัวนาเมนต์(tournamentId) ──
-  // คืนเอกสารทั้งก้อน + .rounds = [[{key, ...คู่, matchLog?}, ...], ...] เรียงตามรอบ/ลำดับ
+  // ── window.ประกาศผลรอบ(tournamentId, round) ── (ครูเท่านั้น — DD-11 / API-69)
+  // คัดลอกผู้ชนะจากผลลับของทุกคู่ปกติในรอบนี้ลงเอกสารสาธารณะ + เลื่อนเข้ารอบถัดไป + announcedRound = round
+  // ทั้งหมดใน transaction เดียว (พลาดจุดเดียว = ไม่เปลี่ยนอะไรเลย) · ประกาศแล้วยกเลิกไม่ได้ (ฌ. ข้อ 10)
+  // คืน Promise<{ announcedRound, roundCount, championDecided }>
+  window.ประกาศผลรอบ = async function (tournamentId, round) {
+    if (!ผู้ใช้เป็นครู()) throw ผิดพลาด("FORBIDDEN_ROLE", "เฉพาะครูเท่านั้นที่ประกาศผลได้");
+    if (typeof round !== "number" || round % 1 !== 0) throw ผิดพลาด("VALIDATION_ERROR", "เลขรอบไม่ถูกต้อง");
+    var อ้างอิง = เอกสารทัวนาเมนต์(tournamentId);
+    try {
+      return await window.fsRunTransaction(window.db, async function (tx) {
+        var ข้อมูล = ตรวจเอกสาร(await tx.get(อ้างอิง), tournamentId);
+        if (round < 1 || round > ข้อมูล.roundCount) throw ผิดพลาด("VALIDATION_ERROR", "เลขรอบไม่ถูกต้อง");
+        // ลำดับตรวจตาม API-69: ประกาศแล้ว → ข้ามรอบ → สู้ยังไม่ครบ → เสมอค้าง (BR-26)
+        if (เป็นเอกสารเก่า(ข้อมูล) || round <= ข้อมูล.announcedRound) {
+          throw ผิดพลาด("ROUND_ALREADY_ANNOUNCED", "รอบนี้ประกาศผลไปแล้ว");
+        }
+        if (round > ข้อมูล.announcedRound + 1) {
+          throw ผิดพลาด("ROUND_SKIPPED", "ต้องประกาศผล" + ชื่อรอบทัวนาเมนต์(ข้อมูล.announcedRound + 1, ข้อมูล.roundCount) + "ก่อน");
+        }
+        var คู่ปกติ = Object.keys(ข้อมูล.matches).filter(function (k) {
+          return ข้อมูล.matches[k].round === round && !ข้อมูล.matches[k].bye;
+        });
+        var ยังไม่สู้ = คู่ปกติ.filter(function (k) { return ข้อมูล.matches[k].fought !== true; });
+        if (ยังไม่สู้.length > 0) {
+          throw ผิดพลาด("ROUND_NOT_FULLY_FOUGHT", "ยังต่อสู้ไม่ครบทุกคู่ในรอบนี้ (เหลือ " + ยังไม่สู้.length + " คู่)");
+        }
+        var ผลลับทั้งหมด = {};
+        for (var i = 0; i < คู่ปกติ.length; i++) {
+          var ส = await tx.get(เอกสารผลลับ(tournamentId, คู่ปกติ[i]));
+          if (!ส.exists()) throw ผิดพลาด("INTERNAL_DATA_ERROR", "ไม่พบผลของคู่ " + คู่ปกติ[i] + " (ข้อมูลภายในผิดปกติ)");
+          ผลลับทั้งหมด[คู่ปกติ[i]] = ส.data();
+        }
+        var เสมอค้าง = คู่ปกติ.filter(function (k) {
+          var w = ผลลับทั้งหมด[k].winnerSlot;
+          return w !== "slotA" && w !== "slotB";
+        });
+        if (เสมอค้าง.length > 0) {
+          throw ผิดพลาด("TIE_NOT_DECIDED", "ยังมีคู่ที่เสมอ " + เสมอค้าง.length + " คู่ — ครูต้องเลือกผู้ชนะก่อนประกาศ");
+        }
+
+        var ค่าที่จะอัปเดต = {};
+        คู่ปกติ.forEach(function (k) {
+          var ผล = ผลลับทั้งหมด[k];
+          var คู่ = ข้อมูล.matches[k];
+          ค่าที่จะอัปเดต["matches." + k + ".winnerSlot"] = ผล.winnerSlot;
+          ค่าที่จะอัปเดต["matches." + k + ".decidedByTeacher"] = ผล.decidedByTeacher === true;
+          var ไป = ปลายทางของ(k, ข้อมูล.roundCount);
+          if (ไป) ค่าที่จะอัปเดต["matches." + ไป.key + "." + ไป.side] = ตัดสำเนาช่อง(คู่[ผล.winnerSlot]);
+        });
+        ค่าที่จะอัปเดต.announcedRound = round;
+        tx.update(อ้างอิง, ค่าที่จะอัปเดต);
+        return { announcedRound: round, roundCount: ข้อมูล.roundCount, championDecided: round === ข้อมูล.roundCount };
+      });
+    } catch (err) {
+      throw ห่อข้อผิดพลาด("ประกาศผลไม่สำเร็จ: ", err);
+    }
+  };
+
+  // ── window.โหลดทัวนาเมนต์(tournamentId) ── (ทุกบทบาท — DD-12 ส่วน A)
+  // คืนเอกสาร + .rounds = [[{key, ...คู่, status, matchLog?}, ...], ...] เรียงตามรอบ/ลำดับ
+  //   status: "bye" | "waiting_fight" | "waiting_announce" | "announced"
+  //   winnerSlot ของคู่ปกติในรอบที่ยังไม่ประกาศถูกตั้งเป็น null เสมอ (ป้องกันซ้อนชั้น) — **ครูก็ไม่เห็นผู้ชนะบนผัง**
+  //   matchLog โหลดเฉพาะคู่ที่ประกาศแล้ว (ใช้ป้ายเหตุผล) · รีเพลย์ใช้ window.โหลดรีเพลย์ของคู่
+  //   legacy (เอกสารเก่า) / announcedRound / effectiveAnnouncedRound
+  //   เฉพาะครู (นักเรียนไม่มี field เหล่านี้เลย): คู่.canFight, คู่.needsTeacherDecision, announceableRound,
+  //     nextRoundInfo = { round, remaining, ties } (สถานะของรอบถัดไปที่ยังไม่ประกาศ — ใช้บอกเหตุผลที่ยังกดประกาศไม่ได้)
   window.โหลดทัวนาเมนต์ = async function (tournamentId) {
     try {
-      var สแนปช็อต = await window.fsGetDoc(window.fsDoc(window.db, "tournaments", tournamentId));
-      if (!สแนปช็อต.exists()) throw new Error("ไม่พบทัวนาเมนต์นี้ — รหัส: " + tournamentId);
-      var ข้อมูล = สแนปช็อต.data();
+      var สแนปช็อต = await window.fsGetDoc(เอกสารทัวนาเมนต์(tournamentId));
+      var ข้อมูล = ตรวจเอกสาร(สแนปช็อต, tournamentId);
       ข้อมูล.id = สแนปช็อต.id;
-      if (!ข้อมูล.matches) {
-        throw new Error("ทัวนาเมนต์นี้สร้างด้วยระบบรุ่นเก่า (4 คนตายตัว) เปิดผังในระบบใหม่ไม่ได้");
-      }
+      var เก่า = เป็นเอกสารเก่า(ข้อมูล);
+      var ประกาศถึง = ประกาศถึงรอบ(ข้อมูล);
+      var ครู = ผู้ใช้เป็นครู();
+      ข้อมูล.legacy = เก่า;
+      ข้อมูล.effectiveAnnouncedRound = ประกาศถึง;
 
       var keys = Object.keys(ข้อมูล.matches);
       await Promise.all(keys.map(async function (k) {
         var คู่ = ข้อมูล.matches[k];
-        if (คู่.matchId) {
-          var ส = await window.fsGetDoc(window.fsDoc(window.db, "tournaments", tournamentId, "matches", คู่.matchId));
-          คู่.matchLog = ส.exists() ? ส.data() : null;
+        var สู้ = สู้แล้ว(คู่, เก่า);
+        var ประกาศแล้ว = คู่.round <= ประกาศถึง;
+        คู่.fought = สู้;
+        if (!คู่.bye && !ประกาศแล้ว) { คู่.winnerSlot = null; คู่.decidedByTeacher = false; } // BR-28
+        คู่.status = คู่.bye ? "bye" : !สู้ ? "waiting_fight" : ประกาศแล้ว ? "announced" : "waiting_announce";
+
+        if (คู่.status === "announced" && คู่.matchId) {
+          try {
+            var ส = await window.fsGetDoc(เอกสารบันทึกต่อสู้(tournamentId, คู่.matchId));
+            คู่.matchLog = ส.exists() ? ส.data() : null;
+          } catch (e) { console.error(e); คู่.matchLog = null; }
+        }
+        if (ครู && !เก่า) {
+          คู่.canFight = !คู่.bye && !สู้ && !!คู่.slotA && !!คู่.slotB && ข้อมูล.announcedRound >= คู่.round - 1;
+          คู่.needsTeacherDecision = false;
+          if (คู่.status === "waiting_announce") {
+            var ผล = await window.fsGetDoc(เอกสารผลลับ(tournamentId, k));
+            // อ่านแค่ว่าเสมอค้างไหม — ไม่นำผู้ชนะลับมาใส่ผัง (AC-FE-43-2)
+            คู่.needsTeacherDecision = ผล.exists() && ผล.data().winnerSlot == null;
+          }
         }
       }));
 
@@ -307,33 +427,88 @@
         ข้อมูล.rounds[คู่.round - 1].push(คู่);
       });
       ข้อมูล.rounds.forEach(function (รอบ) { รอบ.sort(function (a, b) { return a.index - b.index; }); });
+
+      if (ครู && !เก่า) {
+        ข้อมูล.announceableRound = null;
+        ข้อมูล.nextRoundInfo = null;
+        var N = ข้อมูล.announcedRound + 1;
+        if (N <= ข้อมูล.roundCount) {
+          var คู่ปกติ = ข้อมูล.rounds[N - 1].filter(function (ค) { return !ค.bye; });
+          var เหลือ = คู่ปกติ.filter(function (ค) { return !ค.fought; }).length;
+          var เสมอ = คู่ปกติ.filter(function (ค) { return ค.needsTeacherDecision; }).length;
+          ข้อมูล.nextRoundInfo = { round: N, remaining: เหลือ, ties: เสมอ };
+          if (เหลือ === 0 && เสมอ === 0) ข้อมูล.announceableRound = N; // BR-26
+        }
+      }
       return ข้อมูล;
     } catch (err) {
-      console.error(err);
-      throw new Error("โหลดทัวนาเมนต์ไม่สำเร็จ: " + err.message);
+      throw ห่อข้อผิดพลาด("โหลดทัวนาเมนต์ไม่สำเร็จ: ", err);
+    }
+  };
+
+  // ── window.โหลดรีเพลย์ของคู่(tournamentId, matchKey) ── (ทุกบทบาท — DD-12 ส่วน B / API-70)
+  // นักเรียน: รอบที่ยังไม่ประกาศ → ROUND_NOT_ANNOUNCED ทันที (ตรวจก่อนว่าสู้แล้วหรือยัง ไม่อ่าน log เลย)
+  // ครู: เปิดได้เสมอเมื่อสู้แล้ว (AC-FE-43-1) — การเปิดไม่แก้ข้อมูลใดๆ
+  // คืน { tournament: { id, roundCount }, คู่: {...คู่ พร้อม winnerSlot/decidedByTeacher ที่เปิดเผยได้}, matchLog }
+  window.โหลดรีเพลย์ของคู่ = async function (tournamentId, matchKey) {
+    try {
+      var ข้อมูล = ตรวจเอกสาร(await window.fsGetDoc(เอกสารทัวนาเมนต์(tournamentId)), tournamentId);
+      ตรวจรหัสคู่(ข้อมูล, matchKey);
+      var เก่า = เป็นเอกสารเก่า(ข้อมูล);
+      var ประกาศแล้ว = ข้อมูล.matches[matchKey].round <= ประกาศถึงรอบ(ข้อมูล);
+      var คู่ = Object.assign({ key: matchKey }, ข้อมูล.matches[matchKey]);
+      var ครู = ผู้ใช้เป็นครู();
+      if (!ครู && !ประกาศแล้ว) {
+        throw ผิดพลาด("ROUND_NOT_ANNOUNCED", "รอครูประกาศผลก่อน จึงจะดูรีเพลย์ได้");
+      }
+      if (คู่.bye || !สู้แล้ว(คู่, เก่า) || !คู่.matchId) {
+        throw ผิดพลาด("MATCH_NOT_FOUND", "คู่นี้ยังไม่ได้ต่อสู้ — รอครูกดต่อสู้ที่หน้าผังทัวนาเมนต์ก่อน");
+      }
+      var ส = await window.fsGetDoc(เอกสารบันทึกต่อสู้(tournamentId, คู่.matchId));
+      if (!ส.exists()) throw ผิดพลาด("MATCH_NOT_FOUND", "ไม่พบรีเพลย์ของคู่นี้");
+
+      if (!ประกาศแล้ว) {
+        // ครูดูก่อนประกาศ: ผู้ชนะบนเอกสารสาธารณะยังว่าง — ใช้ผลลับเฉพาะกรณีครูชี้ขาดเสมอ
+        คู่.winnerSlot = null;
+        คู่.decidedByTeacher = false;
+        var ผลลับ = await window.fsGetDoc(เอกสารผลลับ(tournamentId, matchKey));
+        if (ผลลับ.exists() && ผลลับ.data().decidedByTeacher === true) {
+          คู่.winnerSlot = ผลลับ.data().winnerSlot;
+          คู่.decidedByTeacher = true;
+        }
+      }
+      return { tournament: { id: tournamentId, roundCount: ข้อมูล.roundCount }, คู่: คู่, matchLog: ส.data(), announced: ประกาศแล้ว };
+    } catch (err) {
+      if (err.code === "ROUND_NOT_ANNOUNCED" || err.code === "MATCH_NOT_FOUND") throw err;
+      throw ห่อข้อผิดพลาด("โหลดรีเพลย์ไม่สำเร็จ: ", err);
     }
   };
 
   // ── window.ลบทัวนาเมนต์(tournamentId) ── (ครูเท่านั้น — rules บังคับ)
-  // ลบ battle log ทุกแมตช์ก่อน แล้วค่อยลบตัวทัวนาเมนต์ (แชมป์หายจากกระดานเกียรติยศ/หน้าหลักด้วย)
+  // ลบ battle log + ผลลับทุกคู่ก่อน แล้วค่อยลบตัวทัวนาเมนต์ (Firestore ไม่ลบ subcollection ให้เอง)
+  // แชมป์หายจากกระดานเกียรติยศ/หน้าหลักด้วย
   window.ลบทัวนาเมนต์ = async function (tournamentId) {
     try {
-      var อ้างอิง = window.fsDoc(window.db, "tournaments", tournamentId);
+      var อ้างอิง = เอกสารทัวนาเมนต์(tournamentId);
       var ส = await window.fsGetDoc(อ้างอิง);
       if (!ส.exists()) return;
       var ข้อมูล = ส.data();
-      var คู่ทั้งหมด = ข้อมูล.matches
-        ? Object.keys(ข้อมูล.matches).map(function (k) { return ข้อมูล.matches[k]; })
-        : ["semifinal1", "semifinal2", "final"].map(function (k) { return ข้อมูล[k] || {}; });
-      for (var i = 0; i < คู่ทั้งหมด.length; i++) {
-        if (คู่ทั้งหมด[i].matchId) {
-          await window.fsDeleteDoc(window.fsDoc(window.db, "tournaments", tournamentId, "matches", คู่ทั้งหมด[i].matchId));
+      if (ข้อมูล.matches) {
+        var keys = Object.keys(ข้อมูล.matches);
+        for (var k = 0; k < keys.length; k++) {
+          var คู่ = ข้อมูล.matches[keys[k]];
+          if (คู่.matchId) await window.fsDeleteDoc(เอกสารบันทึกต่อสู้(tournamentId, คู่.matchId));
+          if (คู่.fought === true) await window.fsDeleteDoc(เอกสารผลลับ(tournamentId, keys[k]));
+        }
+      } else {
+        var เก่า = ["semifinal1", "semifinal2", "final"].map(function (k) { return ข้อมูล[k] || {}; });
+        for (var i = 0; i < เก่า.length; i++) {
+          if (เก่า[i].matchId) await window.fsDeleteDoc(เอกสารบันทึกต่อสู้(tournamentId, เก่า[i].matchId));
         }
       }
       await window.fsDeleteDoc(อ้างอิง);
     } catch (err) {
-      console.error(err);
-      throw new Error("ลบทัวนาเมนต์ไม่สำเร็จ: " + err.message);
+      throw ห่อข้อผิดพลาด("ลบทัวนาเมนต์ไม่สำเร็จ: ", err);
     }
   };
 

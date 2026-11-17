@@ -67,11 +67,22 @@
       window.CURRENT_USER = window.__ผู้ใช้ทดสอบ; // ครูในการสร้าง (data layer อ่าน CURRENT_USER)
       // [แก้ 2026-11-09] API ใหม่: ส่งรายชื่อผู้เข้าแข่ง ระบบสุ่มจับคู่เอง — 4 คน = r1m1, r1m2 → r2m1
       var id = await window.สร้างทัวนาเมนต์([slot("uid-a", "น้องเอ"), slot("uid-b", "น้องบี"), slot("uid-c", "น้องซี"), slot("uid-d", "น้องดี")]);
-      for (var k of ["r1m1", "r1m2", "r2m1"]) {
-        var ผล = await window.คำนวณแมตช์ของทัวนาเมนต์(id, k);
-        if (ผล.result.winner === null) await window.ครูเลือกผู้ชนะ(id, k, "slotA");
+      // [แก้ 2026-11-17] สู้ครบรอบ → ครูประกาศรอบ → จึงสู้รอบถัดไปได้ (spec 08 ฌ.)
+      // พารามิเตอร์เสริม (2026-11-17): announce=0|1|2 ประกาศถึงรอบไหน (ค่าเริ่มต้น 2 = ครบ) · as=teacher เปิดดูในฐานะครู
+      var q = new URLSearchParams(location.search);
+      var ประกาศถึง = q.has("announce") ? Number(q.get("announce")) : 2;
+      var รอบทั้งหมด = [["r1m1", "r1m2"], ["r2m1"]];
+      for (var r = 0; r < รอบทั้งหมด.length; r++) {
+        if (r > ประกาศถึง) break; // สู้รอบ r+1 ได้เมื่อประกาศรอบ r แล้วเท่านั้น
+        for (var k of รอบทั้งหมด[r]) {
+          var ผล = await window.คำนวณแมตช์ของทัวนาเมนต์(id, k);
+          if (ผล.needsTeacherDecision) await window.ครูเลือกผู้ชนะ(id, k, "slotA");
+        }
+        if (r + 1 <= ประกาศถึง) await window.ประกาศผลรอบ(id, r + 1);
       }
-      window.CURRENT_USER = { uid: "uid-a", name: "น้องเอ", role: "student" }; // ดูในฐานะนักเรียน
+      window.CURRENT_USER = q.get("as") === "teacher"
+        ? window.__ผู้ใช้ทดสอบ
+        : { uid: "uid-a", name: "น้องเอ", role: "student" }; // ดูในฐานะนักเรียน
       window.dispatchEvent(new Event("auth-ready"));
       setTimeout(function () { window.__พร้อม = true; }, 50);
     })();

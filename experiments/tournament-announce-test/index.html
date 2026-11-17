@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบ — ครูประกาศผลทัวนาเมนต์ทีละรอบ (spec 08 ฌ.)</title>
+  <style>body{font-family:sans-serif;padding:16px} .ok{color:#0F7A3D} .ng{color:#B3231C} iframe{width:900px;height:240px} h2{margin-top:18px}</style>
+</head>
+<body>
+  <h1>ทดสอบประกาศผลทีละรอบ (2026-11-17)</h1>
+  <p>ส่วน A: data layer (js/tournament-data.js บน mock Firestore) · ส่วน B: หน้าผังจริง (js/tournament.js) และหน้ารีเพลย์จริง (js/tournament-match.js) ใน iframe ·
+     <b>สิทธิ์ที่ Firestore rules (นักเรียนอ่าน results/ หรือ battle log ตรง) ต้องทดสอบบนเว็บจริงหลัง deploy — mock ไม่บังคับ rules</b></p>
+  <p id="สรุป">กำลังรัน…</p>
+  <ol id="ผล"></ol>
+  <div id="เฟรม"></div>
+
+  <script src="../../js/util.js"></script>
+  <script src="../../js/pet-config.js"></script>
+  <script src="../../js/combat-engine.js"></script>
+  <script src="../tournament-integration-test/mock-firestore.js"></script>
+  <script src="../../js/tournament-data.js"></script>
+  <script src="../../js/leaderboard-data.js"></script>
+  <script src="../../js/home-data.js"></script>
+  <script>
+    var ผล = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผล.push(!!ผ่าน);
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "ng";
+      li.textContent = (ผ่าน ? "✓ " : "✗ ") + ชื่อ + (รายละเอียด !== undefined ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function หัวข้อ(t) { var h = document.createElement("h2"); h.textContent = t; document.getElementById("ผล").appendChild(h); }
+    function รอ(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function errของ(fn) { try { await fn(); return null; } catch (e) { return e; } }
+    var ครู = { uid: "teacher-test-uid", name: "ครูทดสอบ", role: "teacher" };
+    var นักเรียน = { uid: "u1", name: "นักเรียน1", role: "student" };
+    function เป็น(u) { window.CURRENT_USER = u; }
+    function คน(i) {
+      return { studentUid: "u" + i, studentName: "นักเรียน" + i, speciesKey: "pixie", stage: 4,
+        stats: { SPD: 50 + i, ATK: 30 + (i % 3) * 4, ACC: 40, EVA: 55 - i, DEF: 20, HP: 35 + (i % 2) * 5 } };
+    }
+    async function เอกสาร() { var p = Array.prototype.slice.call(arguments); return (await window.fsGetDoc(window.fsDoc.apply(null, [window.db].concat(p)))); }
+    async function ข้อมูลดิบ(id) { return (await เอกสาร("tournaments", id)).data(); }
+    function คู่ใน(t, key) { var x = null; t.rounds.forEach(function (r) { r.forEach(function (m) { if (m.key === key) x = m; }); }); return x; }
+
+    async function ส่วนA() {
+      หัวข้อ("A. data layer — 4 คน 2 รอบ");
+      เป็น(ครู);
+      var id = await window.สร้างทัวนาเมนต์([คน(1), คน(2), คน(3), คน(4)]);
+      var d = await ข้อมูลดิบ(id);
+      ตรวจ("สร้างใหม่: announcedRound = 0 และทุกคู่ fought = false", d.announcedRound === 0 &&
+        Object.keys(d.matches).every(function (k) { return d.matches[k].fought === false && d.matches[k].winnerSlot === null; }));
+
+      เป็น(นักเรียน);
+      var t = await window.โหลดทัวนาเมนต์(id);
+      var m = คู่ใน(t, "r1m1");
+      ตรวจ("นักเรียน: ไม่มี field ของครู (canFight/needsTeacherDecision/announceableRound/nextRoundInfo)",
+        !("canFight" in m) && !("needsTeacherDecision" in m) && !("announceableRound" in t) && !("nextRoundInfo" in t));
+      ตรวจ("นักเรียนกดต่อสู้ผ่าน data layer → FORBIDDEN_ROLE", ((await errของ(function () { return window.คำนวณแมตช์ของทัวนาเมนต์(id, "r1m1"); })) || {}).code === "FORBIDDEN_ROLE");
+
+      เป็น(ครู);
+      var r = await window.คำนวณแมตช์ของทัวนาเมนต์(id, "r1m1");
+      ตรวจ("ต่อสู้ r1m1: ผลที่คืนไม่มีผู้ชนะ/result/events (ครูอาจฉายจออยู่)", !("result" in r) && !("events" in r) && !("winnerSlot" in r), JSON.stringify(r));
+      d = await ข้อมูลดิบ(id);
+      ตรวจ("ต่อสู้ r1m1: เอกสารสาธารณะ fought = true, winnerSlot ยัง null (BR-28)", d.matches.r1m1.fought === true && d.matches.r1m1.winnerSlot === null);
+      ตรวจ("ต่อสู้ r1m1: ยังไม่เลื่อนผู้ชนะเข้ารอบชิง (r2m1 ว่างทั้งสองฝั่ง)", d.matches.r2m1.slotA === null && d.matches.r2m1.slotB === null);
+      var ลับ1 = (await เอกสาร("tournaments", id, "results", "r1m1")).data();
+      ตรวจ("ต่อสู้ r1m1: ผลลับ results/r1m1 มี matchId + winnerSlot + decidedByTeacher=false",
+        !!ลับ1 && ลับ1.matchId === id + "-r1m1" && ["slotA", "slotB", null].indexOf(ลับ1.winnerSlot) !== -1 && ลับ1.decidedByTeacher === false, JSON.stringify(ลับ1));
+      var log1 = (await เอกสาร("tournaments", id, "matches", id + "-r1m1")).data();
+      ตรวจ("ต่อสู้ r1m1: battle log มี round = 1 (เงื่อนไขของ rules)", !!log1 && log1.round === 1 && Array.isArray(log1.events));
+      var ตรงกับlog = (log1.result.winner === "A" && ลับ1.winnerSlot === "slotA") || (log1.result.winner === "B" && ลับ1.winnerSlot === "slotB") || (log1.result.winner === null && ลับ1.winnerSlot === null);
+      ตรวจ("ผลลับตรงกับผู้ชนะใน battle log", ตรงกับlog);
+
+      var ซ้ำ = await errของ(function () { return window.คำนวณแมตช์ของทัวนาเมนต์(id, "r1m1"); });
+      ตรวจ("ต่อสู้ r1m1 ซ้ำ → MATCH_ALREADY_FOUGHT", ซ้ำ && ซ้ำ.code === "MATCH_ALREADY_FOUGHT");
+
+      t = await window.โหลดทัวนาเมนต์(id);
+      m = คู่ใน(t, "r1m1");
+      ตรวจ("ครู: ผังไม่แสดงผู้ชนะก่อนประกาศ (AC-FE-43-2)", m.status === "waiting_announce" && m.winnerSlot === null);
+      ตรวจ("ครู: สู้ 1 จาก 2 คู่ → ยังประกาศไม่ได้ เหลือ 1 คู่ (AC-FE-31-8)", t.announceableRound === null && t.nextRoundInfo.remaining === 1);
+      var e = await errของ(function () { return window.ประกาศผลรอบ(id, 1); });
+      ตรวจ("ประกาศรอบ 1 ทั้งที่สู้ไม่ครบ → ROUND_NOT_FULLY_FOUGHT และเอกสารไม่เปลี่ยน", e && e.code === "ROUND_NOT_FULLY_FOUGHT" && (await ข้อมูลดิบ(id)).announcedRound === 0, e && e.message);
+
+      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "r1m2");
+      e = await errของ(function () { return window.คำนวณแมตช์ของทัวนาเมนต์(id, "r2m1"); });
+      ตรวจ("ต่อสู้รอบชิงก่อนประกาศรอบแรก → ROUND_NOT_UNLOCKED (AC-FE-31-13)", e && e.code === "ROUND_NOT_UNLOCKED", e && e.message);
+
+      // บังคับให้ r1m2 "เสมอ" ที่ผลลับ เพื่อทดสอบทางเสมอ (engine จริงเสมอได้ยากมาก)
+      var ลับ2เดิม = (await เอกสาร("tournaments", id, "results", "r1m2")).data();
+      await window.fsUpdateDoc(window.fsDoc(window.db, "tournaments", id, "results", "r1m2"), { winnerSlot: null });
+      t = await window.โหลดทัวนาเมนต์(id);
+      ตรวจ("เสมอค้าง: ครูเห็น needsTeacherDecision + ยังประกาศไม่ได้ (ties = 1)", คู่ใน(t, "r1m2").needsTeacherDecision === true && t.announceableRound === null && t.nextRoundInfo.ties === 1);
+      e = await errของ(function () { return window.ประกาศผลรอบ(id, 1); });
+      ตรวจ("ประกาศขณะเสมอค้าง → TIE_NOT_DECIDED", e && e.code === "TIE_NOT_DECIDED", e && e.message);
+      await window.ครูเลือกผู้ชนะ(id, "r1m2", "slotB");
+      var ลับ2 = (await เอกสาร("tournaments", id, "results", "r1m2")).data();
+      d = await ข้อมูลดิบ(id);
+      ตรวจ("ครูชี้ขาด: เขียนที่ผลลับเท่านั้น (results slotB + decidedByTeacher) เอกสารสาธารณะยัง null", ลับ2.winnerSlot === "slotB" && ลับ2.decidedByTeacher === true && d.matches.r1m2.winnerSlot === null);
+      e = await errของ(function () { return window.ครูเลือกผู้ชนะ(id, "r1m2", "slotA"); });
+      ตรวจ("ชี้ขาดซ้ำ → TIE_ALREADY_DECIDED", e && e.code === "TIE_ALREADY_DECIDED");
+      e = await errของ(function () { return window.ครูเลือกผู้ชนะ(id, "r1m1", "slotA"); });
+      ตรวจ("ชี้ขาดคู่ที่ไม่เสมอ → ปฏิเสธ", !!e && (ลับ1.winnerSlot === null || e.code === "MATCH_NOT_TIED"), e && e.code);
+
+      t = await window.โหลดทัวนาเมนต์(id);
+      ตรวจ("สู้ครบ 2/2 และไม่มีเสมอค้าง → ประกาศรอบ 1 ได้ (ขอบ \"ครบพอดี\" AC-FE-31-9)", t.announceableRound === 1);
+
+      เป็น(นักเรียน);
+      t = await window.โหลดทัวนาเมนต์(id);
+      ตรวจ("นักเรียน: คู่รอบแรก = waiting_announce, ไม่มีผู้ชนะ, ไม่มี battle log (AC-FE-31-3/4)",
+        ["r1m1", "r1m2"].every(function (k) { var x = คู่ใน(t, k); return x.status === "waiting_announce" && x.winnerSlot === null && !x.matchLog; }));
+      e = await errของ(function () { return window.โหลดรีเพลย์ของคู่(id, "r1m1"); });
+      ตรวจ("นักเรียนขอรีเพลย์รอบที่ยังไม่ประกาศ → ROUND_NOT_ANNOUNCED (AC-FE-31-5)", e && e.code === "ROUND_NOT_ANNOUNCED", e && e.message);
+      e = await errของ(function () { return window.โหลดรีเพลย์ของคู่(id, "r2m1"); });
+      ตรวจ("นักเรียนขอรีเพลย์คู่ที่ยังไม่สู้ในรอบที่ยังไม่ประกาศ → ROUND_NOT_ANNOUNCED ก่อน (ไม่บอกว่ายังไม่สู้)", e && e.code === "ROUND_NOT_ANNOUNCED");
+      e = await errของ(function () { return window.ประกาศผลรอบ(id, 1); });
+      ตรวจ("นักเรียนเรียกประกาศ → FORBIDDEN_ROLE", e && e.code === "FORBIDDEN_ROLE");
+
+      เป็น(ครู);
+      var ก่อน = JSON.stringify(await ข้อมูลดิบ(id));
+      var rp = await window.โหลดรีเพลย์ของคู่(id, "r1m1");
+      ตรวจ("ครูเปิดรีเพลย์ก่อนประกาศได้ (AC-FE-43-1)", !!rp.matchLog && rp.announced === false && rp.matchLog.events.length > 0);
+      var rp2 = await window.โหลดรีเพลย์ของคู่(id, "r1m2");
+      ตรวจ("ครูเปิดรีเพลย์คู่ที่ชี้ขาด: เห็นผู้ชนะที่ครูเลือก (slotB)", rp2.คู่.winnerSlot === "slotB" && rp2.คู่.decidedByTeacher === true);
+      ตรวจ("เปิดรีเพลย์ไม่แก้ข้อมูลใด (รอบยังไม่ประกาศ)", JSON.stringify(await ข้อมูลดิบ(id)) === ก่อน);
+
+      e = await errของ(function () { return window.ประกาศผลรอบ(id, 2); });
+      ตรวจ("ประกาศข้ามไปรอบ 2 → ROUND_SKIPPED", e && e.code === "ROUND_SKIPPED");
+      e = await errของ(function () { return window.ประกาศผลรอบ(id, 0); });
+      var e2 = await errของ(function () { return window.ประกาศผลรอบ(id, 1.5); });
+      var e3 = await errของ(function () { return window.ประกาศผลรอบ(id, 3); });
+      ตรวจ("เลขรอบ 0 / 1.5 / 3 → VALIDATION_ERROR", [e, e2, e3].every(function (x) { return x && x.code === "VALIDATION_ERROR"; }));
+
+      window.__ทำให้transactionล้ม = true;
+      e = await errของ(function () { return window.ประกาศผลรอบ(id, 1); });
+      ตรวจ("commit ล้มกลางทาง → ไม่มีอะไรเปลี่ยนเลย (ทั้งตัวนับ ผู้ชนะ และช่องรอบชิง)", !!e && JSON.stringify(await ข้อมูลดิบ(id)) === ก่อน);
+
+      var ตอบ = await window.ประกาศผลรอบ(id, 1);
+      d = await ข้อมูลดิบ(id);
+      ตรวจ("ประกาศรอบ 1: announcedRound = 1, championDecided = false", d.announcedRound === 1 && ตอบ.championDecided === false);
+      ตรวจ("ประกาศรอบ 1: ผู้ชนะทั้งสองคู่ขึ้นพร้อมกัน ตรงกับผลลับ", d.matches.r1m1.winnerSlot === (await เอกสาร("tournaments", id, "results", "r1m1")).data().winnerSlot && d.matches.r1m2.winnerSlot === "slotB" && d.matches.r1m2.decidedByTeacher === true && d.matches.r1m1.decidedByTeacher === false);
+      ตรวจ("ประกาศรอบ 1: ผู้ชนะ r1m1 → r2m1.slotA, ผู้ชนะ r1m2 → r2m1.slotB (AC-FE-31-12)",
+        d.matches.r2m1.slotA && d.matches.r2m1.slotA.studentUid === d.matches.r1m1[d.matches.r1m1.winnerSlot].studentUid &&
+        d.matches.r2m1.slotB && d.matches.r2m1.slotB.studentUid === d.matches.r1m2.slotB.studentUid);
+      ตรวจ("ยังไม่มีแชมป์หลังประกาศรอบรอง (BR-32 / AC-FE-31-15)", แชมป์ของทัวนาเมนต์(d) === null);
+      var รายการ = await window.โหลดรายการทัวนาเมนต์();
+      var ล่าสุด = await window.โหลดทัวนาเมนต์ล่าสุด();
+      var ทำเนียบ = await window.โหลดทำเนียบแชมป์();
+      ตรวจ("รายการ/หน้าหลัก/ทำเนียบแชมป์ ยังไม่มีแชมป์", รายการ[0].championName === null && ล่าสุด.championName === null && ทำเนียบ.length === 0);
+      e = await errของ(function () { return window.ประกาศผลรอบ(id, 1); });
+      ตรวจ("ประกาศรอบ 1 ซ้ำ → ROUND_ALREADY_ANNOUNCED", e && e.code === "ROUND_ALREADY_ANNOUNCED");
+
+      เป็น(นักเรียน);
+      t = await window.โหลดทัวนาเมนต์(id);
+      ตรวจ("นักเรียนหลังประกาศ: รอบแรก announced + มีผู้ชนะ + มี battle log (AC-FE-31-10)",
+        ["r1m1", "r1m2"].every(function (k) { var x = คู่ใน(t, k); return x.status === "announced" && !!x.winnerSlot && !!x.matchLog; }));
+      rp = await window.โหลดรีเพลย์ของคู่(id, "r1m1");
+      ตรวจ("นักเรียนเปิดรีเพลย์รอบที่ประกาศแล้วได้ (AC-FE-31-11)", !!rp.matchLog && rp.announced === true);
+
+      เป็น(ครู);
+      t = await window.โหลดทัวนาเมนต์(id);
+      ตรวจ("หลังประกาศรอบ 1 ครูต่อสู้รอบชิงได้ทันที (AC-FE-31-14)", คู่ใน(t, "r2m1").canFight === true);
+      await window.คำนวณแมตช์ของทัวนาเมนต์(id, "r2m1");
+      d = await ข้อมูลดิบ(id);
+      ตรวจ("สู้รอบชิงแล้วยังไม่มีแชมป์ (ยังไม่ประกาศ)", แชมป์ของทัวนาเมนต์(d) === null && d.matches.r2m1.winnerSlot === null);
+      เป็น(นักเรียน);
+      e = await errของ(function () { return window.โหลดรีเพลย์ของคู่(id, "r2m1"); });
+      ตรวจ("นักเรียนยังเปิดรีเพลย์รอบชิงไม่ได้", e && e.code === "ROUND_NOT_ANNOUNCED");
+      เป็น(ครู);
+      ตอบ = await window.ประกาศผลรอบ(id, 2);
+      d = await ข้อมูลดิบ(id);
+      var แชมป์ = แชมป์ของทัวนาเมนต์(d);
+      var ลับชิง = (await เอกสาร("tournaments", id, "results", "r2m1")).data();
+      ตรวจ("ประกาศรอบชิง: มีแชมป์ = ผู้ชนะในผลลับรอบชิง (AC-FE-31-16)", ตอบ.championDecided === true && !!แชมป์ && แชมป์.slot.studentUid === d.matches.r2m1[ลับชิง.winnerSlot].studentUid, แชมป์ && แชมป์.slot.studentName);
+      รายการ = await window.โหลดรายการทัวนาเมนต์();
+      ล่าสุด = await window.โหลดทัวนาเมนต์ล่าสุด();
+      ทำเนียบ = await window.โหลดทำเนียบแชมป์();
+      ตรวจ("แชมป์ขึ้นรายการ/หน้าหลัก/ทำเนียบแชมป์ (AC-FE-31-17/18)", รายการ[0].championName === แชมป์.slot.studentName && ล่าสุด.championName === แชมป์.slot.studentName && ทำเนียบ.length === 1);
+      t = await window.โหลดทัวนาเมนต์(id);
+      ตรวจ("ประกาศครบแล้ว: ไม่มีปุ่มประกาศถัดไป และไม่มีคู่ให้สู้", t.announceableRound === null && t.nextRoundInfo === null && t.rounds.every(function (r) { return r.every(function (x) { return !x.canFight; }); }));
+
+      // ลบ: ต้องลบผลลับด้วย
+      await window.ลบทัวนาเมนต์(id);
+      var เหลือ = 0;
+      for (var k of ["r1m1", "r1m2", "r2m1"]) {
+        if ((await เอกสาร("tournaments", id, "results", k)).exists()) เหลือ++;
+        if ((await เอกสาร("tournaments", id, "matches", id + "-" + k)).exists()) เหลือ++;
+      }
+      ตรวจ("ลบทัวนาเมนต์: ลบทั้ง battle log และผลลับ (6 เอกสาร) + ตัวทัวนาเมนต์", เหลือ === 0 && !(await เอกสาร("tournaments", id)).exists());
+
+      หัวข้อ("A2. คนได้บาย (5 คน)");
+      var id5 = await window.สร้างทัวนาเมนต์([คน(1), คน(2), คน(3), คน(4), คน(5)]);
+      d = await ข้อมูลดิบ(id5);
+      var บาย = Object.keys(d.matches).filter(function (k) { return d.matches[k].bye; });
+      ตรวจ("5 คน: บาย 3 คู่ มี winnerSlot = slotA ตั้งแต่สร้าง (ฌ. ข้อ 11)", บาย.length === 3 && บาย.every(function (k) { return d.matches[k].winnerSlot === "slotA"; }));
+      var ช่องรอบ2 = Object.keys(d.matches).filter(function (k) { return d.matches[k].round === 2; })
+        .reduce(function (n, k) { return n + (d.matches[k].slotA ? 1 : 0) + (d.matches[k].slotB ? 1 : 0); }, 0);
+      ตรวจ("5 คน: คนได้บาย 3 คนอยู่ในรอบ 2 แล้วตั้งแต่สร้าง", ช่องรอบ2 === 3, ช่องรอบ2);
+      เป็น(นักเรียน);
+      t = await window.โหลดทัวนาเมนต์(id5);
+      ตรวจ("นักเรียนเห็นคู่บายเป็นสถานะ bye พร้อมผู้ผ่าน", บาย.every(function (k) { var x = คู่ใน(t, k); return x.status === "bye" && x.winnerSlot === "slotA"; }));
+      เป็น(ครู);
+      var ปกติ = Object.keys(d.matches).filter(function (k) { return d.matches[k].round === 1 && !d.matches[k].bye; });
+      await window.คำนวณแมตช์ของทัวนาเมนต์(id5, ปกติ[0]);
+      t = await window.โหลดทัวนาเมนต์(id5);
+      ตรวจ("สู้คู่ปกติคู่เดียวของรอบแรก → ประกาศรอบ 1 ได้ (บายนับว่าผ่าน)", ปกติ.length === 1 && t.announceableRound === 1);
+      await window.ประกาศผลรอบ(id5, 1);
+      d = await ข้อมูลดิบ(id5);
+      var ช่องรอบ2หลัง = Object.keys(d.matches).filter(function (k) { return d.matches[k].round === 2; })
+        .reduce(function (n, k) { return n + (d.matches[k].slotA ? 1 : 0) + (d.matches[k].slotB ? 1 : 0); }, 0);
+      ตรวจ("ประกาศรอบ 1: รอบ 2 ครบ 4 ช่อง และคู่บายไม่ถูกแก้", ช่องรอบ2หลัง === 4 && บาย.every(function (k) { return d.matches[k].winnerSlot === "slotA" && d.matches[k].decidedByTeacher === undefined; }));
+
+      หัวข้อ("A3. ทัวนาเมนต์เก่า (ไม่มี announcedRound)");
+      var เก่า = window.สร้างผังทัวนาเมนต์([คน(1), คน(2)], "legacy1");
+      เก่า.matches.r1m1.matchId = "legacy1-r1m1";
+      เก่า.matches.r1m1.winnerSlot = "slotB";
+      delete เก่า.matches.r1m1.fought;
+      await window.fsSetDoc(window.fsDoc(window.db, "tournaments", "legacy1"), Object.assign({ format: 2, createdAt: "2026-11-10 08:00" }, เก่า));
+      await window.fsSetDoc(window.fsDoc(window.db, "tournaments", "legacy1", "matches", "legacy1-r1m1"), { result: { winner: "B", reason: "ko", turns: 9 }, events: [] });
+      เป็น(นักเรียน);
+      t = await window.โหลดทัวนาเมนต์("legacy1");
+      ตรวจ("เก่า: นักเรียนเห็นผลตามเดิม (announced + ผู้ชนะ + log)", t.legacy === true && คู่ใน(t, "r1m1").status === "announced" && คู่ใน(t, "r1m1").winnerSlot === "slotB" && !!คู่ใน(t, "r1m1").matchLog);
+      ตรวจ("เก่า: นักเรียนเปิดรีเพลย์ได้", !!(await window.โหลดรีเพลย์ของคู่("legacy1", "r1m1")).matchLog);
+      เป็น(ครู);
+      t = await window.โหลดทัวนาเมนต์("legacy1");
+      ตรวจ("เก่า: ครูไม่มีปุ่มประกาศ/ปุ่มต่อสู้", !("announceableRound" in t) && !("canFight" in คู่ใน(t, "r1m1")));
+      e = await errของ(function () { return window.ประกาศผลรอบ("legacy1", 1); });
+      ตรวจ("เก่า: ประกาศ → ROUND_ALREADY_ANNOUNCED", e && e.code === "ROUND_ALREADY_ANNOUNCED");
+    }
+
+    async function เปิด(src) {
+      var f = document.createElement("iframe");
+      f.src = src;
+      document.getElementById("เฟรม").appendChild(f);
+      for (var i = 0; i < 200; i++) {
+        await รอ(50);
+        var w = f.contentWindow;
+        if (w.__ข้อผิดพลาด) throw new Error(w.__ข้อผิดพลาด);
+        if (w.__พร้อม) { await รอ(200); return f; }
+      }
+      throw new Error("หน้าไม่พร้อม: " + src);
+    }
+    function ข้อความ(d, sel) { var el = d.querySelector(sel); return el ? el.innerText : ""; }
+    function คู่ในหน้า(d, key) { return d.querySelector('[data-slot-key="' + key + '"]'); }
+
+    async function ส่วนB() {
+      หัวข้อ("B. หน้าผังจริง (tournament.js)");
+      var f = await เปิด("/experiments/tournament-announce-test/bracket.html?role=student&steps=r1m1,r1m2");
+      var d = f.contentDocument;
+      ตรวจ("นักเรียน: ไม่มีปุ่มประกาศใน DOM (AC-FE-31-7)", d.querySelectorAll("#ปุ่มประกาศผลรอบ, [data-announce-round]").length === 0);
+      ตรวจ("นักเรียน: ไม่มีปุ่มต่อสู้/เลือกผู้ชนะใน DOM", d.querySelectorAll("[data-action-slot-key], [data-pick-slot-key]").length === 0);
+      ตรวจ("นักเรียน: คู่รอบแรกขึ้น \"รอครูประกาศผล\" ไม่มีผู้ชนะ ไม่มีลิงก์รีเพลย์",
+        ["r1m1", "r1m2"].every(function (k) { var c = คู่ในหน้า(d, k); return /รอครูประกาศผล/.test(c.innerText) && !/ผู้ชนะ/.test(c.innerText) && !c.querySelector(".is-winner") && !c.querySelector("a[href*='tournament-match']"); }));
+      ตรวจ("นักเรียน: เห็นสถานะ \"ประกาศผลแล้ว 0 จาก 2 รอบ\"", /ประกาศผลแล้ว 0 จาก 2 รอบ/.test(ข้อความ(d, "#สถานะประกาศผล")));
+      ตรวจ("นักเรียน: ไม่มี 👑 แชมป์", !/👑/.test(d.body.innerText));
+
+      f = await เปิด("/experiments/tournament-announce-test/bracket.html?role=teacher&steps=r1m1");
+      d = f.contentDocument;
+      var ปุ่ม = d.getElementById("ปุ่มประกาศผลรอบ");
+      ตรวจ("ครู สู้ 1/2: ปุ่มประกาศมีแต่กดไม่ได้ + บอกเหตุผล \"เหลือ 1 คู่\" (AC-FE-31-8)", !!ปุ่ม && ปุ่ม.disabled && /เหลือ 1 คู่/.test(ข้อความ(d, "#เหตุผลยังประกาศไม่ได้")));
+      ตรวจ("ครู สู้ 1/2: รอบชิงไม่มีปุ่มต่อสู้", !คู่ในหน้า(d, "r2m1").querySelector("[data-action-slot-key]"));
+
+      f = await เปิด("/experiments/tournament-announce-test/bracket.html?role=teacher&steps=r1m1,r1m2");
+      d = f.contentDocument;
+      ปุ่ม = d.getElementById("ปุ่มประกาศผลรอบ");
+      ตรวจ("ครู สู้ครบ: ปุ่ม \"📣 ประกาศผลรอบรองชนะเลิศ\" กดได้ (AC-FE-31-9)", !!ปุ่ม && !ปุ่ม.disabled && /ประกาศผล/.test(ปุ่ม.textContent), ปุ่ม && ปุ่ม.textContent);
+      ตรวจ("ครู ก่อนประกาศ: ผังไม่มีผู้ชนะ (AC-FE-43-2) แต่มีลิงก์ดูรีเพลย์ (AC-FE-43-1)",
+        ["r1m1", "r1m2"].every(function (k) { var c = คู่ในหน้า(d, k); return !c.querySelector(".is-winner") && !/✓ ผู้ชนะ/.test(c.innerText) && !!c.querySelector("a[href*='tournament-match']"); }));
+      ปุ่ม.click();
+      for (var i = 0; i < 100 && !/ประกาศผลแล้ว 1 จาก 2/.test(ข้อความ(d, "#สถานะประกาศผล")); i++) await รอ(30);
+      ตรวจ("ครูกดประกาศ → สถานะ 1 จาก 2 รอบ", /ประกาศผลแล้ว 1 จาก 2/.test(ข้อความ(d, "#สถานะประกาศผล")));
+      ตรวจ("หลังประกาศ: รอบแรกมีผู้ชนะคู่ละ 1 คน", ["r1m1", "r1m2"].every(function (k) { return คู่ในหน้า(d, k).querySelectorAll(".is-winner").length === 1; }));
+      ตรวจ("หลังประกาศ: รอบชิงมีผู้เข้ารอบครบ + ปุ่มต่อสู้", คู่ในหน้า(d, "r2m1").querySelectorAll(".bracket-slot.is-empty").length === 0 && !!คู่ในหน้า(d, "r2m1").querySelector("[data-action-slot-key]"));
+
+      f = await เปิด("/experiments/tournament-announce-test/bracket.html?role=student&steps=r1m1,r1m2,A1,r2m1,A2");
+      d = f.contentDocument;
+      ตรวจ("นักเรียน ประกาศครบ: เห็น 👑 แชมป์ + 2 จาก 2 รอบ", /👑 แชมป์/.test(d.body.innerText) && /ประกาศผลแล้ว 2 จาก 2/.test(ข้อความ(d, "#สถานะประกาศผล")));
+
+      หัวข้อ("B2. หน้ารีเพลย์จริง (tournament-match.js)");
+      f = await เปิด("/experiments/replay-spoiler-test/page.html?tournamentId=auto_1&match=r1m1&announce=0");
+      d = f.contentDocument;
+      ตรวจ("นักเรียนเปิดรีเพลย์รอบที่ยังไม่ประกาศ: ขึ้น 🔒 รอครูประกาศผล ไม่มีหน้าเล่น", /🔒 รอครูประกาศผลก่อน/.test(ข้อความ(d, "#ข้อความไม่พบ")) && d.getElementById("กล่องหลัก").classList.contains("hidden"));
+      f = await เปิด("/experiments/replay-spoiler-test/page.html?tournamentId=auto_1&match=r1m1&announce=0&as=teacher");
+      d = f.contentDocument;
+      ตรวจ("ครูเปิดรีเพลย์ก่อนประกาศ: เล่นได้ + บอกว่ายังไม่ประกาศ", !d.getElementById("กล่องหลัก").classList.contains("hidden") && /ยังไม่ประกาศผล/.test(ข้อความ(d, "#คำอธิบายแมตช์")));
+      f = await เปิด("/experiments/replay-spoiler-test/page.html?tournamentId=auto_1&match=r1m1&announce=1");
+      d = f.contentDocument;
+      ตรวจ("นักเรียนเปิดรีเพลย์รอบที่ประกาศแล้วได้", !d.getElementById("กล่องหลัก").classList.contains("hidden"));
+    }
+
+    (async function () {
+      try { await ส่วนA(); } catch (e) { ตรวจ("ส่วน A รันจบ", false, e.message); console.error(e); }
+      try { await ส่วนB(); } catch (e) { ตรวจ("ส่วน B รันจบ", false, e.message); console.error(e); }
+      var ผ่าน = ผล.filter(Boolean).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ผล.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผล.length };
+    })();
+  </script>
+</body>
+</html>

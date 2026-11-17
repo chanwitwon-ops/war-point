@@ -7,8 +7,10 @@
 // เปิดได้ทั้งครูและนักเรียน (นักเรียนดูอย่างเดียว — หน้านี้ไม่มีปุ่มเขียนข้อมูลใดๆ อยู่แล้ว)
 //
 // ── สัญญาที่ใช้ ──
-//   window.โหลดทัวนาเมนต์(tournamentId) → Tournament (js/tournament-data.js)
-//     Tournament.matches[matchKey] = { slotA, slotB, matchId, winnerSlot, decidedByTeacher?, matchLog? }
+//   window.โหลดรีเพลย์ของคู่(tournamentId, matchKey) → { tournament: {id, roundCount}, คู่, matchLog, announced }
+//     (js/tournament-data.js — [แก้ 2026-11-17 spec 08 ฌ.] นักเรียนเปิดรีเพลย์รอบที่ครูยังไม่ประกาศไม่ได้
+//      → reject ด้วย err.code "ROUND_NOT_ANNOUNCED" · ครูเปิดได้ตลอดเมื่อสู้แล้ว)
+//     คู่ = { round, index, slotA, slotB, matchId, winnerSlot, decidedByTeacher }
 //     slot = { studentUid, studentName, speciesKey, stage, stats }
 //   matchLog = ผลของ window.คำนวณผลการต่อสู้ v2 (js/combat-engine.js) — sideA ↔ slotA
 //     result = { winner: "A"|"B"|null, reason: "ko"|"turn_limit"|"teacher_decides", turns }
@@ -30,8 +32,8 @@
   var พักระหว่างจังหวะ = 450;      // มิลลิวินาที หลังแอนิเมชันแต่ละจังหวะจบ
   var นานจังหวะไม่มีภาพ = 900;    // ใช้เมื่อไม่มีคลิป (แสดงข้อความแทน)
 
-  window.โหลดทัวนาเมนต์ = window.โหลดทัวนาเมนต์ || async function () {
-    throw new Error("ยังไม่ได้เชื่อมระบบโหลดทัวนาเมนต์");
+  window.โหลดรีเพลย์ของคู่ = window.โหลดรีเพลย์ของคู่ || async function () {
+    throw new Error("ยังไม่ได้เชื่อมระบบโหลดรีเพลย์");
   };
 
   var กล่องกำลังโหลด = document.getElementById("กล่องกำลังโหลด");
@@ -55,6 +57,7 @@
 
   var คู่ = null;
   var แมตช์ = null;
+  var ยังไม่ประกาศ = false;   // ครูเปิดดูก่อนประกาศรอบ (นักเรียนยังไม่เห็นผลคู่นี้)
   var ฝ่าย = null;          // { A: {...}, B: {...} }
   var เหตุการณ์ = [];
   var สแนปช็อตHP = [];       // สแนปช็อตHP[i] = HP ทั้งสองฝ่ายหลังแสดงเหตุการณ์ไปแล้ว i ตัว
@@ -88,20 +91,19 @@
     }
 
     try {
-      var ผลโหลด = await window.โหลดทัวนาเมนต์(tournamentId);
-      if (!ผลโหลด) {
-        แสดงไม่พบ("ไม่พบทัวนาเมนต์นี้ — ลิงก์อาจไม่ถูกต้อง");
-        return;
+      var ผลโหลด;
+      try {
+        ผลโหลด = await window.โหลดรีเพลย์ของคู่(tournamentId, matchKey);
+      } catch (err) {
+        // รอบที่ยังไม่ประกาศ (นักเรียน) / ยังไม่สู้ — บอกสถานะ ไม่ใช่ error (DD-12 ERR-22, ERR-19)
+        if (err.code === "ROUND_NOT_ANNOUNCED") { แสดงไม่พบ("🔒 " + err.message); return; }
+        if (err.code === "MATCH_NOT_FOUND") { แสดงไม่พบ(err.message); return; }
+        throw err;
       }
-      คู่ = (ผลโหลด.matches && ผลโหลด.matches[matchKey]) || null;
-      if (คู่) {
-        หัวข้อของคู่ = ชื่อรอบทัวนาเมนต์(คู่.round, ผลโหลด.roundCount) + " · คู่ที่ " + คู่.index;
-      }
-      แมตช์ = คู่ ? คู่.matchLog : null;
-      if (!แมตช์) {
-        แสดงไม่พบ("แมตช์นี้ยังไม่ได้ต่อสู้ — รอครูกดต่อสู้ที่หน้าผังทัวนาเมนต์ก่อน");
-        return;
-      }
+      คู่ = ผลโหลด.คู่;
+      หัวข้อของคู่ = ชื่อรอบทัวนาเมนต์(คู่.round, ผลโหลด.tournament.roundCount) + " · คู่ที่ " + คู่.index;
+      ยังไม่ประกาศ = !ผลโหลด.announced;
+      แมตช์ = ผลโหลด.matchLog;
 
       ฝ่าย = {
         A: สร้างข้อมูลฝ่าย(คู่.slotA, แมตช์.sideA),
@@ -231,7 +233,8 @@
 
   function วาดหัวข้อ() {
     หัวข้อแมตช์.textContent = หัวข้อของคู่;
-    คำอธิบายแมตช์.textContent = ฝ่าย.A.name + " VS " + ฝ่าย.B.name + " · สู้ยกเดียวจนเลือดหมด";
+    คำอธิบายแมตช์.textContent = ฝ่าย.A.name + " VS " + ฝ่าย.B.name + " · สู้ยกเดียวจนเลือดหมด" +
+      (ยังไม่ประกาศ ? " · 🔒 รอบนี้ยังไม่ประกาศผล — นักเรียนยังดูคู่นี้ไม่ได้" : "");
   }
 
   function วาดฝ่าย() {

@@ -26,6 +26,10 @@
 //      ใช้เมื่อ matchLog.result.winner === null (เลือดเท่ากันครบ 30 เทิร์น) · winnerSlot = "slotA" | "slotB"
 // 6) window.โหลดรายการทัวนาเมนต์() → Promise<[{ id, createdAt, participantCount, championName }]> เรียงใหม่สุดก่อน
 // 7) window.ลบทัวนาเมนต์(tournamentId) → Promise<void> (ครูเท่านั้น)
+// 8) [เพิ่ม 2026-11-17 spec 08 ฌ.] window.ประกาศผลรอบ(tournamentId, round) → Promise (ครูเท่านั้น)
+//      ผู้ชนะบนผังปรากฏเฉพาะรอบที่ครูประกาศแล้ว (ทั้งครูและนักเรียน) — คู่.status บอกสถานะ:
+//      "bye" | "waiting_fight" | "waiting_announce" (🔒 สู้แล้ว รอครูประกาศ) | "announced"
+//      ครูได้ field เพิ่ม: คู่.canFight, คู่.needsTeacherDecision, Tournament.announceableRound, Tournament.nextRoundInfo
 //
 // reject ทุกตัวด้วย Error ที่ .message เป็นภาษาไทย (หน้านี้แสดงในกล่องเตือนให้ผู้ใช้เห็น)
 // ─────────────────────────────────────────────────────────────
@@ -75,6 +79,10 @@
 
   window.ลบทัวนาเมนต์ = window.ลบทัวนาเมนต์ || async function () {
     throw new Error("ยังไม่ได้เชื่อมระบบลบทัวนาเมนต์");
+  };
+
+  window.ประกาศผลรอบ = window.ประกาศผลรอบ || async function () {
+    throw new Error("ยังไม่ได้เชื่อมระบบประกาศผล");
   };
 
   // กระดานเกียรติยศ (สเปก 09) — สัญญาอยู่ที่หัวไฟล์ js/leaderboard-data.js
@@ -465,6 +473,7 @@
       '<p class="section-title">' + esc(ทัวนาเมนต์.participantCount) + " คน · " + esc(ทัวนาเมนต์.roundCount) + " รอบ" +
         (ทัวนาเมนต์.createdAt ? ' <span class="sub-note">' + esc(ทัวนาเมนต์.createdAt) + "</span>" : "") + "</p>" +
       (แชมป์ ? '<p class="bracket-champion">👑 แชมป์: ' + esc(แชมป์.slot.studentName) + "</p>" : "") +
+      สร้างแถบประกาศผล(ทัวนาเมนต์) +
       '<div class="bracket bracket-rounds">' +
         ทัวนาเมนต์.rounds.map(function (คู่ในรอบ, i) {
           return (
@@ -477,7 +486,9 @@
           );
         }).join("") +
       "</div>" +
-      '<p class="hint">ระบบสุ่มจับคู่และสุ่มคนที่ได้บายตอนสร้างทัวนาเมนต์ — ผู้ชนะแต่ละคู่เลื่อนเข้ารอบถัดไปโดยอัตโนมัติ · กด "ดูรายละเอียด" เพื่อดูรีเพลย์การต่อสู้</p>' +
+      (ทัวนาเมนต์.legacy
+        ? '<p class="hint">ระบบสุ่มจับคู่และสุ่มคนที่ได้บายตอนสร้างทัวนาเมนต์ — ทัวนาเมนต์นี้สร้างก่อนมีระบบประกาศผล จึงแสดงผลทุกรอบตามเดิม (ดูได้อย่างเดียว) · กด "ดูรายละเอียด" เพื่อดูรีเพลย์การต่อสู้</p>'
+        : '<p class="hint">ระบบสุ่มจับคู่และสุ่มคนที่ได้บายตอนสร้างทัวนาเมนต์ — ผลของแต่ละรอบเป็นความลับจนกว่าครูจะกดประกาศผลรอบนั้น แล้วผู้ชนะจึงเลื่อนเข้ารอบถัดไป · กด "ดูรายละเอียด" เพื่อดูรีเพลย์การต่อสู้</p>') +
       (เป็นครู()
         ? '<div class="btn-row"><button type="button" class="btn-ghost" id="ปุ่มลบทัวนาเมนต์นี้">ลบทัวนาเมนต์นี้</button></div>'
         : "");
@@ -498,19 +509,64 @@
     กล่อง.querySelectorAll("[data-pick-slot-key]").forEach(function (ปุ่ม) {
       ปุ่ม.addEventListener("click", function () { กดเลือกผู้ชนะ(ปุ่ม); });
     });
+    var ปุ่มประกาศ = document.getElementById("ปุ่มประกาศผลรอบ");
+    if (ปุ่มประกาศ) {
+      ปุ่มประกาศ.addEventListener("click", function () { กดประกาศผล(ปุ่มประกาศ, ทัวนาเมนต์); });
+    }
   }
 
-  // หาผู้ชนะของคู่ — ผลจากการต่อสู้ก่อน ถ้าไม่มี (เสมอ) ใช้ winnerSlot ที่ครูเลือกไว้
-  function หาผู้ชนะ(คู่) {
-    var บันทึก = คู่.matchLog;
-    if (บันทึก && บันทึก.result && (บันทึก.result.winner === "A" || บันทึก.result.winner === "B")) {
-      return {
-        ฝั่ง: บันทึก.result.winner === "A" ? "slotA" : "slotB",
-        เหตุผล: บันทึก.result.reason || null
-      };
+  // ── [เพิ่ม 2026-11-17 spec 08 ฌ.] แถบสถานะการประกาศผล ──
+  // ทุกบทบาทเห็นว่าประกาศไปแล้วกี่รอบ · ปุ่มประกาศมีเฉพาะครู (นักเรียนไม่มีใน DOM — AC-FE-31-7)
+  // ปุ่มกดไม่ได้จนกว่าจะสู้ครบทุกคู่และไม่มีคู่เสมอค้าง พร้อมบอกเหตุผล (AC-FE-31-8/9)
+  function สร้างแถบประกาศผล(ทัวนาเมนต์) {
+    if (ทัวนาเมนต์.legacy) return "";
+    var ประกาศแล้ว = ทัวนาเมนต์.announcedRound;
+    var html = '<p class="alert alert-warn" id="สถานะประกาศผล">📣 ประกาศผลแล้ว ' + esc(ประกาศแล้ว) + " จาก " + esc(ทัวนาเมนต์.roundCount) + " รอบ" +
+      (ประกาศแล้ว < ทัวนาเมนต์.roundCount ? " · ผลของรอบที่ยังไม่ประกาศยังเป็นความลับ" : "") + "</p>";
+    var ถัดไป = ทัวนาเมนต์.nextRoundInfo;
+    if (!เป็นครู() || !ถัดไป) return html;
+    var ชื่อรอบ = ชื่อรอบทัวนาเมนต์(ถัดไป.round, ทัวนาเมนต์.roundCount);
+    var เหตุผล = "";
+    if (ถัดไป.remaining > 0) เหตุผล = "ต้องต่อสู้ให้ครบทุกคู่ของ" + ชื่อรอบ + "ก่อน (เหลือ " + ถัดไป.remaining + " คู่)";
+    else if (ถัดไป.ties > 0) เหตุผล = "มีคู่ที่เสมอ " + ถัดไป.ties + " คู่ — เลือกผู้ชนะก่อนประกาศ";
+    var กดได้ = ทัวนาเมนต์.announceableRound === ถัดไป.round;
+    return html +
+      '<div class="btn-row">' +
+        '<button type="button" class="btn" id="ปุ่มประกาศผลรอบ" data-announce-round="' + esc(ถัดไป.round) + '"' + (กดได้ ? "" : " disabled") + ">" +
+          "📣 ประกาศผล" + esc(ชื่อรอบ) +
+        "</button>" +
+      "</div>" +
+      (เหตุผล ? '<p class="hint" id="เหตุผลยังประกาศไม่ได้">' + esc(เหตุผล) + "</p>" : "");
+  }
+
+  async function กดประกาศผล(ปุ่ม, ทัวนาเมนต์) {
+    var รอบ = Number(ปุ่ม.getAttribute("data-announce-round"));
+    var ชื่อรอบ = ชื่อรอบทัวนาเมนต์(รอบ, ทัวนาเมนต์.roundCount);
+    if (!window.confirm("ประกาศผล" + ชื่อรอบ + "? นักเรียนทุกคนจะเห็นผู้ชนะและรีเพลย์ของรอบนี้ทันที — ประกาศแล้วยกเลิกไม่ได้")) return;
+    ปุ่ม.disabled = true;
+    ปุ่ม.textContent = "กำลังประกาศผล...";
+    ซ่อนเตือนผัง();
+    try {
+      await window.ประกาศผลรอบ(tournamentId, รอบ);
+      await โหลดผัง();
+    } catch (err) {
+      console.error(err);
+      เตือนผัง(err.message);
+      ปุ่ม.disabled = false;
+      ปุ่ม.textContent = "📣 ประกาศผล" + ชื่อรอบ;
     }
+  }
+
+  // หาผู้ชนะของคู่ — [แก้ 2026-11-17] เฉพาะคู่ที่ประกาศแล้ว: ใช้ winnerSlot บนเอกสาร (เขียนตอนครูประกาศ)
+  // เหตุผลมาจาก battle log หรือ "ครูตัดสิน" · คู่ที่ยังไม่ประกาศไม่มีผู้ชนะบนผังเลย แม้แต่ฝั่งครู (AC-FE-43-2)
+  function หาผู้ชนะ(คู่) {
+    if (คู่.status !== "announced") return { ฝั่ง: null, เหตุผล: null };
     if (คู่.winnerSlot === "slotA" || คู่.winnerSlot === "slotB") {
-      return { ฝั่ง: คู่.winnerSlot, เหตุผล: "teacher_decides" };
+      var บันทึก = คู่.matchLog;
+      return {
+        ฝั่ง: คู่.winnerSlot,
+        เหตุผล: คู่.decidedByTeacher ? "teacher_decides" : (บันทึก && บันทึก.result && บันทึก.result.reason) || null
+      };
     }
     return { ฝั่ง: null, เหตุผล: null };
   }
@@ -534,32 +590,45 @@
       );
     }
 
-    if (คู่.matchLog) {
-      if (ผู้ชนะ.ฝั่ง) {
-        var slotชนะ = ผู้ชนะ.ฝั่ง === "slotA" ? slotA : slotB;
-        var ป้าย = ผู้ชนะ.เหตุผล && ป้ายเหตุผล[ผู้ชนะ.เหตุผล] ? " (" + ป้ายเหตุผล[ผู้ชนะ.เหตุผล] + ")" : "";
-        ข้อความสถานะ = "ผู้ชนะ: " + esc(slotชนะ ? slotชนะ.studentName : "ไม่ทราบชื่อ") + esc(ป้าย);
-      } else {
-        ข้อความสถานะ = "ผลเสมอ — รอครูตัดสิน";
-        if (เป็นครู() && slotA && slotB) {
+    var ลิงก์รีเพลย์ =
+      '<div class="btn-row"><a class="btn-ghost" href="tournament-match.html?tournamentId=' +
+      encodeURIComponent(tournamentId) + "&match=" + encodeURIComponent(key) + '">ดูรายละเอียด →</a></div>';
+
+    if (คู่.status === "waiting_announce") {
+      // [เพิ่ม 2026-11-17] สู้แล้วแต่ครูยังไม่ประกาศ — ไม่มีผู้ชนะบนผังทั้งสองบทบาท
+      ข้อความสถานะ = "🔒 ต่อสู้แล้ว — รอครูประกาศผล";
+      if (เป็นครู()) {
+        if (คู่.needsTeacherDecision && slotA && slotB) {
+          ข้อความสถานะ += " · ผลเสมอ ครูต้องเลือกผู้ชนะ (ยังเป็นความลับจนประกาศ)";
           ปุ่มHtml +=
             '<div class="btn-row">' +
             ปุ่มเลือกผู้ชนะ(key, "slotA", slotA.studentName) +
             ปุ่มเลือกผู้ชนะ(key, "slotB", slotB.studentName) +
             "</div>";
         }
+        // ครูเปิดรีเพลย์ก่อนประกาศได้ (AC-FE-43-1) — นักเรียนไม่มีลิงก์นี้
+        ปุ่มHtml += ลิงก์รีเพลย์;
       }
-      ปุ่มHtml +=
-        '<div class="btn-row"><a class="btn-ghost" href="tournament-match.html?tournamentId=' +
-        encodeURIComponent(tournamentId) + "&match=" + encodeURIComponent(key) + '">ดูรายละเอียด →</a></div>';
+    } else if (คู่.status === "announced") {
+      if (ผู้ชนะ.ฝั่ง) {
+        var slotชนะ = ผู้ชนะ.ฝั่ง === "slotA" ? slotA : slotB;
+        var ป้าย = ผู้ชนะ.เหตุผล && ป้ายเหตุผล[ผู้ชนะ.เหตุผล] ? " (" + ป้ายเหตุผล[ผู้ชนะ.เหตุผล] + ")" : "";
+        ข้อความสถานะ = "ผู้ชนะ: " + esc(slotชนะ ? slotชนะ.studentName : "ไม่ทราบชื่อ") + esc(ป้าย);
+      } else {
+        // เกิดได้เฉพาะทัวนาเมนต์เก่าที่เสมอค้าง (ดูได้อย่างเดียว)
+        ข้อความสถานะ = "ผลเสมอ — ยังไม่มีผู้ชนะ";
+      }
+      ปุ่มHtml += ลิงก์รีเพลย์;
     } else if (slotA && slotB) {
       ข้อความสถานะ = "ยังไม่ได้ต่อสู้";
-      if (เป็นครู()) {
+      if (เป็นครู() && คู่.canFight) {
         ปุ่มHtml =
           '<div class="btn-row"><button type="button" class="btn-ok" data-action-slot-key="' + esc(key) + '">ต่อสู้</button></div>';
+      } else if (เป็นครู() && !ทัวนาเมนต์.legacy) {
+        ข้อความสถานะ += " — ต้องประกาศผลรอบก่อนหน้าก่อน";
       }
     } else {
-      ข้อความสถานะ = "รอผู้เข้ารอบ — รอผลของรอบก่อนหน้า";
+      ข้อความสถานะ = ทัวนาเมนต์.legacy ? "รอผู้เข้ารอบ — รอผลของรอบก่อนหน้า" : "รอผู้เข้ารอบ — รอครูประกาศผลรอบก่อนหน้า";
     }
 
     return (

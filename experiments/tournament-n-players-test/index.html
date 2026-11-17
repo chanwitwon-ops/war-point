@@ -56,19 +56,23 @@
         check(!!e, "N=" + N + " กดต่อสู้คู่บาย → error", e);
       }
 
-      // สู้ทุกคู่ที่พร้อมจนจบ (เสมอ → ครูเลือกฝั่ง A)
-      var สู้ไป = 0, กันวน = 0, ครูชี้ขาด = 0;
+      // สู้ทุกคู่ที่พร้อมจนจบ (เสมอ → ครูเลือกฝั่ง A) · [แก้ 2026-11-17] สู้ครบรอบแล้วต้องกดประกาศรอบก่อนถึงสู้รอบถัดไปได้
+      var สู้ไป = 0, กันวน = 0, ครูชี้ขาด = 0, ประกาศไป = 0;
       while (กันวน++ < 50) {
         t = await window.โหลดทัวนาเมนต์(id);
         var พร้อม = [];
-        t.rounds.forEach(function (r) { r.forEach(function (m) { if (!m.bye && !m.matchId && m.slotA && m.slotB) พร้อม.push(m); }); });
-        if (!พร้อม.length) break;
+        t.rounds.forEach(function (r) { r.forEach(function (m) { if (m.canFight) พร้อม.push(m); }); });
+        if (!พร้อม.length) {
+          if (t.announceableRound) { await window.ประกาศผลรอบ(id, t.announceableRound); ประกาศไป++; continue; }
+          break;
+        }
         for (var k = 0; k < พร้อม.length; k++) {
           var log = await window.คำนวณแมตช์ของทัวนาเมนต์(id, พร้อม[k].key);
           สู้ไป++;
-          if (log.result.winner === null) { await window.ครูเลือกผู้ชนะ(id, พร้อม[k].key, "slotA"); ครูชี้ขาด++; }
+          if (log.needsTeacherDecision) { await window.ครูเลือกผู้ชนะ(id, พร้อม[k].key, "slotA"); ครูชี้ขาด++; }
         }
       }
+      check(ประกาศไป === t.roundCount && t.announcedRound === t.roundCount, "N=" + N + " ประกาศครบ " + ประกาศไป + " รอบ");
       t = await window.โหลดทัวนาเมนต์(id);
       var แชมป์ = แชมป์ของทัวนาเมนต์(t);
       check(!!แชมป์, "N=" + N + " ได้แชมป์", แชมป์ && แชมป์.slot.studentName);
@@ -133,6 +137,7 @@
     console.error(err);
   }
   summaryEl.innerHTML = '<span class="' + (fail ? "fail" : "pass") + '">' + pass + " passed / " + (pass + fail) + " total</span>";
+  window.__ผลทดสอบ = { ผ่าน: pass, ทั้งหมด: pass + fail };
 })();
 </script>
 </body>
