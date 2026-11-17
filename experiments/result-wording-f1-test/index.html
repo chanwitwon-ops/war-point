@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบ F1 — ข้อความหน้าผลงานแยกปรนัย/ตรวจมือ</title>
+  <style>body{font-family:sans-serif;padding:16px} .ok{color:#0F7A3D} .ng{color:#B3231C} iframe{width:420px;height:120px}</style>
+</head>
+<body>
+  <h1>ทดสอบ F1 (2026-11-17)</h1>
+  <p>ใช้ harness ของ <code>experiments/ai-summary-test/page.html</code> (หน้า quiz-attempt-detail ของจริงบน mock) · a1 = ใบงานที่ครูตรวจแล้ว (มีความเห็น 1 รายการ) · a2 = ปรนัยตรวจอัตโนมัติ</p>
+  <p id="สรุป">กำลังรัน…</p>
+  <ol id="ผล"></ol>
+  <div id="เฟรม"></div>
+  <script>
+    var ผล = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผล.push(!!ผ่าน);
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "ng";
+      li.textContent = (ผ่าน ? "✓ " : "✗ ") + ชื่อ + (รายละเอียด !== undefined ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function รอ(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    async function เปิด(qs) {
+      var f = document.createElement("iframe");
+      f.src = "../ai-summary-test/page.html?" + qs;
+      document.getElementById("เฟรม").appendChild(f);
+      for (var i = 0; i < 100; i++) {
+        await รอ(50);
+        var w = f.contentWindow;
+        if (w.__ข้อผิดพลาด) throw new Error(w.__ข้อผิดพลาด);
+        if (w.__พร้อม) { await รอ(300); return w.document; }
+      }
+      throw new Error("หน้าไม่พร้อม: " + qs);
+    }
+    function กล่องรีวิวเห็น(d) { var g = d.getElementById("กล่องรีวิว"); return !!g && !g.classList.contains("hidden"); }
+    function ข้อความงาน(d) { return d.querySelector(".container").innerText; }
+
+    (async function () {
+      var d = await เปิด("scene=noDoc&id=a2");
+      var t = ข้อความงาน(d);
+      ตรวจ("ปรนัย: ขึ้น \"ระบบตรวจให้คะแนนอัตโนมัติแล้ว\"", /ระบบตรวจให้คะแนนอัตโนมัติแล้ว/.test(t));
+      ตรวจ("ปรนัย: ไม่มีคำว่า \"ใบงานนี้ตรวจแล้ว\"", !/ใบงานนี้ตรวจแล้ว/.test(t));
+      ตรวจ("ปรนัย: ไม่โชว์กล่อง \"ความเห็นการตรวจ\"", !กล่องรีวิวเห็น(d) && !/ยังไม่มีการตรวจในรายการนี้/.test(t));
+      ตรวจ("ปรนัย: คะแนนยังแสดง 8 / 10", /8 \/ 10/.test(t));
+
+      d = await เปิด("scene=noDoc&id=a1");
+      t = ข้อความงาน(d);
+      ตรวจ("ใบงานตรวจแล้ว: ยังขึ้น \"ใบงานนี้ตรวจแล้ว เปลี่ยนสถานะต่อไม่ได้\"", /ใบงานนี้ตรวจแล้ว เปลี่ยนสถานะต่อไม่ได้/.test(t));
+      ตรวจ("ใบงานตรวจแล้ว: โชว์กล่องความเห็น + ความเห็นของครู", กล่องรีวิวเห็น(d) && /วาดสวย อธิบายครบ/.test(t));
+
+      d = await เปิด("scene=noGraded&id=a1");
+      t = ข้อความงาน(d);
+      ตรวจ("ใบงานรอตรวจ: ยังโชว์กล่องความเห็น (ว่าง) ตามเดิม", กล่องรีวิวเห็น(d) && /ยังไม่มีการตรวจในรายการนี้/.test(t));
+    })().catch(function (e) { ตรวจ("รันจบ", false, e.message); }).then(function () {
+      var ผ่าน = ผล.filter(Boolean).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ผล.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผล.length };
+    });
+  </script>
+</body>
+</html>

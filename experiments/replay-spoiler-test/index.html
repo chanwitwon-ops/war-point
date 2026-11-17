@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>ทดสอบ F2 — รีเพลย์ไม่เฉลยผลก่อนจบ</title>
+  <style>body{font-family:sans-serif;padding:16px} .ok{color:#0F7A3D} .ng{color:#B3231C} iframe{width:900px;height:300px}</style>
+</head>
+<body>
+  <h1>ทดสอบ F2 (2026-11-17)</h1>
+  <p>ป้าย "🏆 ผู้ชนะ" และกล่องผลสรุปต้องไม่ขึ้นจนกว่ารีเพลย์จะเล่นจบ (ฉาก 4.4 ของเดโม)</p>
+  <p id="สรุป">กำลังรัน…</p>
+  <ol id="ผล"></ol>
+  <iframe id="f" src="page.html?tournamentId=auto_1&match=r2m1"></iframe>
+  <script>
+    var ผล = [];
+    function ตรวจ(ชื่อ, ผ่าน, รายละเอียด) {
+      ผล.push(!!ผ่าน);
+      var li = document.createElement("li");
+      li.className = ผ่าน ? "ok" : "ng";
+      li.textContent = (ผ่าน ? "✓ " : "✗ ") + ชื่อ + (รายละเอียด !== undefined ? " — " + รายละเอียด : "");
+      document.getElementById("ผล").appendChild(li);
+    }
+    function รอ(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function สถานะ(d) {
+      var ป้าย = d.querySelector("[data-winner-badge]");
+      var นับ = (d.getElementById("ตัวนับเหตุการณ์").textContent.match(/(\d+) \/ (\d+)/) || []);
+      return {
+        ป้ายมี: !!ป้าย,
+        ป้ายเห็น: !!ป้าย && !ป้าย.classList.contains("hidden") && d.defaultView.getComputedStyle(ป้าย).display !== "none",
+        การ์ดชนะ: d.querySelectorAll(".fighter.is-winner").length,
+        สรุป: d.getElementById("กล่องผลสรุป").textContent,
+        ตำแหน่ง: +นับ[1], ทั้งหมด: +นับ[2]
+      };
+    }
+    (async function () {
+      var f = document.getElementById("f");
+      for (var i = 0; i < 200; i++) { await รอ(50); if (f.contentWindow.__พร้อม && f.contentDocument.getElementById("ตัวนับเหตุการณ์").textContent) break; }
+      var d = f.contentDocument;
+      var s = สถานะ(d);
+      ตรวจ("โหลดรีเพลย์คู่ชิงได้ มีเหตุการณ์", s.ทั้งหมด > 0, s.ตำแหน่ง + " / " + s.ทั้งหมด);
+      ตรวจ("ก่อนกดเล่น: ป้ายผู้ชนะมีในหน้าแต่ซ่อนอยู่", s.ป้ายมี && !s.ป้ายเห็น);
+      ตรวจ("ก่อนกดเล่น: ไม่มีการ์ดไหนถูกไฮไลต์เป็นผู้ชนะ", s.การ์ดชนะ === 0, s.การ์ดชนะ);
+      ตรวจ("ก่อนกดเล่น: ผลสรุปไม่บอกผู้ชนะ/เหตุผล/จำนวนเทิร์น", !/🏆|น็อค|เทิร์น|ตัดสิน/.test(s.สรุป) && /ดูการต่อสู้ให้จบก่อน/.test(s.สรุป), s.สรุป);
+
+      d.getElementById("ปุ่มก้าวถัดไป").click();
+      for (i = 0; i < 100 && สถานะ(d).ตำแหน่ง === 0; i++) await รอ(20);
+      s = สถานะ(d);
+      ตรวจ("ก้าวไป 1 จังหวะ (ยังไม่จบ): ยังไม่เฉลย", s.ตำแหน่ง > 0 && s.ตำแหน่ง < s.ทั้งหมด && !s.ป้ายเห็น && s.การ์ดชนะ === 0 && !/🏆/.test(s.สรุป), s.ตำแหน่ง + " / " + s.ทั้งหมด);
+
+      d.getElementById("ปุ่มเล่น").click();
+      for (i = 0; i < 600 && สถานะ(d).ตำแหน่ง < สถานะ(d).ทั้งหมด; i++) await รอ(20);
+      await รอ(100);
+      s = สถานะ(d);
+      ตรวจ("เล่นจนจบ", s.ตำแหน่ง === s.ทั้งหมด, s.ตำแหน่ง + " / " + s.ทั้งหมด);
+      ตรวจ("จบแล้ว: ป้าย 🏆 ผู้ชนะขึ้น", s.ป้ายเห็น);
+      ตรวจ("จบแล้ว: ไฮไลต์การ์ดผู้ชนะ 1 ใบ", s.การ์ดชนะ === 1, s.การ์ดชนะ);
+      ตรวจ("จบแล้ว: ผลสรุปบอกผู้ชนะ + จำนวนเทิร์น", /🏆/.test(s.สรุป) && /จำนวนเทิร์น/.test(s.สรุป), s.สรุป.slice(0, 80));
+      var ชื่อการ์ดชนะ = d.querySelector(".fighter.is-winner .fighter-name").textContent;
+      ตรวจ("การ์ดที่ไฮไลต์ตรงกับชื่อในผลสรุป", s.สรุป.indexOf(ชื่อการ์ดชนะ) !== -1, ชื่อการ์ดชนะ);
+
+      d.getElementById("ปุ่มกลับไปต้น").click();
+      for (i = 0; i < 100 && สถานะ(d).ตำแหน่ง !== 0; i++) await รอ(20);
+      s = สถานะ(d);
+      ตรวจ("กดกลับไปต้น: ซ่อนผลอีกครั้ง", s.ตำแหน่ง === 0 && !s.ป้ายเห็น && s.การ์ดชนะ === 0 && !/🏆/.test(s.สรุป));
+    })().catch(function (e) { ตรวจ("รันจบ", false, e.message); }).then(function () {
+      var ผ่าน = ผล.filter(Boolean).length;
+      document.getElementById("สรุป").textContent = "ผ่าน " + ผ่าน + "/" + ผล.length;
+      window.__ผลทดสอบ = { ผ่าน: ผ่าน, ทั้งหมด: ผล.length };
+    });
+  </script>
+</body>
+</html>
